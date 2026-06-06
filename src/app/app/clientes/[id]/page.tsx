@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  adjustLoyaltyPointsAction,
   createInternalCommentAction,
   createInternalNoteAction,
   createInternalTaskAction,
+  redeemRewardAction,
   updateCustomerAction,
   updateTaskStatusAction,
 } from "@/app/app/actions";
@@ -21,7 +23,18 @@ export default async function CustomerDetailPage({
 }) {
   const { id } = await params;
   const messages = await searchParams;
-  const { customer, events, reservations, notes, tasks, comments, businessUsers } =
+  const {
+    customer,
+    events,
+    reservations,
+    notes,
+    tasks,
+    comments,
+    businessUsers,
+    loyaltyAccount,
+    loyaltyTransactions,
+    rewards,
+  } =
     await getCustomerDetail(id);
 
   if (!customer) {
@@ -43,6 +56,78 @@ export default async function CustomerDetailPage({
       </div>
       {messages.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{messages.error}</p> : null}
       {messages.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{messages.success}</p> : null}
+
+      <section className="grid gap-4 xl:grid-cols-[0.7fr_1.3fr]">
+        <ModuleCard title="Fidelizacion" description="Cuenta de puntos, nivel actual y ajuste manual.">
+          <div className="rounded-lg bg-stone-950 p-5 text-white">
+            <p className="text-sm text-stone-400">Puntos actuales</p>
+            <p className="mt-3 text-4xl font-semibold">
+              {loyaltyAccount?.points_balance ?? 0}
+            </p>
+            <div className="mt-4">
+              <StatusBadge status={loyaltyAccount?.tier ?? "bronze"} />
+            </div>
+          </div>
+          <form action={adjustLoyaltyPointsAction} className="mt-4 grid gap-3">
+            <input type="hidden" name="customer_id" value={customer.id} />
+            <input type="hidden" name="return_to" value={`/app/clientes/${customer.id}`} />
+            <input required type="number" name="points" placeholder="Puntos (+ o -)" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+            <input required name="reason" placeholder="Motivo obligatorio" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+            <button className="h-10 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">
+              Ajustar puntos
+            </button>
+          </form>
+        </ModuleCard>
+
+        <ModuleCard title="Recompensas disponibles" description="Canjea beneficios si el cliente tiene puntos suficientes.">
+          {rewards.length ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {rewards.map((reward) => {
+                const canRedeem = (loyaltyAccount?.points_balance ?? 0) >= reward.points_required;
+
+                return (
+                  <div key={reward.id} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+                    <p className="text-sm font-semibold text-stone-950">{reward.name}</p>
+                    <p className="mt-1 text-xs text-stone-500">{reward.points_required} puntos</p>
+                    {reward.description ? (
+                      <p className="mt-2 text-sm leading-6 text-stone-600">{reward.description}</p>
+                    ) : null}
+                    <form action={redeemRewardAction} className="mt-4">
+                      <input type="hidden" name="customer_id" value={customer.id} />
+                      <input type="hidden" name="reward_id" value={reward.id} />
+                      <input type="hidden" name="return_to" value={`/app/clientes/${customer.id}`} />
+                      <button
+                        disabled={!canRedeem}
+                        className="h-9 w-full rounded-lg bg-stone-950 px-3 text-xs font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+                      >
+                        Canjear
+                      </button>
+                    </form>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState title="Sin recompensas" description="Crea beneficios en Fidelizacion para permitir canjes." />
+          )}
+        </ModuleCard>
+      </section>
+
+      <ModuleCard title="Historial de puntos" description="Movimientos de loyalty_transactions del cliente.">
+        {loyaltyTransactions.length ? (
+          <DataTable
+            columns={["Tipo", "Puntos", "Descripcion", "Fecha"]}
+            rows={loyaltyTransactions.map((transaction) => [
+              <StatusBadge key="type" status={transaction.type} />,
+              String(transaction.points),
+              transaction.description ?? "-",
+              new Date(transaction.created_at).toLocaleDateString("es-MX"),
+            ])}
+          />
+        ) : (
+          <EmptyState title="Sin movimientos de puntos" description="Las visitas completadas, ajustes y canjes apareceran aqui." />
+        )}
+      </ModuleCard>
 
       <section className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
         <ModuleCard title="Datos principales" description="Editar ficha del cliente.">

@@ -64,6 +64,14 @@ const statusClasses: Record<string, string> = {
   high: "border-orange-200 bg-orange-50 text-orange-700",
   medium: "border-sky-200 bg-sky-50 text-sky-700",
   low: "border-stone-200 bg-stone-50 text-stone-600",
+  bronze: "border-orange-200 bg-orange-50 text-orange-800",
+  silver: "border-zinc-200 bg-zinc-50 text-zinc-700",
+  gold: "border-yellow-200 bg-yellow-50 text-yellow-800",
+  black: "border-stone-900 bg-stone-950 text-white",
+  earn: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  redeem: "border-purple-200 bg-purple-50 text-purple-700",
+  adjustment: "border-sky-200 bg-sky-50 text-sky-700",
+  expired: "border-stone-200 bg-stone-50 text-stone-600",
 };
 
 export function StatusBadge({ status }: { status: string }) {

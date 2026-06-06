@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusiness } from "@/lib/current-business";
+import { applyLoyaltyPoints } from "@/lib/loyalty";
 
 const validReservationStatuses = [
   "pending",
@@ -394,6 +395,28 @@ export async function updateReservationStatusAction(formData: FormData) {
       })
       .eq("business_id", current.businessId)
       .eq("id", customerId);
+
+    try {
+      await applyLoyaltyPoints({
+        businessId: current.businessId,
+        customerId,
+        pointsDelta: 10,
+        type: "earn",
+        description: "Puntos por visita completada",
+        createdBy: current.userId,
+      });
+
+      await addCustomerEvent({
+        businessId: current.businessId,
+        customerId,
+        type: "points_earned",
+        title: "Puntos acumulados",
+        description: "El cliente gano 10 puntos por visita completada",
+        reservationId: id,
+      });
+    } catch (loyaltyError) {
+      redirect(`/app/reservas?error=${encodeURIComponent(loyaltyError instanceof Error ? loyaltyError.message : "loyalty_points_failed")}`);
+    }
   }
 
   const eventTypeByStatus: Record<string, string> = {
@@ -409,9 +432,10 @@ export async function updateReservationStatusAction(formData: FormData) {
     customerId,
     type: eventTypeByStatus[status],
     title: `Reserva ${status}`,
-    description: existingReservation
-      ? `Reserva para ${existingReservation.party_size} personas el ${existingReservation.date} a las ${existingReservation.time}`
-      : undefined,
+    description:
+      existingReservation
+        ? `Reserva para ${existingReservation.party_size} personas el ${existingReservation.date} a las ${existingReservation.time}`
+        : undefined,
     reservationId: id,
   });
 
@@ -483,4 +507,130 @@ export async function updatePublicWebsiteSettingsAction(formData: FormData) {
   revalidatePath("/app/configuracion");
   revalidatePath(`/site/${current.business.slug}`);
   redirect("/app/configuracion?success=public_settings_updated");
+}
+
+export async function createRewardAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const name = requiredString(formData, "name");
+  const pointsRequired = Number(requiredString(formData, "points_required"));
+
+  if (!name || !pointsRequired || pointsRequired <= 0) {
+    redirect("/app/fidelizacion?error=reward_validation");
+  }
+
+  const { error } = await supabase.from("rewards").insert({
+    business_id: current.businessId,
+    name,
+    description: requiredString(formData, "description") || null,
+    points_required: pointsRequired,
+    status: requiredString(formData, "status") || "active",
+  });
+
+  if (error) {
+    redirect(`/app/fidelizacion?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/fidelizacion");
+  redirect("/app/fidelizacion?success=reward_created");
+}
+
+export async function adjustLoyaltyPointsAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const customerId = requiredString(formData, "customer_id");
+  const points = Number(requiredString(formData, "points"));
+  const reason = requiredString(formData, "reason");
+  const returnTo = requiredString(formData, "return_to") || "/app/fidelizacion";
+
+  if (!customerId || !points || !reason) {
+    redirect(`${returnTo}?error=points_adjustment_validation`);
+  }
+
+  try {
+    await applyLoyaltyPoints({
+      businessId: current.businessId,
+      customerId,
+      pointsDelta: points,
+      type: "adjustment",
+      description: reason,
+      createdBy: current.userId,
+    });
+
+    await addCustomerEvent({
+      businessId: current.businessId,
+      customerId,
+      type: "points_adjusted",
+      title: "Puntos ajustados",
+      description: `${points} puntos: ${reason}`,
+    });
+  } catch (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error instanceof Error ? error.message : "points_adjustment_failed")}`);
+  }
+
+  revalidatePath(returnTo);
+  redirect(`${returnTo}?success=points_adjusted`);
+}
+
+export async function redeemRewardAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const customerId = requiredString(formData, "customer_id");
+  const rewardId = requiredString(formData, "reward_id");
+  const returnTo = requiredString(formData, "return_to") || `/app/clientes/${customerId}`;
+
+  if (!customerId || !rewardId) {
+    redirect(`${returnTo}?error=reward_validation`);
+  }
+
+  const [accountResult, rewardResult] = await Promise.all([
+    supabase
+      .from("loyalty_accounts")
+      .select("points_balance")
+      .eq("business_id", current.businessId)
+      .eq("customer_id", customerId)
+      .maybeSingle<{ points_balance: number }>(),
+    supabase
+      .from("rewards")
+      .select("name, points_required")
+      .eq("business_id", current.businessId)
+      .eq("id", rewardId)
+      .eq("status", "active")
+      .maybeSingle<{ name: string; points_required: number }>(),
+  ]);
+
+  const pointsBalance = accountResult.data?.points_balance ?? 0;
+  const reward = rewardResult.data;
+
+  if (!reward) {
+    redirect(`${returnTo}?error=reward_not_found`);
+  }
+
+  if (pointsBalance < reward.points_required) {
+    redirect(`${returnTo}?error=insufficient_points`);
+  }
+
+  try {
+    await applyLoyaltyPoints({
+      businessId: current.businessId,
+      customerId,
+      pointsDelta: -reward.points_required,
+      type: "redeem",
+      description: `Canje de recompensa: ${reward.name}`,
+      createdBy: current.userId,
+    });
+
+    await addCustomerEvent({
+      businessId: current.businessId,
+      customerId,
+      type: "reward_redeemed",
+      title: "Recompensa canjeada",
+      description: `${reward.name} por ${reward.points_required} puntos`,
+    });
+  } catch (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error instanceof Error ? error.message : "reward_redeem_failed")}`);
+  }
+
+  revalidatePath(returnTo);
+  revalidatePath("/app/fidelizacion");
+  redirect(`${returnTo}?success=reward_redeemed`);
 }

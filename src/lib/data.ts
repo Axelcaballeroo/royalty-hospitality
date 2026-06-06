@@ -71,6 +71,32 @@ export type ReservationFilters = {
   source?: string;
 };
 
+export type LoyaltyAccount = {
+  id: string;
+  customer_id: string;
+  points_balance: number;
+  tier: string;
+  customers: { full_name: string; phone: string | null } | null;
+};
+
+export type Reward = {
+  id: string;
+  name: string;
+  description: string | null;
+  points_required: number;
+  status: string;
+};
+
+export type LoyaltyTransaction = {
+  id: string;
+  customer_id: string;
+  type: string;
+  points: number;
+  description: string | null;
+  created_at: string;
+  customers: { full_name: string } | null;
+};
+
 export async function getDashboardData() {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
@@ -86,6 +112,8 @@ export async function getDashboardData() {
     pendingReservations,
     noShows,
     pendingTasks,
+    pointsIssued,
+    rewardsRedeemed,
     activity,
   ] = await Promise.all([
     supabase
@@ -119,6 +147,18 @@ export async function getDashboardData() {
       .eq("business_id", current.businessId)
       .in("status", ["pending", "in_progress"]),
     supabase
+      .from("loyalty_transactions")
+      .select("points")
+      .eq("business_id", current.businessId)
+      .eq("type", "earn")
+      .gte("created_at", `${monthStartIso}T00:00:00.000Z`),
+    supabase
+      .from("loyalty_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("type", "redeem")
+      .gte("created_at", `${monthStartIso}T00:00:00.000Z`),
+    supabase
       .from("customer_events")
       .select("id, type, title, description, created_at")
       .eq("business_id", current.businessId)
@@ -135,6 +175,12 @@ export async function getDashboardData() {
       pendingReservations: pendingReservations.count ?? 0,
       noShows: noShows.count ?? 0,
       pendingTasks: pendingTasks.count ?? 0,
+      pointsIssued:
+        pointsIssued.data?.reduce(
+          (sum, transaction) => sum + Math.max(0, Number(transaction.points)),
+          0,
+        ) ?? 0,
+      rewardsRedeemed: rewardsRedeemed.count ?? 0,
     },
     activity: activity.data ?? [],
   };
@@ -169,7 +215,7 @@ export async function getCustomersData(filters: CustomerFilters = {}) {
 export async function getCustomerDetail(customerId: string) {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
-  const [customer, events, reservations, notes, tasks, comments, businessUsers] =
+  const [customer, events, reservations, notes, tasks, comments, businessUsers, loyaltyAccount, loyaltyTransactions, rewards] =
     await Promise.all([
       supabase
         .from("customers")
@@ -213,6 +259,25 @@ export async function getCustomerDetail(customerId: string) {
         .eq("business_id", current.businessId)
         .eq("status", "active")
         .order("created_at", { ascending: true }),
+      supabase
+        .from("loyalty_accounts")
+        .select("id, points_balance, tier")
+        .eq("business_id", current.businessId)
+        .eq("customer_id", customerId)
+        .maybeSingle<{ id: string; points_balance: number; tier: string }>(),
+      supabase
+        .from("loyalty_transactions")
+        .select("id, type, points, description, created_at")
+        .eq("business_id", current.businessId)
+        .eq("customer_id", customerId)
+        .order("created_at", { ascending: false })
+        .limit(12),
+      supabase
+        .from("rewards")
+        .select("id, name, description, points_required, status")
+        .eq("business_id", current.businessId)
+        .eq("status", "active")
+        .order("points_required", { ascending: true }),
     ]);
 
   return {
@@ -224,6 +289,9 @@ export async function getCustomerDetail(customerId: string) {
     tasks: tasks.data ?? [],
     comments: comments.data ?? [],
     businessUsers: (businessUsers.data ?? []) as BusinessUser[],
+    loyaltyAccount: loyaltyAccount.data,
+    loyaltyTransactions: loyaltyTransactions.data ?? [],
+    rewards: (rewards.data ?? []) as Reward[],
   };
 }
 
@@ -313,6 +381,43 @@ export async function getBusinessSettingsData() {
     current,
     hours: hours.data ?? [],
     modules: modules.data ?? [],
+  };
+}
+
+export async function getLoyaltyData() {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const [accounts, rewards, transactions, customers] = await Promise.all([
+    supabase
+      .from("loyalty_accounts")
+      .select("id, customer_id, points_balance, tier, customers(full_name, phone)")
+      .eq("business_id", current.businessId)
+      .order("points_balance", { ascending: false })
+      .limit(50),
+    supabase
+      .from("rewards")
+      .select("id, name, description, points_required, status")
+      .eq("business_id", current.businessId)
+      .order("points_required", { ascending: true }),
+    supabase
+      .from("loyalty_transactions")
+      .select("id, customer_id, type, points, description, created_at, customers(full_name)")
+      .eq("business_id", current.businessId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("customers")
+      .select("id, full_name, phone, email")
+      .eq("business_id", current.businessId)
+      .order("full_name", { ascending: true }),
+  ]);
+
+  return {
+    current,
+    accounts: (accounts.data ?? []) as unknown as LoyaltyAccount[],
+    rewards: (rewards.data ?? []) as Reward[],
+    transactions: (transactions.data ?? []) as unknown as LoyaltyTransaction[],
+    customers: (customers.data ?? []) as Customer[],
   };
 }
 
