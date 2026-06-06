@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusiness } from "@/lib/current-business";
 import { applyLoyaltyPoints } from "@/lib/loyalty";
+import { generateLoyaltyCode } from "@/lib/loyalty-code";
 
 const validReservationStatuses = [
   "pending",
@@ -23,6 +24,29 @@ function parseTags(value: string) {
     .split(",")
     .map((tag) => tag.trim())
     .filter(Boolean);
+}
+
+async function createUniqueLoyaltyCode(input: {
+  businessId: string;
+  prefixSource: string;
+}) {
+  const supabase = await createClient();
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = generateLoyaltyCode(input.prefixSource);
+    const { data } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("business_id", input.businessId)
+      .eq("loyalty_code", code)
+      .maybeSingle<{ id: string }>();
+
+    if (!data) {
+      return code;
+    }
+  }
+
+  return `${generateLoyaltyCode(input.prefixSource)}-${Date.now().toString().slice(-4)}`;
 }
 
 async function addCustomerEvent(input: {
@@ -66,6 +90,11 @@ export async function createCustomerAction(formData: FormData) {
       phone: phone || null,
       email: email || null,
       birthday: requiredString(formData, "birthday") || null,
+      loyalty_code: await createUniqueLoyaltyCode({
+        businessId: current.businessId,
+        prefixSource: current.business.slug,
+      }),
+      loyalty_enabled: true,
       tags: parseTags(requiredString(formData, "tags")),
       notes: requiredString(formData, "notes") || null,
       status: "active",
@@ -292,6 +321,11 @@ export async function createReservationAction(formData: FormData) {
         full_name: quickName,
         phone: quickPhone || null,
         email: quickEmail || null,
+        loyalty_code: await createUniqueLoyaltyCode({
+          businessId: current.businessId,
+          prefixSource: current.business.slug,
+        }),
+        loyalty_enabled: true,
         status: "active",
       })
       .select("id")
@@ -633,4 +667,43 @@ export async function redeemRewardAction(formData: FormData) {
   revalidatePath(returnTo);
   revalidatePath("/app/fidelizacion");
   redirect(`${returnTo}?success=reward_redeemed`);
+}
+
+export async function registerConsumptionAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const customerId = requiredString(formData, "customer_id");
+  const amount = Number(requiredString(formData, "amount"));
+  const comment = requiredString(formData, "comment");
+  const returnTo = requiredString(formData, "return_to") || "/app/fidelizacion/check-in";
+
+  if (!customerId || !amount || amount <= 0) {
+    redirect(`${returnTo}?error=consumption_validation`);
+  }
+
+  const points = Math.floor(amount);
+
+  try {
+    await applyLoyaltyPoints({
+      businessId: current.businessId,
+      customerId,
+      pointsDelta: points,
+      type: "earn",
+      description: comment ? `Consumo registrado: ${comment}` : "Consumo registrado",
+      createdBy: current.userId,
+    });
+
+    await addCustomerEvent({
+      businessId: current.businessId,
+      customerId,
+      type: "points_earned",
+      title: "Puntos acumulados",
+      description: `Cliente acumulo ${points} puntos por consumo.`,
+    });
+  } catch (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error instanceof Error ? error.message : "consumption_failed")}`);
+  }
+
+  revalidatePath(returnTo);
+  revalidatePath("/app/fidelizacion");
+  redirect(`${returnTo}?success=consumption_registered`);
 }

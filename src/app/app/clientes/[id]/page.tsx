@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import {
   adjustLoyaltyPointsAction,
@@ -10,6 +11,7 @@ import {
   updateTaskStatusAction,
 } from "@/app/app/actions";
 import { getCustomerDetail } from "@/lib/data";
+import { createQrDataUrl } from "@/lib/qr";
 import { DataTable, EmptyState, ModuleCard, StatusBadge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +43,8 @@ export default async function CustomerDetailPage({
     notFound();
   }
 
+  const qrDataUrl = await createQrDataUrl(customer.loyalty_code ?? customer.id);
+
   return (
     <div className="space-y-6">
       <div>
@@ -59,14 +63,27 @@ export default async function CustomerDetailPage({
 
       <section className="grid gap-4 xl:grid-cols-[0.7fr_1.3fr]">
         <ModuleCard title="Fidelizacion" description="Cuenta de puntos, nivel actual y ajuste manual.">
-          <div className="rounded-lg bg-stone-950 p-5 text-white">
-            <p className="text-sm text-stone-400">Puntos actuales</p>
-            <p className="mt-3 text-4xl font-semibold">
-              {loyaltyAccount?.points_balance ?? 0}
-            </p>
-            <div className="mt-4">
-              <StatusBadge status={loyaltyAccount?.tier ?? "bronze"} />
+          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+            <div className="rounded-lg bg-stone-950 p-5 text-white">
+              <p className="text-sm text-stone-400">Puntos actuales</p>
+              <p className="mt-3 text-4xl font-semibold">
+                {loyaltyAccount?.points_balance ?? 0}
+              </p>
+              <p className="mt-2 text-xs text-stone-400">
+                {customer.loyalty_code ?? "Sin codigo"}
+              </p>
+              <div className="mt-4">
+                <StatusBadge status={loyaltyAccount?.tier ?? "bronze"} />
+              </div>
             </div>
+            <Image
+              src={qrDataUrl}
+              alt="QR personal del cliente"
+              width={160}
+              height={160}
+              unoptimized
+              className="size-40 rounded-lg border border-stone-200 bg-white p-2"
+            />
           </div>
           <form action={adjustLoyaltyPointsAction} className="mt-4 grid gap-3">
             <input type="hidden" name="customer_id" value={customer.id} />

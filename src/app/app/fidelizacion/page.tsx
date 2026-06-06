@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ScanLine } from "lucide-react";
 import {
   adjustLoyaltyPointsAction,
   createRewardAction,
@@ -15,7 +16,7 @@ export default async function LoyaltyPage({
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   const params = await searchParams;
-  const { accounts, rewards, transactions, customers } = await getLoyaltyData();
+  const { accounts, rewards, transactions, customers, summary } = await getLoyaltyData();
   const totalPoints = accounts.reduce(
     (sum, account) => sum + account.points_balance,
     0,
@@ -39,10 +40,29 @@ export default async function LoyaltyPage({
       {params.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{params.error}</p> : null}
       {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p> : null}
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <div>
+        <Link
+          href="/app/fidelizacion/check-in"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
+        >
+          <ScanLine size={17} />
+          Abrir check-in
+        </Link>
+      </div>
+
+      <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
         <StatCard title="Puntos activos" value={String(totalPoints)} detail="Balance total de cuentas" tone="dark" />
-        <StatCard title="Clientes con cuenta" value={String(accounts.length)} detail="loyalty_accounts" />
+        <StatCard title="Clientes registrados" value={String(summary.registeredCustomers)} detail="loyalty_accounts" />
         <StatCard title="Recompensas activas" value={String(activeRewards.length)} detail="Beneficios disponibles" />
+        <StatCard title="Puntos emitidos" value={String(summary.pointsIssued)} detail="Historico earn" />
+        <StatCard title="Puntos canjeados" value={String(summary.pointsRedeemed)} detail="Historico redeem" />
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-4">
+        <StatCard title="Clientes bronze" value={String(summary.tierCounts.bronze)} detail="0+ puntos" />
+        <StatCard title="Clientes silver" value={String(summary.tierCounts.silver)} detail="500+ puntos" />
+        <StatCard title="Clientes gold" value={String(summary.tierCounts.gold)} detail="1500+ puntos" />
+        <StatCard title="Clientes black" value={String(summary.tierCounts.black)} detail="3000+ puntos" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.8fr]">

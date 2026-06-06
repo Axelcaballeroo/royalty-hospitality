@@ -60,6 +60,8 @@ create table public.customers (
   phone text,
   email text,
   birthday date,
+  loyalty_code text unique,
+  loyalty_enabled boolean not null default true,
   tags text[] not null default '{}',
   notes text,
   total_visits integer not null default 0,

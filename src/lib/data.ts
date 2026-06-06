@@ -8,6 +8,8 @@ export type Customer = {
   phone: string | null;
   email: string | null;
   birthday: string | null;
+  loyalty_code: string | null;
+  loyalty_enabled: boolean;
   tags: string[];
   notes: string | null;
   total_visits: number;
@@ -76,7 +78,7 @@ export type LoyaltyAccount = {
   customer_id: string;
   points_balance: number;
   tier: string;
-  customers: { full_name: string; phone: string | null } | null;
+  customers: { full_name: string; phone: string | null; loyalty_code?: string | null } | null;
 };
 
 export type Reward = {
@@ -95,6 +97,16 @@ export type LoyaltyTransaction = {
   description: string | null;
   created_at: string;
   customers: { full_name: string } | null;
+};
+
+export type ClubCustomer = {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+  birthday: string | null;
+  loyalty_code: string | null;
+  last_visit_at: string | null;
 };
 
 export async function getDashboardData() {
@@ -387,10 +399,10 @@ export async function getBusinessSettingsData() {
 export async function getLoyaltyData() {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
-  const [accounts, rewards, transactions, customers] = await Promise.all([
+  const [accounts, rewards, transactions, customers, earnTransactions, redeemTransactions] = await Promise.all([
     supabase
       .from("loyalty_accounts")
-      .select("id, customer_id, points_balance, tier, customers(full_name, phone)")
+      .select("id, customer_id, points_balance, tier, customers(full_name, phone, loyalty_code)")
       .eq("business_id", current.businessId)
       .order("points_balance", { ascending: false })
       .limit(50),
@@ -410,14 +422,75 @@ export async function getLoyaltyData() {
       .select("id, full_name, phone, email")
       .eq("business_id", current.businessId)
       .order("full_name", { ascending: true }),
+    supabase
+      .from("loyalty_transactions")
+      .select("points")
+      .eq("business_id", current.businessId)
+      .eq("type", "earn"),
+    supabase
+      .from("loyalty_transactions")
+      .select("points")
+      .eq("business_id", current.businessId)
+      .eq("type", "redeem"),
   ]);
+
+  const loyaltyAccounts = (accounts.data ?? []) as unknown as LoyaltyAccount[];
 
   return {
     current,
-    accounts: (accounts.data ?? []) as unknown as LoyaltyAccount[],
+    accounts: loyaltyAccounts,
     rewards: (rewards.data ?? []) as Reward[],
     transactions: (transactions.data ?? []) as unknown as LoyaltyTransaction[],
     customers: (customers.data ?? []) as Customer[],
+    summary: {
+      registeredCustomers: loyaltyAccounts.length,
+      pointsIssued:
+        earnTransactions.data?.reduce(
+          (sum, transaction) => sum + Math.max(0, Number(transaction.points)),
+          0,
+        ) ?? 0,
+      pointsRedeemed:
+        redeemTransactions.data?.reduce(
+          (sum, transaction) => sum + Math.abs(Number(transaction.points)),
+          0,
+        ) ?? 0,
+      tierCounts: {
+        bronze: loyaltyAccounts.filter((account) => account.tier === "bronze").length,
+        silver: loyaltyAccounts.filter((account) => account.tier === "silver").length,
+        gold: loyaltyAccounts.filter((account) => account.tier === "gold").length,
+        black: loyaltyAccounts.filter((account) => account.tier === "black").length,
+      },
+    },
+  };
+}
+
+export async function getCheckInData(search?: string) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const term = search?.trim().replace(/[%_,]/g, "");
+
+  let query = supabase
+    .from("customers")
+    .select("id, full_name, phone, email, loyalty_code, last_visit_at, loyalty_accounts(points_balance, tier)")
+    .eq("business_id", current.businessId)
+    .eq("loyalty_enabled", true);
+
+  if (term) {
+    query = query.or(`full_name.ilike.%${term}%,phone.ilike.%${term}%,loyalty_code.ilike.%${term}%`);
+  }
+
+  const { data } = await query.order("full_name", { ascending: true }).limit(20);
+  const { data: rewards } = await supabase
+    .from("rewards")
+    .select("id, name, description, points_required, status")
+    .eq("business_id", current.businessId)
+    .eq("status", "active")
+    .order("points_required", { ascending: true });
+
+  return {
+    current,
+    customers: data ?? [],
+    rewards: (rewards ?? []) as Reward[],
   };
 }
 
@@ -443,5 +516,72 @@ export async function getPublicBusinessBySlug(slug: string) {
   return {
     business: data,
     hours: hours ?? [],
+  };
+}
+
+export async function getClubAccountByPhoneAndCode(input: {
+  businessSlug: string;
+  phone: string;
+  code: string;
+}) {
+  const admin = createAdminClient();
+  const { data: business } = await admin
+    .from("businesses")
+    .select("id, name, slug, brand_primary_color, brand_secondary_color")
+    .eq("slug", input.businessSlug)
+    .eq("status", "active")
+    .maybeSingle<{
+      id: string;
+      name: string;
+      slug: string;
+      brand_primary_color: string | null;
+      brand_secondary_color: string | null;
+    }>();
+
+  if (!business) {
+    return null;
+  }
+
+  const { data: customer } = await admin
+    .from("customers")
+    .select("id, full_name, phone, email, birthday, loyalty_code, last_visit_at")
+    .eq("business_id", business.id)
+    .eq("phone", input.phone)
+    .eq("loyalty_code", input.code.toUpperCase())
+    .eq("loyalty_enabled", true)
+    .maybeSingle<ClubCustomer>();
+
+  if (!customer) {
+    return { business, customer: null };
+  }
+
+  const [account, transactions, rewards] = await Promise.all([
+    admin
+      .from("loyalty_accounts")
+      .select("id, points_balance, tier")
+      .eq("business_id", business.id)
+      .eq("customer_id", customer.id)
+      .maybeSingle<{ id: string; points_balance: number; tier: string }>(),
+    admin
+      .from("loyalty_transactions")
+      .select("id, type, points, description, created_at")
+      .eq("business_id", business.id)
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false })
+      .limit(12),
+    admin
+      .from("rewards")
+      .select("id, name, description, points_required, status")
+      .eq("business_id", business.id)
+      .eq("status", "active")
+      .order("points_required", { ascending: true }),
+  ]);
+
+  return {
+    business,
+    customer,
+    account: account.data,
+    transactions: transactions.data ?? [],
+    rewards: (rewards.data ?? []) as Reward[],
   };
 }

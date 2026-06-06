@@ -2,9 +2,33 @@
 
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { generateLoyaltyCode } from "@/lib/loyalty-code";
 
 function requiredString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+async function createUniqueLoyaltyCode(input: {
+  businessId: string;
+  prefixSource: string;
+}) {
+  const admin = createAdminClient();
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = generateLoyaltyCode(input.prefixSource);
+    const { data } = await admin
+      .from("customers")
+      .select("id")
+      .eq("business_id", input.businessId)
+      .eq("loyalty_code", code)
+      .maybeSingle<{ id: string }>();
+
+    if (!data) {
+      return code;
+    }
+  }
+
+  return `${generateLoyaltyCode(input.prefixSource)}-${Date.now().toString().slice(-4)}`;
 }
 
 export async function createPublicReservationAction(formData: FormData) {
@@ -82,6 +106,11 @@ export async function createPublicReservationAction(formData: FormData) {
         full_name: fullName,
         phone,
         email: email || null,
+        loyalty_code: await createUniqueLoyaltyCode({
+          businessId: business.id,
+          prefixSource: businessSlug,
+        }),
+        loyalty_enabled: true,
         status: "active",
       })
       .select("id")
