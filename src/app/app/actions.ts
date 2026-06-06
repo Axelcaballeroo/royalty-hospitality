@@ -64,6 +64,7 @@ export async function createCustomerAction(formData: FormData) {
       full_name: fullName,
       phone: phone || null,
       email: email || null,
+      birthday: requiredString(formData, "birthday") || null,
       tags: parseTags(requiredString(formData, "tags")),
       notes: requiredString(formData, "notes") || null,
       status: "active",
@@ -80,7 +81,7 @@ export async function createCustomerAction(formData: FormData) {
     customerId: data.id,
     type: "customer_created",
     title: "Cliente creado",
-    description: fullName,
+    description: `Se creó el cliente ${fullName}`,
   });
 
   revalidatePath("/app/clientes");
@@ -105,6 +106,7 @@ export async function updateCustomerAction(formData: FormData) {
       full_name: fullName,
       phone: phone || null,
       email: email || null,
+      birthday: requiredString(formData, "birthday") || null,
       tags: parseTags(requiredString(formData, "tags")),
       notes: requiredString(formData, "notes") || null,
       updated_at: new Date().toISOString(),
@@ -153,7 +155,8 @@ export async function createInternalNoteAction(formData: FormData) {
     businessId: current.businessId,
     customerId,
     type: "note_added",
-    title,
+    title: "Nota interna agregada",
+    description: title,
   });
 
   revalidatePath(`/app/clientes/${customerId}`);
@@ -198,7 +201,8 @@ export async function createInternalTaskAction(formData: FormData) {
     businessId: current.businessId,
     customerId,
     type: "task_created",
-    title,
+    title: "Tarea interna creada",
+    description: title,
   });
 
   revalidatePath(`/app/clientes/${customerId}`);
@@ -332,7 +336,7 @@ export async function createReservationAction(formData: FormData) {
     customerId,
     type: "reservation_created",
     title: "Reserva creada",
-    description: `${date} ${time}`,
+    description: `Reserva para ${partySize} personas el ${date} a las ${time}`,
     reservationId: data.id,
   });
 
@@ -351,6 +355,18 @@ export async function updateReservationStatusAction(formData: FormData) {
     redirect("/app/reservas?error=invalid_status");
   }
 
+  const { data: existingReservation } = await supabase
+    .from("reservations")
+    .select("status, date, time, party_size")
+    .eq("business_id", current.businessId)
+    .eq("id", id)
+    .maybeSingle<{
+      status: string;
+      date: string;
+      time: string;
+      party_size: number;
+    }>();
+
   const { error } = await supabase
     .from("reservations")
     .update({ status, updated_at: new Date().toISOString() })
@@ -359,6 +375,25 @@ export async function updateReservationStatusAction(formData: FormData) {
 
   if (error) {
     redirect(`/app/reservas?error=${encodeURIComponent(error.message)}`);
+  }
+
+  if (status === "completed" && existingReservation?.status !== "completed") {
+    const { data: customer } = await supabase
+      .from("customers")
+      .select("total_visits")
+      .eq("business_id", current.businessId)
+      .eq("id", customerId)
+      .maybeSingle<{ total_visits: number }>();
+
+    await supabase
+      .from("customers")
+      .update({
+        total_visits: (customer?.total_visits ?? 0) + 1,
+        last_visit_at: `${existingReservation?.date ?? new Date().toISOString().slice(0, 10)}T${existingReservation?.time ?? "00:00"}Z`,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("business_id", current.businessId)
+      .eq("id", customerId);
   }
 
   const eventTypeByStatus: Record<string, string> = {
@@ -374,6 +409,9 @@ export async function updateReservationStatusAction(formData: FormData) {
     customerId,
     type: eventTypeByStatus[status],
     title: `Reserva ${status}`,
+    description: existingReservation
+      ? `Reserva para ${existingReservation.party_size} personas el ${existingReservation.date} a las ${existingReservation.time}`
+      : undefined,
     reservationId: id,
   });
 

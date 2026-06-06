@@ -14,10 +14,20 @@ const sources = ["manual", "web", "whatsapp", "google", "instagram"];
 export default async function ReservationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    success?: string;
+    date?: string;
+    status?: string;
+    source?: string;
+  }>;
 }) {
   const params = await searchParams;
-  const { reservations, customers } = await getReservationsData();
+  const { reservations, customers } = await getReservationsData({
+    date: params.date,
+    status: params.status,
+    source: params.source,
+  });
 
   const rows = reservations.map((reservation) => [
     reservation.date,
@@ -67,6 +77,38 @@ export default async function ReservationsPage({
       </div>
       {params.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{params.error}</p> : null}
       {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p> : null}
+
+      <ModuleCard title="Filtros" description="Refina la lista por fecha, estado o fuente.">
+        <form className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
+          <input
+            type="date"
+            name="date"
+            defaultValue={params.date ?? ""}
+            className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400"
+          />
+          <select
+            name="status"
+            defaultValue={params.status ?? "all"}
+            className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400"
+          >
+            <option value="all">Todos los estados</option>
+            {["pending", "confirmed", "cancelled", "completed", "no_show"].map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
+          <select
+            name="source"
+            defaultValue={params.source ?? "all"}
+            className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400"
+          >
+            <option value="all">Todas las fuentes</option>
+            {sources.map((source) => <option key={source} value={source}>{source}</option>)}
+          </select>
+          <button className="h-11 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800">
+            Aplicar
+          </button>
+        </form>
+      </ModuleCard>
 
       <section className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
         <ModuleCard title="Crear reserva" description="Fecha, hora y personas son requeridos.">

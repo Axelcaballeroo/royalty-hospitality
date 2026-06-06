@@ -48,10 +48,10 @@ export default async function CalendarPage({
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-sm font-semibold text-stone-950">
-                        {reservation.time.slice(0, 5)} · {reservation.customers?.full_name ?? "Cliente"}
+                        {reservation.time.slice(0, 5)} / {reservation.customers?.full_name ?? "Cliente"}
                       </p>
                       <p className="mt-1 text-xs text-stone-500">
-                        {reservation.party_size} personas · {reservation.source}
+                        {reservation.party_size} personas / {reservation.source}
                       </p>
                     </div>
                     <StatusBadge status={reservation.status} />

@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { getDashboardData } from "@/lib/data";
 import { EmptyState, ModuleCard, StatCard } from "@/components/ui";
 
@@ -26,6 +28,39 @@ export default async function DashboardPage() {
         <StatCard title="Nuevos este mes" value={String(stats.customersNew)} detail="Clientes creados desde inicio de mes" />
         <StatCard title="Pendientes" value={String(stats.pendingReservations)} detail="Reservas por confirmar" />
         <StatCard title="No-shows del mes" value={String(stats.noShows)} detail="Requieren seguimiento" />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+        <StatCard
+          title="Tareas internas pendientes"
+          value={String(stats.pendingTasks)}
+          detail="Pendientes o en progreso"
+        />
+        <ModuleCard title="Acciones rapidas" description="Atajos para operar desde el dashboard.">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Link
+              href="/app/reservas"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
+            >
+              <Plus size={16} />
+              Crear reserva
+            </Link>
+            <Link
+              href="/app/clientes"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300"
+            >
+              <Plus size={16} />
+              Crear cliente
+            </Link>
+            <Link
+              href="/app/clientes"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300"
+            >
+              <Plus size={16} />
+              Crear tarea interna
+            </Link>
+          </div>
+        </ModuleCard>
       </section>
 
       <ModuleCard title="Actividad reciente" description="Timeline global desde customer_events.">

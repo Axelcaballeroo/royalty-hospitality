@@ -21,7 +21,7 @@ export default async function CustomerDetailPage({
 }) {
   const { id } = await params;
   const messages = await searchParams;
-  const { customer, events, reservations, notes, tasks, comments } =
+  const { customer, events, reservations, notes, tasks, comments, businessUsers } =
     await getCustomerDetail(id);
 
   if (!customer) {
@@ -38,7 +38,7 @@ export default async function CustomerDetailPage({
           {customer.full_name}
         </h1>
         <p className="mt-2 text-sm text-stone-500">
-          {customer.phone ?? "Sin telefono"} · {customer.email ?? "Sin email"}
+          {customer.phone ?? "Sin telefono"} / {customer.email ?? "Sin email"}
         </p>
       </div>
       {messages.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{messages.error}</p> : null}
@@ -53,6 +53,7 @@ export default async function CustomerDetailPage({
               <input name="phone" defaultValue={customer.phone ?? ""} className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
               <input type="email" name="email" defaultValue={customer.email ?? ""} className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             </div>
+            <input type="date" name="birthday" defaultValue={customer.birthday ?? ""} className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <input name="tags" defaultValue={customer.tags.join(", ")} className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <textarea name="notes" defaultValue={customer.notes ?? ""} className="min-h-24 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
             <button className="h-11 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">Guardar cambios</button>
@@ -96,7 +97,14 @@ export default async function CustomerDetailPage({
         <ModuleCard title="Notas internas" description="Relacionadas al cliente o reserva.">
           <form action={createInternalNoteAction} className="mb-4 grid gap-3">
             <input type="hidden" name="customer_id" value={customer.id} />
-            <input name="reservation_id" placeholder="reservation_id opcional" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+            <select name="reservation_id" className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
+              <option value="">Sin reserva asociada</option>
+              {reservations.map((reservation) => (
+                <option key={reservation.id} value={reservation.id}>
+                  {reservation.date} {reservation.time.slice(0, 5)}
+                </option>
+              ))}
+            </select>
             <input required name="title" placeholder="Titulo" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <textarea required name="content" placeholder="Contenido" className="min-h-20 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
             <button className="h-10 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">Agregar nota</button>
@@ -114,7 +122,14 @@ export default async function CustomerDetailPage({
         <ModuleCard title="Tareas internas" description="Seguimiento asignable al equipo.">
           <form action={createInternalTaskAction} className="mb-4 grid gap-3">
             <input type="hidden" name="customer_id" value={customer.id} />
-            <input name="assigned_to" placeholder="user_id asignado opcional" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+            <select name="assigned_to" className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
+              <option value="">Sin responsable</option>
+              {businessUsers.map((user) => (
+                <option key={user.user_id} value={user.user_id}>
+                  {user.role} - {user.user_id.slice(0, 8)}
+                </option>
+              ))}
+            </select>
             <input required name="title" placeholder="Tarea" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <textarea name="description" placeholder="Descripcion" className="min-h-20 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
             <div className="grid grid-cols-2 gap-3">
@@ -147,11 +162,21 @@ export default async function CustomerDetailPage({
         </ModuleCard>
       </section>
 
-      <ModuleCard title="Comentarios del equipo" description="Comentar una nota o tarea usando su id.">
+      <ModuleCard title="Comentarios del equipo" description="Comenta una nota o tarea del cliente.">
         <form action={createInternalCommentAction} className="grid gap-3 lg:grid-cols-[1fr_1fr_2fr_auto]">
           <input type="hidden" name="customer_id" value={customer.id} />
-          <input name="task_id" placeholder="task_id opcional" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-          <input name="note_id" placeholder="note_id opcional" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+          <select name="task_id" className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
+            <option value="">Sin tarea</option>
+            {tasks.map((task) => (
+              <option key={task.id} value={task.id}>{task.title}</option>
+            ))}
+          </select>
+          <select name="note_id" className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
+            <option value="">Sin nota</option>
+            {notes.map((note) => (
+              <option key={note.id} value={note.id}>{note.title}</option>
+            ))}
+          </select>
           <input required name="comment" placeholder="Comentario" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
           <button className="h-10 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800">Comentar</button>
         </form>

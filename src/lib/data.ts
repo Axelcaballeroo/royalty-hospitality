@@ -6,6 +6,7 @@ export type Customer = {
   full_name: string;
   phone: string | null;
   email: string | null;
+  birthday: string | null;
   tags: string[];
   notes: string | null;
   total_visits: number;
@@ -28,6 +29,24 @@ export type Reservation = {
   customers: { full_name: string; phone: string | null } | null;
 };
 
+export type BusinessUser = {
+  user_id: string;
+  role: string;
+  status: string;
+};
+
+export type CustomerFilters = {
+  q?: string;
+  status?: string;
+  tag?: string;
+};
+
+export type ReservationFilters = {
+  date?: string;
+  status?: string;
+  source?: string;
+};
+
 export async function getDashboardData() {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
@@ -42,6 +61,7 @@ export async function getDashboardData() {
     customersNew,
     pendingReservations,
     noShows,
+    pendingTasks,
     activity,
   ] = await Promise.all([
     supabase
@@ -70,6 +90,11 @@ export async function getDashboardData() {
       .eq("status", "no_show")
       .gte("date", monthStartIso),
     supabase
+      .from("internal_tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .in("status", ["pending", "in_progress"]),
+    supabase
       .from("customer_events")
       .select("id, type, title, description, created_at")
       .eq("business_id", current.businessId)
@@ -85,19 +110,34 @@ export async function getDashboardData() {
       customersNew: customersNew.count ?? 0,
       pendingReservations: pendingReservations.count ?? 0,
       noShows: noShows.count ?? 0,
+      pendingTasks: pendingTasks.count ?? 0,
     },
     activity: activity.data ?? [],
   };
 }
 
-export async function getCustomersData() {
+export async function getCustomersData(filters: CustomerFilters = {}) {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
-  const { data } = await supabase
+  let query = supabase
     .from("customers")
     .select("*")
-    .eq("business_id", current.businessId)
-    .order("created_at", { ascending: false });
+    .eq("business_id", current.businessId);
+
+  if (filters.q) {
+    const q = filters.q.replace(/[%_,]/g, "");
+    query = query.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%,email.ilike.%${q}%`);
+  }
+
+  if (filters.status && filters.status !== "all") {
+    query = query.eq("status", filters.status);
+  }
+
+  if (filters.tag) {
+    query = query.contains("tags", [filters.tag]);
+  }
+
+  const { data } = await query.order("created_at", { ascending: false });
 
   return { current, customers: (data ?? []) as Customer[] };
 }
@@ -105,7 +145,7 @@ export async function getCustomersData() {
 export async function getCustomerDetail(customerId: string) {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
-  const [customer, events, reservations, notes, tasks, comments] =
+  const [customer, events, reservations, notes, tasks, comments, businessUsers] =
     await Promise.all([
       supabase
         .from("customers")
@@ -133,7 +173,7 @@ export async function getCustomerDetail(customerId: string) {
         .order("created_at", { ascending: false }),
       supabase
         .from("internal_tasks")
-        .select("id, title, description, priority, status, due_date, created_at")
+        .select("id, title, description, priority, status, due_date, assigned_to, created_at")
         .eq("business_id", current.businessId)
         .eq("customer_id", customerId)
         .order("created_at", { ascending: false }),
@@ -143,6 +183,12 @@ export async function getCustomerDetail(customerId: string) {
         .eq("business_id", current.businessId)
         .order("created_at", { ascending: false })
         .limit(20),
+      supabase
+        .from("business_users")
+        .select("user_id, role, status")
+        .eq("business_id", current.businessId)
+        .eq("status", "active")
+        .order("created_at", { ascending: true }),
     ]);
 
   return {
@@ -153,17 +199,32 @@ export async function getCustomerDetail(customerId: string) {
     notes: notes.data ?? [],
     tasks: tasks.data ?? [],
     comments: comments.data ?? [],
+    businessUsers: (businessUsers.data ?? []) as BusinessUser[],
   };
 }
 
-export async function getReservationsData() {
+export async function getReservationsData(filters: ReservationFilters = {}) {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
+  let reservationsQuery = supabase
+    .from("reservations")
+    .select("id, date, time, party_size, status, source, notes, special_request, customer_id, customers(full_name, phone)")
+    .eq("business_id", current.businessId);
+
+  if (filters.date) {
+    reservationsQuery = reservationsQuery.eq("date", filters.date);
+  }
+
+  if (filters.status && filters.status !== "all") {
+    reservationsQuery = reservationsQuery.eq("status", filters.status);
+  }
+
+  if (filters.source && filters.source !== "all") {
+    reservationsQuery = reservationsQuery.eq("source", filters.source);
+  }
+
   const [reservations, customers] = await Promise.all([
-    supabase
-      .from("reservations")
-      .select("id, date, time, party_size, status, source, notes, special_request, customer_id, customers(full_name, phone)")
-      .eq("business_id", current.businessId)
+    reservationsQuery
       .order("date", { ascending: true })
       .order("time", { ascending: true }),
     supabase
