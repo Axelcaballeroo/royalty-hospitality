@@ -8,7 +8,7 @@ export function ensureDevEmail(input: string) {
   const email = normalizeEmail(input);
 
   if (process.env.NODE_ENV === "development" && email && !email.includes("@")) {
-    return `${email}@royalty.test`;
+    return `${email}@gmail.com`;
   }
 
   return email;

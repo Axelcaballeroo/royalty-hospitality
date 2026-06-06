@@ -7,6 +7,19 @@ import { createClient } from "@/lib/supabase/server";
 
 const authErrorMessage =
   "No se pudo crear la cuenta. Revisa el email o intenta con otro.";
+const passwordLengthMessage = "La contraseña debe tener al menos 6 caracteres.";
+
+function registerError(message: string): never {
+  redirect(`/register?error=${encodeURIComponent(message)}`);
+}
+
+function devErrorMessage(fallback: string, error?: { message?: string } | null) {
+  if (process.env.NODE_ENV === "development" && error?.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
 
 function slugify(value: string) {
   return value
@@ -48,6 +61,10 @@ export async function registerAction(formData: FormData) {
     redirect("/register?error=missing_fields");
   }
 
+  if (password.length < 6) {
+    registerError(passwordLengthMessage);
+  }
+
   if (!isValidEmail(email)) {
     redirect("/register?error=email_invalido");
   }
@@ -65,7 +82,9 @@ export async function registerAction(formData: FormData) {
   });
 
   if (error || !data.user) {
-    redirect(`/register?error=${encodeURIComponent(authErrorMessage)}`);
+    console.error("REGISTER ERROR:", error);
+    console.error("SIGNUP ERROR:", error);
+    registerError(devErrorMessage(authErrorMessage, error));
   }
 
   const admin = createAdminClient();
@@ -84,7 +103,14 @@ export async function registerAction(formData: FormData) {
     .single<{ id: string }>();
 
   if (businessError || !business) {
-    redirect(`/register?error=${encodeURIComponent(businessError?.message ?? "business_failed")}`);
+    console.error("REGISTER ERROR:", businessError);
+    console.error("BUSINESS INSERT ERROR:", businessError);
+    registerError(
+      `Usuario creado, pero falló la creación del negocio: ${devErrorMessage(
+        "error interno",
+        businessError,
+      )}`,
+    );
   }
 
   const { error: userError } = await admin.from("business_users").insert({
@@ -95,7 +121,9 @@ export async function registerAction(formData: FormData) {
   });
 
   if (userError) {
-    redirect(`/register?error=${encodeURIComponent(userError.message)}`);
+    console.error("REGISTER ERROR:", userError);
+    console.error("BUSINESS USER INSERT ERROR:", userError);
+    registerError(devErrorMessage("No se pudo vincular el usuario al negocio.", userError));
   }
 
   const moduleRows = ["reservations", "crm", "reports"].map((module_key) => ({
@@ -109,7 +137,9 @@ export async function registerAction(formData: FormData) {
     .insert(moduleRows);
 
   if (modulesError) {
-    redirect(`/register?error=${encodeURIComponent(modulesError.message)}`);
+    console.error("REGISTER ERROR:", modulesError);
+    console.error("MODULES INSERT ERROR:", modulesError);
+    registerError(devErrorMessage("No se pudieron activar los modulos iniciales.", modulesError));
   }
 
   redirect("/app/dashboard");
