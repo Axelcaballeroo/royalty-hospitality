@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusiness } from "@/lib/current-business";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type Customer = {
   id: string;
@@ -33,6 +34,29 @@ export type BusinessUser = {
   user_id: string;
   role: string;
   status: string;
+};
+
+export type PublicBusiness = {
+  id: string;
+  name: string;
+  slug: string;
+  type: string | null;
+  logo_url: string | null;
+  cover_url: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  timezone: string;
+  public_description: string | null;
+  brand_primary_color: string | null;
+  brand_secondary_color: string | null;
+  instagram_url: string | null;
+  facebook_url: string | null;
+  whatsapp_url: string | null;
+  website_enabled: boolean;
+  reservation_enabled: boolean;
 };
 
 export type CustomerFilters = {
@@ -266,5 +290,53 @@ export async function getCalendarData(date: string) {
     current,
     reservations: (reservations.data ?? []) as unknown as Reservation[],
     tasks: tasks.data ?? [],
+  };
+}
+
+export async function getBusinessSettingsData() {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const [hours, modules] = await Promise.all([
+    supabase
+      .from("business_hours")
+      .select("day_of_week, opens_at, closes_at, is_closed")
+      .eq("business_id", current.businessId)
+      .order("day_of_week", { ascending: true }),
+    supabase
+      .from("business_modules")
+      .select("module_key, enabled")
+      .eq("business_id", current.businessId)
+      .order("module_key", { ascending: true }),
+  ]);
+
+  return {
+    current,
+    hours: hours.data ?? [],
+    modules: modules.data ?? [],
+  };
+}
+
+export async function getPublicBusinessBySlug(slug: string) {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("businesses")
+    .select("*")
+    .eq("slug", slug)
+    .eq("status", "active")
+    .maybeSingle<PublicBusiness>();
+
+  if (!data) {
+    return null;
+  }
+
+  const { data: hours } = await admin
+    .from("business_hours")
+    .select("day_of_week, opens_at, closes_at, is_closed")
+    .eq("business_id", data.id)
+    .order("day_of_week", { ascending: true });
+
+  return {
+    business: data,
+    hours: hours ?? [],
   };
 }

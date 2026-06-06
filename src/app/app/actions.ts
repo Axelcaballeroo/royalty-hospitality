@@ -81,7 +81,7 @@ export async function createCustomerAction(formData: FormData) {
     customerId: data.id,
     type: "customer_created",
     title: "Cliente creado",
-    description: `Se creó el cliente ${fullName}`,
+    description: `Se creo el cliente ${fullName}`,
   });
 
   revalidatePath("/app/clientes");
@@ -448,4 +448,39 @@ export async function updateReservationAction(formData: FormData) {
 
   revalidatePath("/app/reservas");
   redirect("/app/reservas?success=reservation_updated");
+}
+
+export async function updatePublicWebsiteSettingsAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("businesses")
+    .update({
+      public_description: requiredString(formData, "public_description") || null,
+      logo_url: requiredString(formData, "logo_url") || null,
+      cover_url: requiredString(formData, "cover_url") || null,
+      brand_primary_color: requiredString(formData, "brand_primary_color") || null,
+      brand_secondary_color: requiredString(formData, "brand_secondary_color") || null,
+      phone: requiredString(formData, "phone") || null,
+      email: requiredString(formData, "email") || null,
+      address: requiredString(formData, "address") || null,
+      city: requiredString(formData, "city") || null,
+      country: requiredString(formData, "country") || null,
+      instagram_url: requiredString(formData, "instagram_url") || null,
+      facebook_url: requiredString(formData, "facebook_url") || null,
+      whatsapp_url: requiredString(formData, "whatsapp_url") || null,
+      website_enabled: formData.get("website_enabled") === "on",
+      reservation_enabled: formData.get("reservation_enabled") === "on",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", current.businessId);
+
+  if (error) {
+    redirect(`/app/configuracion?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/configuracion");
+  revalidatePath(`/site/${current.business.slug}`);
+  redirect("/app/configuracion?success=public_settings_updated");
 }
