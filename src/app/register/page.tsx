@@ -41,7 +41,11 @@ export default async function RegisterPage({
           </label>
           <label className="block text-sm font-medium text-stone-700">
             Email
-            <input required type="email" name="email" className="mt-2 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+            <input required type="text" inputMode="email" name="email" className="mt-2 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+            <span className="mt-2 block text-xs leading-5 text-stone-500">
+              Para pruebas puedes usar: demo@royalty.test o escribir solo
+              &quot;demo1&quot; en desarrollo.
+            </span>
           </label>
           <label className="block text-sm font-medium text-stone-700">
             Password

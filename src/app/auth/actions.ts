@@ -1,8 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { ensureDevEmail, isValidEmail, normalizeEmail } from "@/lib/auth-email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+
+const authErrorMessage =
+  "No se pudo crear la cuenta. Revisa el email o intenta con otro.";
 
 function slugify(value: string) {
   return value
@@ -15,11 +19,11 @@ function slugify(value: string) {
 }
 
 export async function loginAction(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const email = normalizeEmail(String(formData.get("email") ?? ""));
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/app/dashboard");
 
-  if (!email || !password) {
+  if (!email || !password || !isValidEmail(email)) {
     redirect("/login?error=missing_fields");
   }
 
@@ -35,13 +39,17 @@ export async function loginAction(formData: FormData) {
 
 export async function registerAction(formData: FormData) {
   const fullName = String(formData.get("fullName") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const email = ensureDevEmail(String(formData.get("email") ?? ""));
   const password = String(formData.get("password") ?? "");
   const businessName = String(formData.get("businessName") ?? "").trim();
   const businessType = String(formData.get("businessType") ?? "").trim();
 
   if (!fullName || !email || !password || !businessName || !businessType) {
     redirect("/register?error=missing_fields");
+  }
+
+  if (!isValidEmail(email)) {
+    redirect("/register?error=email_invalido");
   }
 
   const supabase = await createClient();
@@ -57,7 +65,7 @@ export async function registerAction(formData: FormData) {
   });
 
   if (error || !data.user) {
-    redirect(`/register?error=${encodeURIComponent(error?.message ?? "signup_failed")}`);
+    redirect(`/register?error=${encodeURIComponent(authErrorMessage)}`);
   }
 
   const admin = createAdminClient();

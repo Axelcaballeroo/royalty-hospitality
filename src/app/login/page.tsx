@@ -47,7 +47,8 @@ export default async function LoginPage({
             Email
             <input
               required
-              type="email"
+              type="text"
+              inputMode="email"
               name="email"
               className="mt-2 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none transition focus:border-stone-400"
             />
