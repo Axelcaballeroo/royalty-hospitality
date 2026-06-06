@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusiness } from "@/lib/current-business";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSegmentCustomers, segmentDefinitions } from "@/lib/marketing";
 
 export type Customer = {
   id: string;
@@ -99,6 +100,37 @@ export type LoyaltyTransaction = {
   customers: { full_name: string } | null;
 };
 
+export type Campaign = {
+  id: string;
+  name: string;
+  type: string;
+  segment_key: string;
+  message: string;
+  channel: string;
+  status: string;
+  scheduled_at: string | null;
+  sent_at: string | null;
+  created_at: string;
+};
+
+export type CampaignRecipient = {
+  id: string;
+  status: string;
+  sent_at: string | null;
+  opened_at: string | null;
+  clicked_at: string | null;
+  redeemed_at: string | null;
+  customers: { full_name: string; phone: string | null; email: string | null } | null;
+};
+
+export type MessageTemplate = {
+  id: string;
+  name: string;
+  type: string;
+  message: string;
+  status: string;
+};
+
 export type ClubCustomer = {
   id: string;
   full_name: string;
@@ -126,6 +158,10 @@ export async function getDashboardData() {
     pendingTasks,
     pointsIssued,
     rewardsRedeemed,
+    campaignsSent,
+    customersReached,
+    inactiveCustomers,
+    birthdayCustomers,
     activity,
   ] = await Promise.all([
     supabase
@@ -171,6 +207,26 @@ export async function getDashboardData() {
       .eq("type", "redeem")
       .gte("created_at", `${monthStartIso}T00:00:00.000Z`),
     supabase
+      .from("campaigns")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "sent")
+      .gte("sent_at", `${monthStartIso}T00:00:00.000Z`),
+    supabase
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "sent")
+      .gte("sent_at", `${monthStartIso}T00:00:00.000Z`),
+    getSegmentCustomers({
+      businessId: current.businessId,
+      segmentKey: "inactive_60d",
+    }),
+    getSegmentCustomers({
+      businessId: current.businessId,
+      segmentKey: "birthday_month",
+    }),
+    supabase
       .from("customer_events")
       .select("id, type, title, description, created_at")
       .eq("business_id", current.businessId)
@@ -193,6 +249,10 @@ export async function getDashboardData() {
           0,
         ) ?? 0,
       rewardsRedeemed: rewardsRedeemed.count ?? 0,
+      campaignsSent: campaignsSent.count ?? 0,
+      customersReached: customersReached.count ?? 0,
+      inactiveCustomers: inactiveCustomers.length,
+      birthdayCustomers: birthdayCustomers.length,
     },
     activity: activity.data ?? [],
   };
@@ -227,7 +287,7 @@ export async function getCustomersData(filters: CustomerFilters = {}) {
 export async function getCustomerDetail(customerId: string) {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
-  const [customer, events, reservations, notes, tasks, comments, businessUsers, loyaltyAccount, loyaltyTransactions, rewards] =
+  const [customer, events, reservations, notes, tasks, comments, businessUsers, loyaltyAccount, loyaltyTransactions, rewards, campaignRecipients] =
     await Promise.all([
       supabase
         .from("customers")
@@ -290,6 +350,13 @@ export async function getCustomerDetail(customerId: string) {
         .eq("business_id", current.businessId)
         .eq("status", "active")
         .order("points_required", { ascending: true }),
+      supabase
+        .from("campaign_recipients")
+        .select("id, status, sent_at, opened_at, clicked_at, redeemed_at, campaigns(name, channel)")
+        .eq("business_id", current.businessId)
+        .eq("customer_id", customerId)
+        .order("created_at", { ascending: false })
+        .limit(12),
     ]);
 
   return {
@@ -304,6 +371,7 @@ export async function getCustomerDetail(customerId: string) {
     loyaltyAccount: loyaltyAccount.data,
     loyaltyTransactions: loyaltyTransactions.data ?? [],
     rewards: (rewards.data ?? []) as Reward[],
+    campaignRecipients: campaignRecipients.data ?? [],
   };
 }
 
@@ -460,6 +528,110 @@ export async function getLoyaltyData() {
         gold: loyaltyAccounts.filter((account) => account.tier === "gold").length,
         black: loyaltyAccounts.filter((account) => account.tier === "black").length,
       },
+    },
+  };
+}
+
+export async function getMarketingData(selectedSegment = "all_customers") {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const segmentCustomers = await getSegmentCustomers({
+    businessId: current.businessId,
+    segmentKey: selectedSegment,
+  });
+  const [
+    campaigns,
+    sentCampaigns,
+    recipients,
+    inactiveCustomers,
+    birthdayCustomers,
+    vipCustomers,
+    templates,
+  ] = await Promise.all([
+    supabase
+      .from("campaigns")
+      .select("id, name, type, segment_key, message, channel, status, scheduled_at, sent_at, created_at")
+      .eq("business_id", current.businessId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("campaigns")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "sent"),
+    supabase
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId),
+    getSegmentCustomers({ businessId: current.businessId, segmentKey: "inactive_60d" }),
+    getSegmentCustomers({ businessId: current.businessId, segmentKey: "birthday_month" }),
+    getSegmentCustomers({ businessId: current.businessId, segmentKey: "vip_customers" }),
+    supabase
+      .from("message_templates")
+      .select("id, name, type, message, status")
+      .eq("business_id", current.businessId)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const segmentSummaries = await Promise.all(
+    segmentDefinitions.map(async (segment) => ({
+      ...segment,
+      count: (
+        await getSegmentCustomers({
+          businessId: current.businessId,
+          segmentKey: segment.key,
+        })
+      ).length,
+    })),
+  );
+
+  return {
+    current,
+    campaigns: (campaigns.data ?? []) as Campaign[],
+    templates: (templates.data ?? []) as MessageTemplate[],
+    segmentCustomers,
+    segmentSummaries,
+    metrics: {
+      campaignsCreated: campaigns.data?.length ?? 0,
+      campaignsSent: sentCampaigns.count ?? 0,
+      customersReached: recipients.count ?? 0,
+      inactiveCustomers: inactiveCustomers.length,
+      birthdayCustomers: birthdayCustomers.length,
+      vipCustomers: vipCustomers.length,
+    },
+  };
+}
+
+export async function getCampaignDetail(campaignId: string) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const [campaign, recipients] = await Promise.all([
+    supabase
+      .from("campaigns")
+      .select("id, name, type, segment_key, message, channel, status, scheduled_at, sent_at, created_at")
+      .eq("business_id", current.businessId)
+      .eq("id", campaignId)
+      .maybeSingle<Campaign>(),
+    supabase
+      .from("campaign_recipients")
+      .select("id, status, sent_at, opened_at, clicked_at, redeemed_at, customers(full_name, phone, email)")
+      .eq("business_id", current.businessId)
+      .eq("campaign_id", campaignId)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const recipientRows = (recipients.data ?? []) as unknown as CampaignRecipient[];
+
+  return {
+    current,
+    campaign: campaign.data,
+    recipients: recipientRows,
+    metrics: {
+      total: recipientRows.length,
+      sent: recipientRows.filter((recipient) => recipient.status === "sent").length,
+      opened: recipientRows.filter((recipient) => recipient.opened_at).length,
+      clicked: recipientRows.filter((recipient) => recipient.clicked_at).length,
+      redeemed: recipientRows.filter((recipient) => recipient.redeemed_at).length,
     },
   };
 }

@@ -93,7 +93,7 @@ create table public.customer_events (
   business_id uuid not null references public.businesses(id) on delete cascade,
   customer_id uuid not null references public.customers(id) on delete cascade,
   reservation_id uuid references public.reservations(id) on delete set null,
-  type text not null check (type in ('customer_created', 'reservation_created', 'reservation_confirmed', 'reservation_cancelled', 'reservation_no_show', 'visit_completed', 'note_added', 'task_created', 'campaign_sent', 'wallet_topup', 'points_earned', 'reward_redeemed', 'points_adjusted')),
+  type text not null check (type in ('customer_created', 'reservation_created', 'reservation_confirmed', 'reservation_cancelled', 'reservation_no_show', 'visit_completed', 'note_added', 'task_created', 'campaign_sent', 'campaign_redeemed', 'wallet_topup', 'points_earned', 'reward_redeemed', 'points_adjusted')),
   title text not null,
   description text,
   metadata jsonb not null default '{}'::jsonb,

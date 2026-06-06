@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusiness } from "@/lib/current-business";
 import { applyLoyaltyPoints } from "@/lib/loyalty";
 import { generateLoyaltyCode } from "@/lib/loyalty-code";
+import { getSegmentCustomers } from "@/lib/marketing";
 
 const validReservationStatuses = [
   "pending",
@@ -706,4 +707,192 @@ export async function registerConsumptionAction(formData: FormData) {
   revalidatePath(returnTo);
   revalidatePath("/app/fidelizacion");
   redirect(`${returnTo}?success=consumption_registered`);
+}
+
+export async function createMessageTemplateAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const name = requiredString(formData, "name");
+  const type = requiredString(formData, "type");
+  const message = requiredString(formData, "message");
+
+  if (!name || !type || !message) {
+    redirect("/app/marketing?error=template_validation");
+  }
+
+  const { error } = await supabase.from("message_templates").insert({
+    business_id: current.businessId,
+    name,
+    type,
+    message,
+    status: requiredString(formData, "status") || "active",
+    created_by: current.userId,
+  });
+
+  if (error) {
+    redirect(`/app/marketing?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/marketing");
+  redirect("/app/marketing?success=template_created");
+}
+
+export async function createCampaignAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const name = requiredString(formData, "name");
+  const type = requiredString(formData, "type");
+  const segmentKey = requiredString(formData, "segment_key");
+  const channel = requiredString(formData, "channel") || "manual";
+  const message = requiredString(formData, "message");
+  const action = requiredString(formData, "campaign_action");
+  const scheduledAt = requiredString(formData, "scheduled_at");
+
+  if (!name || !type || !segmentKey || !message) {
+    redirect("/app/marketing?error=campaign_validation");
+  }
+
+  const status = action === "schedule" ? "scheduled" : "draft";
+  const { data, error } = await supabase
+    .from("campaigns")
+    .insert({
+      business_id: current.businessId,
+      name,
+      type,
+      segment_key: segmentKey,
+      channel,
+      message,
+      status,
+      scheduled_at: status === "scheduled" ? scheduledAt || new Date().toISOString() : null,
+      created_by: current.userId,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !data) {
+    redirect(`/app/marketing?error=${encodeURIComponent(error?.message ?? "campaign_failed")}`);
+  }
+
+  if (action === "send") {
+    redirect(`/app/marketing/${data.id}?send=1`);
+  }
+
+  revalidatePath("/app/marketing");
+  redirect(`/app/marketing/${data.id}?success=campaign_created`);
+}
+
+export async function sendCampaignAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const campaignId = requiredString(formData, "campaign_id");
+
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("id, name, segment_key, channel")
+    .eq("business_id", current.businessId)
+    .eq("id", campaignId)
+    .maybeSingle<{ id: string; name: string; segment_key: string; channel: string }>();
+
+  if (!campaign) {
+    redirect("/app/marketing?error=campaign_not_found");
+  }
+
+  const customers = await getSegmentCustomers({
+    businessId: current.businessId,
+    segmentKey: campaign.segment_key,
+  });
+  const now = new Date().toISOString();
+
+  if (customers.length) {
+    const { error: recipientsError } = await supabase
+      .from("campaign_recipients")
+      .upsert(
+        customers.map((customer) => ({
+          business_id: current.businessId,
+          campaign_id: campaign.id,
+          customer_id: customer.id,
+          status: "sent",
+          sent_at: now,
+        })),
+        { onConflict: "campaign_id,customer_id" },
+      );
+
+    if (recipientsError) {
+      redirect(`/app/marketing/${campaign.id}?error=${encodeURIComponent(recipientsError.message)}`);
+    }
+
+    await supabase.from("customer_events").insert(
+      customers.map((customer) => ({
+        business_id: current.businessId,
+        customer_id: customer.id,
+        type: "campaign_sent",
+        title: "Campana enviada",
+        description: `${campaign.name} / ${campaign.channel}`,
+        created_by: current.userId,
+      })),
+    );
+  }
+
+  const { error } = await supabase
+    .from("campaigns")
+    .update({
+      status: "sent",
+      sent_at: now,
+      updated_at: now,
+    })
+    .eq("business_id", current.businessId)
+    .eq("id", campaign.id);
+
+  if (error) {
+    redirect(`/app/marketing/${campaign.id}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/marketing");
+  revalidatePath(`/app/marketing/${campaign.id}`);
+  redirect(`/app/marketing/${campaign.id}?success=campaign_sent`);
+}
+
+export async function updateCampaignRecipientStatusAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const campaignId = requiredString(formData, "campaign_id");
+  const recipientId = requiredString(formData, "recipient_id");
+  const status = requiredString(formData, "status");
+  const now = new Date().toISOString();
+
+  const timestampFieldByStatus: Record<string, string> = {
+    opened: "opened_at",
+    clicked: "clicked_at",
+    redeemed: "redeemed_at",
+  };
+  const updatePayload: Record<string, string> = { status };
+
+  if (timestampFieldByStatus[status]) {
+    updatePayload[timestampFieldByStatus[status]] = now;
+  }
+
+  const { data: recipient, error } = await supabase
+    .from("campaign_recipients")
+    .update(updatePayload)
+    .eq("business_id", current.businessId)
+    .eq("id", recipientId)
+    .select("customer_id")
+    .maybeSingle<{ customer_id: string }>();
+
+  if (error) {
+    redirect(`/app/marketing/${campaignId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  if (status === "redeemed" && recipient?.customer_id) {
+    await addCustomerEvent({
+      businessId: current.businessId,
+      customerId: recipient.customer_id,
+      type: "campaign_redeemed",
+      title: "Campana canjeada",
+      description: campaignId,
+    });
+  }
+
+  revalidatePath(`/app/marketing/${campaignId}`);
+  redirect(`/app/marketing/${campaignId}?success=recipient_updated`);
 }

@@ -22,13 +22,17 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <StatCard title="Reservas de hoy" value={String(stats.reservationsToday)} detail="Fecha actual del servidor" tone="dark" />
         <StatCard title="Clientes totales" value={String(stats.customersTotal)} detail="CRM del tenant" />
         <StatCard title="Nuevos este mes" value={String(stats.customersNew)} detail="Clientes creados desde inicio de mes" />
         <StatCard title="Pendientes" value={String(stats.pendingReservations)} detail="Reservas por confirmar" />
         <StatCard title="No-shows del mes" value={String(stats.noShows)} detail="Requieren seguimiento" />
         <StatCard title="Puntos emitidos" value={String(stats.pointsIssued)} detail="Este mes" />
+        <StatCard title="Campanas enviadas" value={String(stats.campaignsSent)} detail="Este mes" />
+        <StatCard title="Clientes alcanzados" value={String(stats.customersReached)} detail="Este mes" />
+        <StatCard title="Inactivos" value={String(stats.inactiveCustomers)} detail="60 dias" />
+        <StatCard title="Cumpleanos" value={String(stats.birthdayCustomers)} detail="Este mes" />
         <StatCard title="Canjes" value={String(stats.rewardsRedeemed)} detail="Recompensas este mes" />
       </section>
 

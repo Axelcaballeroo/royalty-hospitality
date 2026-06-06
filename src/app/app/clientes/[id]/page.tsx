@@ -36,6 +36,7 @@ export default async function CustomerDetailPage({
     loyaltyAccount,
     loyaltyTransactions,
     rewards,
+    campaignRecipients,
   } =
     await getCustomerDetail(id);
 
@@ -143,6 +144,28 @@ export default async function CustomerDetailPage({
           />
         ) : (
           <EmptyState title="Sin movimientos de puntos" description="Las visitas completadas, ajustes y canjes apareceran aqui." />
+        )}
+      </ModuleCard>
+
+      <ModuleCard title="Marketing" description="Campanas recibidas y estados manuales.">
+        {campaignRecipients.length ? (
+          <DataTable
+            columns={["Campana", "Canal", "Estado", "Fecha"]}
+            rows={campaignRecipients.map((recipient) => {
+              const campaign = Array.isArray(recipient.campaigns)
+                ? recipient.campaigns[0]
+                : recipient.campaigns;
+
+              return [
+                campaign?.name ?? "Campana",
+                campaign?.channel ?? "-",
+                <StatusBadge key="status" status={recipient.status} />,
+                recipient.sent_at ? new Date(recipient.sent_at).toLocaleDateString("es-MX") : "-",
+              ];
+            })}
+          />
+        ) : (
+          <EmptyState title="Sin campanas recibidas" description="Cuando envies campanas simuladas, apareceran aqui." />
         )}
       </ModuleCard>
 
