@@ -1,4 +1,5 @@
-import { Bell, Search } from "lucide-react";
+import Link from "next/link";
+import { Bell, LogOut, Search } from "lucide-react";
 
 export function AppHeader() {
   return (
@@ -27,6 +28,14 @@ export function AppHeader() {
           >
             <Bell size={17} />
           </button>
+          <Link
+            href="/logout"
+            className="flex size-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+            aria-label="Cerrar sesion"
+            title="Cerrar sesion"
+          >
+            <LogOut size={17} />
+          </Link>
           <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-600">
             Supabase Auth preparado
           </div>

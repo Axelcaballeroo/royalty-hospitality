@@ -28,6 +28,7 @@ Copia `.env.example` a `.env.local` y completa:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 ```
 
 ## Rutas iniciales
@@ -44,6 +45,25 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 - `/app/rrhh`
 - `/app/reportes`
 - `/app/configuracion`
+- `/login`
+- `/register`
+- `/logout`
+
+## Etapa 2
+
+Implementado:
+
+- Supabase SSR client, server client, admin client y middleware.
+- Proteccion de rutas bajo `/app`.
+- Registro con creacion de usuario, negocio, owner y modulos base.
+- Helper `getCurrentBusiness()` para resolver tenant y rol.
+- Dashboard con metricas reales desde Supabase.
+- CRUD funcional base para clientes y reservas.
+- Timeline de cliente con `customer_events`.
+- Notas, tareas y comentarios internos basicos desde el detalle del cliente.
+- Agenda simple en `/app/calendario`.
+
+El `SUPABASE_SERVICE_ROLE_KEY` solo se usa en servidor para bootstrap del negocio.
 
 ## Supabase
 
