@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusiness } from "@/lib/current-business";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSegmentCustomers, segmentDefinitions } from "@/lib/marketing";
+import { estimateWorkedHours, getTodayDate, getWeekStartIso } from "@/lib/hr";
 
 export type Customer = {
   id: string;
@@ -175,6 +176,42 @@ export type WasteAlert = {
   inventory_items?: { name: string; unit: string } | null;
 };
 
+export type Employee = {
+  id: string;
+  user_id: string | null;
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+  position: string | null;
+  status: string;
+  created_at: string;
+};
+
+export type Shift = {
+  id: string;
+  employee_id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  role: string | null;
+  status: string;
+  employees?: { full_name: string; position: string | null } | null;
+};
+
+export type TimeClockEntry = {
+  id: string;
+  employee_id: string;
+  shift_id: string | null;
+  clock_in: string;
+  clock_out: string | null;
+  break_start: string | null;
+  break_end: string | null;
+  notes: string | null;
+  created_at: string;
+  employees?: { full_name: string; position: string | null } | null;
+  shifts?: { date: string; start_time: string; end_time: string; role: string | null } | null;
+};
+
 export type ClubCustomer = {
   id: string;
   full_name: string;
@@ -210,6 +247,9 @@ export async function getDashboardData() {
     openWasteAlerts,
     urgentBatches,
     wasteAlertsForLoss,
+    employeesWorkingNow,
+    shiftsToday,
+    pendingClockOuts,
     activity,
   ] = await Promise.all([
     supabase
@@ -296,6 +336,22 @@ export async function getDashboardData() {
       .eq("business_id", current.businessId)
       .eq("status", "open"),
     supabase
+      .from("time_clock_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .is("clock_out", null),
+    supabase
+      .from("shifts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("date", today)
+      .neq("status", "cancelled"),
+    supabase
+      .from("time_clock_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .is("clock_out", null),
+    supabase
       .from("customer_events")
       .select("id, type, title, description, created_at")
       .eq("business_id", current.businessId)
@@ -338,6 +394,9 @@ export async function getDashboardData() {
           (sum, alert) => sum + Number(alert.estimated_loss),
           0,
         ) ?? 0,
+      employeesWorkingNow: employeesWorkingNow.count ?? 0,
+      shiftsToday: shiftsToday.count ?? 0,
+      pendingClockOuts: pendingClockOuts.count ?? 0,
     },
     activity: activity.data ?? [],
   };
@@ -821,6 +880,209 @@ export async function getInventoryItemDetail(itemId: string) {
     movements: (movements.data ?? []) as InventoryMovement[],
     alerts: (alerts.data ?? []) as WasteAlert[],
     stock: batchRows.reduce((sum, batch) => sum + Number(batch.quantity), 0),
+  };
+}
+
+export async function getHrData() {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const today = getTodayDate();
+  const weekStart = getWeekStartIso();
+  const todayStart = `${today}T00:00:00.000Z`;
+  const todayEnd = `${today}T23:59:59.999Z`;
+
+  const [
+    employees,
+    shiftsToday,
+    upcomingShifts,
+    openEntries,
+    entriesToday,
+    weekEntries,
+    missedShifts,
+    completedShifts,
+    businessUsers,
+  ] = await Promise.all([
+    supabase
+      .from("employees")
+      .select("id, user_id, full_name, phone, email, position, status, created_at")
+      .eq("business_id", current.businessId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("shifts")
+      .select("id, employee_id, date, start_time, end_time, role, status, employees(full_name, position)")
+      .eq("business_id", current.businessId)
+      .eq("date", today)
+      .order("start_time", { ascending: true }),
+    supabase
+      .from("shifts")
+      .select("id, employee_id, date, start_time, end_time, role, status, employees(full_name, position)")
+      .eq("business_id", current.businessId)
+      .gte("date", today)
+      .neq("status", "cancelled")
+      .order("date", { ascending: true })
+      .order("start_time", { ascending: true })
+      .limit(12),
+    supabase
+      .from("time_clock_entries")
+      .select("id, employee_id, shift_id, clock_in, clock_out, break_start, break_end, notes, created_at, employees(full_name, position), shifts(date, start_time, end_time, role)")
+      .eq("business_id", current.businessId)
+      .is("clock_out", null)
+      .order("clock_in", { ascending: true }),
+    supabase
+      .from("time_clock_entries")
+      .select("id, employee_id, shift_id, clock_in, clock_out, break_start, break_end, notes, created_at, employees(full_name, position)")
+      .eq("business_id", current.businessId)
+      .gte("clock_in", todayStart)
+      .lte("clock_in", todayEnd)
+      .order("clock_in", { ascending: false }),
+    supabase
+      .from("time_clock_entries")
+      .select("clock_in, clock_out, break_start, break_end")
+      .eq("business_id", current.businessId)
+      .gte("clock_in", weekStart),
+    supabase
+      .from("shifts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "missed"),
+    supabase
+      .from("shifts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "completed")
+      .gte("date", today),
+    supabase
+      .from("business_users")
+      .select("user_id, role, status")
+      .eq("business_id", current.businessId)
+      .eq("status", "active"),
+  ]);
+
+  const employeeRows = (employees.data ?? []) as Employee[];
+  const openEntryRows = (openEntries.data ?? []) as unknown as TimeClockEntry[];
+  const entriesTodayRows = (entriesToday.data ?? []) as unknown as TimeClockEntry[];
+  const weekHours =
+    weekEntries.data?.reduce(
+      (sum, entry) => sum + estimateWorkedHours(entry),
+      0,
+    ) ?? 0;
+
+  return {
+    current,
+    employees: employeeRows,
+    shiftsToday: (shiftsToday.data ?? []) as unknown as Shift[],
+    upcomingShifts: (upcomingShifts.data ?? []) as unknown as Shift[],
+    openEntries: openEntryRows,
+    entriesToday: entriesTodayRows,
+    businessUsers: (businessUsers.data ?? []) as BusinessUser[],
+    summary: {
+      activeEmployees: employeeRows.filter((employee) => employee.status === "active").length,
+      shiftsToday: shiftsToday.data?.length ?? 0,
+      entriesToday: entriesTodayRows.length,
+      pendingClockOuts: openEntryRows.length,
+      missedShifts: missedShifts.count ?? 0,
+      completedShifts: completedShifts.count ?? 0,
+      weekHours,
+      lateEntries: 0,
+    },
+  };
+}
+
+export async function getEmployeeDetail(employeeId: string) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const today = getTodayDate();
+  const weekStart = getWeekStartIso();
+  const [employee, upcomingShifts, clockEntries, weekEntries, businessUsers] =
+    await Promise.all([
+      supabase
+        .from("employees")
+        .select("id, user_id, full_name, phone, email, position, status, created_at")
+        .eq("business_id", current.businessId)
+        .eq("id", employeeId)
+        .maybeSingle<Employee>(),
+      supabase
+        .from("shifts")
+        .select("id, employee_id, date, start_time, end_time, role, status")
+        .eq("business_id", current.businessId)
+        .eq("employee_id", employeeId)
+        .gte("date", today)
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true })
+        .limit(10),
+      supabase
+        .from("time_clock_entries")
+        .select("id, employee_id, shift_id, clock_in, clock_out, break_start, break_end, notes, created_at, shifts(date, start_time, end_time, role)")
+        .eq("business_id", current.businessId)
+        .eq("employee_id", employeeId)
+        .order("clock_in", { ascending: false })
+        .limit(20),
+      supabase
+        .from("time_clock_entries")
+        .select("clock_in, clock_out, break_start, break_end")
+        .eq("business_id", current.businessId)
+        .eq("employee_id", employeeId)
+        .gte("clock_in", weekStart),
+      supabase
+        .from("business_users")
+        .select("user_id, role, status")
+        .eq("business_id", current.businessId)
+        .eq("status", "active"),
+    ]);
+
+  return {
+    current,
+    employee: employee.data,
+    upcomingShifts: (upcomingShifts.data ?? []) as Shift[],
+    clockEntries: (clockEntries.data ?? []) as unknown as TimeClockEntry[],
+    businessUsers: (businessUsers.data ?? []) as BusinessUser[],
+    weekHours:
+      weekEntries.data?.reduce(
+        (sum, entry) => sum + estimateWorkedHours(entry),
+        0,
+      ) ?? 0,
+  };
+}
+
+export async function getTimeClockData() {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const today = getTodayDate();
+  const [employees, shiftsToday, openEntries, entriesToday] = await Promise.all([
+    supabase
+      .from("employees")
+      .select("id, user_id, full_name, phone, email, position, status, created_at")
+      .eq("business_id", current.businessId)
+      .eq("status", "active")
+      .order("full_name", { ascending: true }),
+    supabase
+      .from("shifts")
+      .select("id, employee_id, date, start_time, end_time, role, status, employees(full_name, position)")
+      .eq("business_id", current.businessId)
+      .eq("date", today)
+      .neq("status", "cancelled")
+      .order("start_time", { ascending: true }),
+    supabase
+      .from("time_clock_entries")
+      .select("id, employee_id, shift_id, clock_in, clock_out, break_start, break_end, notes, created_at, employees(full_name, position), shifts(date, start_time, end_time, role)")
+      .eq("business_id", current.businessId)
+      .is("clock_out", null)
+      .order("clock_in", { ascending: true }),
+    supabase
+      .from("time_clock_entries")
+      .select("id, employee_id, shift_id, clock_in, clock_out, break_start, break_end, notes, created_at, employees(full_name, position)")
+      .eq("business_id", current.businessId)
+      .gte("clock_in", `${today}T00:00:00.000Z`)
+      .lte("clock_in", `${today}T23:59:59.999Z`)
+      .order("clock_in", { ascending: false }),
+  ]);
+
+  return {
+    current,
+    employees: (employees.data ?? []) as Employee[],
+    shiftsToday: (shiftsToday.data ?? []) as unknown as Shift[],
+    openEntries: (openEntries.data ?? []) as unknown as TimeClockEntry[],
+    entriesToday: (entriesToday.data ?? []) as unknown as TimeClockEntry[],
   };
 }
 

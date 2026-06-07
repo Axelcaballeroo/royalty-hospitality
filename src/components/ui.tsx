@@ -60,6 +60,10 @@ const statusClasses: Record<string, string> = {
   cancelled: "border-red-200 bg-red-50 text-red-700",
   no_show: "border-rose-200 bg-rose-50 text-rose-700",
   active: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  inactive: "border-stone-200 bg-stone-50 text-stone-600",
+  suspended: "border-red-200 bg-red-50 text-red-700",
+  scheduled: "border-sky-200 bg-sky-50 text-sky-700",
+  missed: "border-red-200 bg-red-50 text-red-700",
   urgent: "border-red-200 bg-red-50 text-red-700",
   high: "border-orange-200 bg-orange-50 text-orange-700",
   medium: "border-sky-200 bg-sky-50 text-sky-700",
@@ -79,6 +83,8 @@ const statusClasses: Record<string, string> = {
   near_expiration: "border-amber-200 bg-amber-50 text-amber-700",
   expired: "border-stone-200 bg-stone-50 text-stone-600",
   used: "border-stone-200 bg-stone-100 text-stone-600",
+  working: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  on_break: "border-amber-200 bg-amber-50 text-amber-700",
 };
 
 export function StatusBadge({ status }: { status: string }) {

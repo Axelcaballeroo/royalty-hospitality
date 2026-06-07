@@ -8,6 +8,7 @@ import { applyLoyaltyPoints } from "@/lib/loyalty";
 import { generateLoyaltyCode } from "@/lib/loyalty-code";
 import { getSegmentCustomers } from "@/lib/marketing";
 import { getBatchStatus, getRiskLevel, inventoryMovementTypes, inventoryUnits } from "@/lib/inventory";
+import { employeeStatuses, shiftStatuses } from "@/lib/hr";
 
 const validReservationStatuses = [
   "pending",
@@ -1077,6 +1078,341 @@ export async function refreshWasteAlertsAction() {
 
   revalidatePath("/app/inventario");
   redirect("/app/inventario?success=waste_alerts_refreshed");
+}
+
+export async function createEmployeeAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const fullName = requiredString(formData, "full_name");
+  const status = requiredString(formData, "status") || "active";
+  const returnTo = requiredString(formData, "return_to") || "/app/rrhh";
+
+  if (!fullName || !employeeStatuses.includes(status)) {
+    redirect(`${returnTo}?error=employee_validation`);
+  }
+
+  const { data, error } = await supabase
+    .from("employees")
+    .insert({
+      business_id: current.businessId,
+      user_id: requiredString(formData, "user_id") || null,
+      full_name: fullName,
+      phone: requiredString(formData, "phone") || null,
+      email: requiredString(formData, "email") || null,
+      position: requiredString(formData, "position") || null,
+      status,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !data) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error?.message ?? "employee_failed")}`);
+  }
+
+  revalidatePath("/app/rrhh");
+  revalidatePath("/app/dashboard");
+  redirect(`/app/rrhh/${data.id}?success=employee_created`);
+}
+
+export async function updateEmployeeAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const employeeId = requiredString(formData, "employee_id");
+  const fullName = requiredString(formData, "full_name");
+  const status = requiredString(formData, "status") || "active";
+  const returnTo = requiredString(formData, "return_to") || `/app/rrhh/${employeeId}`;
+
+  if (!employeeId || !fullName || !employeeStatuses.includes(status)) {
+    redirect(`${returnTo}?error=employee_validation`);
+  }
+
+  const { error } = await supabase
+    .from("employees")
+    .update({
+      user_id: requiredString(formData, "user_id") || null,
+      full_name: fullName,
+      phone: requiredString(formData, "phone") || null,
+      email: requiredString(formData, "email") || null,
+      position: requiredString(formData, "position") || null,
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("business_id", current.businessId)
+    .eq("id", employeeId);
+
+  if (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/rrhh");
+  revalidatePath(`/app/rrhh/${employeeId}`);
+  revalidatePath("/app/dashboard");
+  redirect(`${returnTo}?success=employee_updated`);
+}
+
+export async function createShiftAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const employeeId = requiredString(formData, "employee_id");
+  const date = requiredString(formData, "date");
+  const startTime = requiredString(formData, "start_time");
+  const endTime = requiredString(formData, "end_time");
+  const status = requiredString(formData, "status") || "scheduled";
+  const returnTo = requiredString(formData, "return_to") || "/app/rrhh";
+
+  if (!employeeId || !date || !startTime || !endTime || !shiftStatuses.includes(status)) {
+    redirect(`${returnTo}?error=shift_validation`);
+  }
+
+  const { data: employee } = await supabase
+    .from("employees")
+    .select("id")
+    .eq("business_id", current.businessId)
+    .eq("id", employeeId)
+    .maybeSingle<{ id: string }>();
+
+  if (!employee) {
+    redirect(`${returnTo}?error=employee_not_found`);
+  }
+
+  const { error } = await supabase.from("shifts").insert({
+    business_id: current.businessId,
+    employee_id: employeeId,
+    date,
+    start_time: startTime,
+    end_time: endTime,
+    role: requiredString(formData, "role") || null,
+    status,
+  });
+
+  if (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/rrhh");
+  revalidatePath(`/app/rrhh/${employeeId}`);
+  revalidatePath("/app/dashboard");
+  redirect(`${returnTo}?success=shift_created`);
+}
+
+export async function updateShiftAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const shiftId = requiredString(formData, "shift_id");
+  const employeeId = requiredString(formData, "employee_id");
+  const date = requiredString(formData, "date");
+  const startTime = requiredString(formData, "start_time");
+  const endTime = requiredString(formData, "end_time");
+  const status = requiredString(formData, "status") || "scheduled";
+  const returnTo = requiredString(formData, "return_to") || "/app/rrhh";
+
+  if (!shiftId || !employeeId || !date || !startTime || !endTime || !shiftStatuses.includes(status)) {
+    redirect(`${returnTo}?error=shift_validation`);
+  }
+
+  const { error } = await supabase
+    .from("shifts")
+    .update({
+      employee_id: employeeId,
+      date,
+      start_time: startTime,
+      end_time: endTime,
+      role: requiredString(formData, "role") || null,
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("business_id", current.businessId)
+    .eq("id", shiftId);
+
+  if (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/rrhh");
+  revalidatePath(`/app/rrhh/${employeeId}`);
+  revalidatePath("/app/dashboard");
+  redirect(`${returnTo}?success=shift_updated`);
+}
+
+export async function cancelShiftAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const shiftId = requiredString(formData, "shift_id");
+  const employeeId = requiredString(formData, "employee_id");
+  const returnTo = requiredString(formData, "return_to") || "/app/rrhh";
+
+  const { error } = await supabase
+    .from("shifts")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("business_id", current.businessId)
+    .eq("id", shiftId);
+
+  if (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/rrhh");
+  revalidatePath(`/app/rrhh/${employeeId}`);
+  revalidatePath("/app/dashboard");
+  redirect(`${returnTo}?success=shift_cancelled`);
+}
+
+export async function clockInAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const employeeId = requiredString(formData, "employee_id");
+  const shiftId = requiredString(formData, "shift_id");
+
+  if (!employeeId) {
+    redirect("/app/rrhh/checador?error=employee_required");
+  }
+
+  const { data: openEntry } = await supabase
+    .from("time_clock_entries")
+    .select("id")
+    .eq("business_id", current.businessId)
+    .eq("employee_id", employeeId)
+    .is("clock_out", null)
+    .maybeSingle<{ id: string }>();
+
+  if (openEntry) {
+    redirect("/app/rrhh/checador?error=open_entry_exists");
+  }
+
+  const { error } = await supabase.from("time_clock_entries").insert({
+    business_id: current.businessId,
+    employee_id: employeeId,
+    shift_id: shiftId || null,
+    clock_in: new Date().toISOString(),
+    notes: requiredString(formData, "notes") || null,
+  });
+
+  if (error) {
+    redirect(`/app/rrhh/checador?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/rrhh");
+  revalidatePath("/app/rrhh/checador");
+  revalidatePath("/app/dashboard");
+  redirect("/app/rrhh/checador?success=clock_in");
+}
+
+export async function clockOutAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const employeeId = requiredString(formData, "employee_id");
+  const { data: openEntry } = await supabase
+    .from("time_clock_entries")
+    .select("id, shift_id, break_start, break_end")
+    .eq("business_id", current.businessId)
+    .eq("employee_id", employeeId)
+    .is("clock_out", null)
+    .maybeSingle<{ id: string; shift_id: string | null; break_start: string | null; break_end: string | null }>();
+
+  if (!openEntry) {
+    redirect("/app/rrhh/checador?error=no_open_entry");
+  }
+
+  if (openEntry.break_start && !openEntry.break_end) {
+    redirect("/app/rrhh/checador?error=break_active");
+  }
+
+  const { error } = await supabase
+    .from("time_clock_entries")
+    .update({
+      clock_out: new Date().toISOString(),
+      notes: requiredString(formData, "notes") || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("business_id", current.businessId)
+    .eq("id", openEntry.id);
+
+  if (error) {
+    redirect(`/app/rrhh/checador?error=${encodeURIComponent(error.message)}`);
+  }
+
+  if (openEntry.shift_id) {
+    await supabase
+      .from("shifts")
+      .update({ status: "completed", updated_at: new Date().toISOString() })
+      .eq("business_id", current.businessId)
+      .eq("id", openEntry.shift_id);
+  }
+
+  revalidatePath("/app/rrhh");
+  revalidatePath("/app/rrhh/checador");
+  revalidatePath("/app/dashboard");
+  redirect("/app/rrhh/checador?success=clock_out");
+}
+
+export async function startBreakAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const employeeId = requiredString(formData, "employee_id");
+  const { data: openEntry } = await supabase
+    .from("time_clock_entries")
+    .select("id, break_start, break_end")
+    .eq("business_id", current.businessId)
+    .eq("employee_id", employeeId)
+    .is("clock_out", null)
+    .maybeSingle<{ id: string; break_start: string | null; break_end: string | null }>();
+
+  if (!openEntry) {
+    redirect("/app/rrhh/checador?error=no_open_entry");
+  }
+
+  if (openEntry.break_start && !openEntry.break_end) {
+    redirect("/app/rrhh/checador?error=break_already_active");
+  }
+
+  const { error } = await supabase
+    .from("time_clock_entries")
+    .update({ break_start: new Date().toISOString(), break_end: null, updated_at: new Date().toISOString() })
+    .eq("business_id", current.businessId)
+    .eq("id", openEntry.id);
+
+  if (error) {
+    redirect(`/app/rrhh/checador?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/rrhh");
+  revalidatePath("/app/rrhh/checador");
+  redirect("/app/rrhh/checador?success=break_started");
+}
+
+export async function endBreakAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const employeeId = requiredString(formData, "employee_id");
+  const { data: openEntry } = await supabase
+    .from("time_clock_entries")
+    .select("id, break_start, break_end")
+    .eq("business_id", current.businessId)
+    .eq("employee_id", employeeId)
+    .is("clock_out", null)
+    .maybeSingle<{ id: string; break_start: string | null; break_end: string | null }>();
+
+  if (!openEntry) {
+    redirect("/app/rrhh/checador?error=no_open_entry");
+  }
+
+  if (!openEntry.break_start || openEntry.break_end) {
+    redirect("/app/rrhh/checador?error=no_active_break");
+  }
+
+  const { error } = await supabase
+    .from("time_clock_entries")
+    .update({ break_end: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("business_id", current.businessId)
+    .eq("id", openEntry.id);
+
+  if (error) {
+    redirect(`/app/rrhh/checador?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/rrhh");
+  revalidatePath("/app/rrhh/checador");
+  redirect("/app/rrhh/checador?success=break_ended");
 }
 
 export async function createMessageTemplateAction(formData: FormData) {

@@ -38,6 +38,9 @@ export default async function DashboardPage() {
         <StatCard title="Alertas merma" value={String(stats.openWasteAlerts)} detail="Abiertas" />
         <StatCard title="Lotes urgentes" value={String(stats.urgentBatches)} detail="Vencimiento critico" />
         <StatCard title="Merma estimada" value={`$${stats.estimatedWasteLoss.toFixed(0)}`} detail="MXN en riesgo" />
+        <StatCard title="Trabajando ahora" value={String(stats.employeesWorkingNow)} detail="Checador RRHH" />
+        <StatCard title="Turnos de hoy" value={String(stats.shiftsToday)} detail="Equipo programado" />
+        <StatCard title="Salidas pendientes" value={String(stats.pendingClockOuts)} detail="Entradas abiertas" />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
