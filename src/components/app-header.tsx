@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { Bell, LogOut, Search } from "lucide-react";
+import { getCurrentBusiness } from "@/lib/current-business";
 
-export function AppHeader() {
+export async function AppHeader() {
+  const current = await getCurrentBusiness();
+
   return (
     <header className="hidden border-b border-stone-200 bg-white/85 px-8 py-4 backdrop-blur lg:block">
       <div className="flex items-center justify-between gap-6">
@@ -10,11 +13,12 @@ export function AppHeader() {
             Workspace
           </p>
           <p className="mt-1 text-sm font-semibold text-stone-950">
-            Demo Restaurant Group
+            {current.business.name}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <label className="flex h-10 w-80 items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 text-sm text-stone-500">
+            <span className="sr-only">Buscar en el workspace</span>
             <Search size={16} />
             <input
               className="w-full bg-transparent text-sm outline-none placeholder:text-stone-400"
@@ -37,7 +41,7 @@ export function AppHeader() {
             <LogOut size={17} />
           </Link>
           <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-600">
-            Supabase Auth preparado
+            Plan {current.business.plan}
           </div>
         </div>
       </div>

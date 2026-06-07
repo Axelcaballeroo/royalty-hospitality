@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getDashboardData } from "@/lib/data";
-import { EmptyState, ModuleCard, StatCard } from "@/components/ui";
+import { EmptyState, ModuleCard, SectionHeader, StatCard } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -10,17 +10,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-700">
-          {current.business.name}
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold text-stone-950">
-          Dashboard ejecutivo
-        </h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-          Pulso del negocio por dia, crecimiento, operacion y alertas comerciales.
-        </p>
-      </div>
+      <SectionHeader
+        eyebrow={current.business.name}
+        title="Dashboard ejecutivo"
+        description="Pulso del negocio por dia, crecimiento, operacion y alertas comerciales."
+      />
 
       {!current.business.onboarding_completed ? (
         <Link
@@ -76,21 +70,21 @@ export default async function DashboardPage() {
           <div className="grid gap-3 sm:grid-cols-3">
             <Link
               href="/app/reservas"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-950 focus-visible:ring-offset-2"
             >
               <Plus size={16} />
               Crear reserva
             </Link>
             <Link
               href="/app/clientes"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-950 focus-visible:ring-offset-2"
             >
               <Plus size={16} />
               Crear cliente
             </Link>
             <Link
               href="/app/clientes"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-950 focus-visible:ring-offset-2"
             >
               <Plus size={16} />
               Crear tarea interna

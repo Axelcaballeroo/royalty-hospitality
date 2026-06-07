@@ -1,6 +1,93 @@
 import type { ReactNode } from "react";
 import { Inbox } from "lucide-react";
 
+const focusRing =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-950 focus-visible:ring-offset-2";
+
+type ButtonProps = {
+  children: ReactNode;
+  className?: string;
+  type?: "button" | "submit" | "reset";
+};
+
+export function PrimaryButton({ children, className = "", type = "submit" }: ButtonProps) {
+  return (
+    <button
+      type={type}
+      className={[
+        "inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300",
+        focusRing,
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function SecondaryButton({ children, className = "", type = "submit" }: ButtonProps) {
+  return (
+    <button
+      type={type}
+      className={[
+        "inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50 disabled:cursor-not-allowed disabled:text-stone-400",
+        focusRing,
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function DangerButton({ children, className = "", type = "submit" }: ButtonProps) {
+  return (
+    <button
+      type={type}
+      className={[
+        "inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60",
+        focusRing,
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function SectionHeader({
+  eyebrow,
+  title,
+  description,
+  actions,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        {eyebrow ? (
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-700">
+            {eyebrow}
+          </p>
+        ) : null}
+        <h1 className="mt-3 text-3xl font-semibold tracking-normal text-stone-950">
+          {title}
+        </h1>
+        {description ? (
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+    </div>
+  );
+}
+
 type StatCardProps = {
   title: string;
   value: string;
@@ -14,7 +101,7 @@ export function StatCard({ title, value, detail, tone = "light" }: StatCardProps
   return (
     <div
       className={[
-        "rounded-lg border p-5 shadow-sm",
+        "rounded-lg border p-5 shadow-sm transition hover:shadow-md",
         dark
           ? "border-stone-900 bg-stone-950 text-white"
           : "border-stone-200 bg-white text-stone-950",
@@ -23,7 +110,7 @@ export function StatCard({ title, value, detail, tone = "light" }: StatCardProps
       <p className={dark ? "text-sm text-stone-400" : "text-sm text-stone-500"}>
         {title}
       </p>
-      <p className="mt-4 text-3xl font-semibold">{value}</p>
+      <p className="mt-4 text-3xl font-semibold tracking-normal">{value}</p>
       <p className={dark ? "mt-2 text-xs text-stone-400" : "mt-2 text-xs text-stone-500"}>
         {detail}
       </p>
@@ -105,7 +192,7 @@ export function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={[
-        "inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium",
+        "inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium capitalize",
         statusClasses[status] ?? "border-stone-200 bg-stone-50 text-stone-600",
       ].join(" ")}
     >
@@ -117,9 +204,11 @@ export function StatusBadge({ status }: { status: string }) {
 export function EmptyState({
   title,
   description,
+  action,
 }: {
   title: string;
   description: string;
+  action?: ReactNode;
 }) {
   return (
     <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-8 text-center">
@@ -128,6 +217,37 @@ export function EmptyState({
       <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-stone-500">
         {description}
       </p>
+      {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
+    </div>
+  );
+}
+
+export function SkeletonBlock({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={[
+        "animate-pulse rounded-lg bg-stone-200/80",
+        className || "h-24",
+      ].join(" ")}
+    />
+  );
+}
+
+export function PageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <SkeletonBlock className="h-3 w-28" />
+        <SkeletonBlock className="h-10 w-72" />
+        <SkeletonBlock className="h-4 w-full max-w-2xl" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-4">
+        <SkeletonBlock />
+        <SkeletonBlock />
+        <SkeletonBlock />
+        <SkeletonBlock />
+      </div>
+      <SkeletonBlock className="h-80" />
     </div>
   );
 }
@@ -135,14 +255,19 @@ export function EmptyState({
 export function DataTable({
   columns,
   rows,
+  caption,
 }: {
   columns: string[];
   rows: ReactNode[][];
+  caption?: string;
 }) {
+  const visibleRows = rows.slice(0, 25);
+
   return (
-    <div className="overflow-hidden rounded-lg border border-stone-200">
+    <div className="overflow-hidden rounded-lg border border-stone-200 bg-white">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-stone-200 text-sm">
+          {caption ? <caption className="sr-only">{caption}</caption> : null}
           <thead className="bg-stone-50">
             <tr>
               {columns.map((column) => (
@@ -156,10 +281,10 @@ export function DataTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100 bg-white">
-            {rows.map((row, index) => (
-              <tr key={index}>
+            {visibleRows.map((row, index) => (
+              <tr key={index} className="transition hover:bg-stone-50">
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="whitespace-nowrap px-4 py-4 text-stone-700">
+                  <td key={cellIndex} className="max-w-[18rem] whitespace-nowrap px-4 py-4 text-stone-700">
                     {cell}
                   </td>
                 ))}
@@ -167,6 +292,12 @@ export function DataTable({
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="flex flex-col gap-2 border-t border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-500 sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          Mostrando {visibleRows.length} de {rows.length} registros
+        </span>
+        <span>Paginacion simple: primeros 25 resultados</span>
       </div>
     </div>
   );
