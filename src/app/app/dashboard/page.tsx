@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getDashboardData } from "@/lib/data";
-import { EmptyState, ModuleCard, SectionHeader, StatCard } from "@/components/ui";
+import { EmptyState, ModuleCard, SectionHeader, StatCard, StatusBadge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const { current, stats, activity } = await getDashboardData();
+  const { current, stats, automationActivity, activity } = await getDashboardData();
 
   return (
     <div className="space-y-6">
@@ -61,6 +61,8 @@ export default async function DashboardPage() {
           <StatCard title="Lotes urgentes" value={String(stats.urgentBatches)} detail="Vencimiento critico" />
           <StatCard title="Merma estimada" value={`$${stats.estimatedWasteLoss.toFixed(0)}`} detail="MXN en riesgo" />
           <StatCard title="Salidas pendientes" value={String(stats.pendingClockOuts)} detail="Entradas abiertas" />
+          <StatCard title="Automatizaciones" value={String(stats.automationsToday)} detail="Ejecutadas hoy" />
+          <StatCard title="Errores auto" value={String(stats.automationErrorsToday)} detail="Revisar logs" />
         </div>
       </section>
 
@@ -92,6 +94,37 @@ export default async function DashboardPage() {
           </div>
         </ModuleCard>
       </section>
+
+      <ModuleCard title="Ultimas automatizaciones" description="Reglas ejecutadas y alertas generadas por Automation Engine.">
+        {automationActivity.length ? (
+          <div className="space-y-3">
+            {automationActivity.map((log) => (
+              <div key={log.id} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-stone-950">
+                    {log.automation_rules?.name ?? "Automatizacion"}
+                  </p>
+                  <StatusBadge status={log.status} />
+                </div>
+                <p className="mt-2 text-sm leading-6 text-stone-600">{log.message}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="Sin automatizaciones ejecutadas"
+            description="Cuando ejecutes reglas, los ultimos resultados apareceran aqui."
+            action={
+              <Link
+                href="/app/automatizaciones"
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
+              >
+                Abrir automatizaciones
+              </Link>
+            }
+          />
+        )}
+      </ModuleCard>
 
       <ModuleCard title="Actividad reciente" description="Timeline global desde customer_events.">
         {activity.length ? (

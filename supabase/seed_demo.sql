@@ -173,4 +173,22 @@ begin
     (demo_business_id, ana_id, 'customer_created', 'Cliente demo creado', 'Cliente VIP para presentaciones.'),
     (demo_business_id, ana_id, 'wallet_topup', 'Recarga de wallet', 'Cliente recargo 1000 MXN.'),
     (demo_business_id, sofia_id, 'campaign_sent', 'Campana enviada', 'Recuperacion clientes inactivos.');
+
+  insert into public.automation_rules (business_id, name, trigger_type, action_type, enabled, config)
+  values
+    (demo_business_id, 'Recuperar clientes inactivos', 'customer_inactive_60d', 'create_campaign_draft', true, '{"campaignType":"inactive_customers","segmentKey":"inactive_60d"}'::jsonb),
+    (demo_business_id, 'Campana anti-merma urgente', 'waste_alert_created', 'create_campaign_draft', true, '{"campaignType":"waste_reduction","segmentKey":"all_customers"}'::jsonb),
+    (demo_business_id, 'Seguimiento cliente Gold', 'customer_reached_gold', 'create_internal_task', true, '{"taskTitle":"Dar seguimiento a cliente Gold","priority":"medium"}'::jsonb)
+  on conflict (business_id, name) do nothing;
+
+  insert into public.automation_logs (business_id, rule_id, status, message, metadata)
+  select
+    demo_business_id,
+    id,
+    'success',
+    'Ejecucion demo de automatizacion creada por seed.',
+    jsonb_build_object('demo', true, 'trigger_type', trigger_type, 'action_type', action_type)
+  from public.automation_rules
+  where business_id = demo_business_id
+  limit 2;
 end $$;

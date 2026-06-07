@@ -10,6 +10,7 @@ import {
   Settings,
   Users,
   Utensils,
+  Workflow,
 } from "lucide-react";
 
 export const privateNavigation = [
@@ -22,6 +23,7 @@ export const privateNavigation = [
   { name: "Wallet", href: "/app/wallet", icon: HandCoins, moduleKey: "wallet_placeholder" },
   { name: "Inventario", href: "/app/inventario", icon: Package, moduleKey: "inventory" },
   { name: "RRHH", href: "/app/rrhh", icon: Utensils, moduleKey: "hr" },
+  { name: "Automatizaciones", href: "/app/automatizaciones", icon: Workflow, moduleKey: "automation" },
   { name: "Reportes", href: "/app/reportes", icon: BarChart3, moduleKey: "reports_basic" },
   { name: "Configuracion", href: "/app/configuracion", icon: Settings, moduleKey: "dashboard" },
 ];
@@ -91,6 +93,12 @@ export const routeMeta: Record<
     description: "Equipo, roles y operacion interna por negocio.",
     metric: "23",
     label: "colaboradores",
+  },
+  automatizaciones: {
+    title: "Automatizaciones",
+    description: "Reglas, disparadores y acciones simuladas entre modulos.",
+    metric: "5",
+    label: "reglas base",
   },
   reportes: {
     title: "Reportes",

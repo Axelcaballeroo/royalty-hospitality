@@ -1,6 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusiness } from "@/lib/current-business";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  ensureDefaultAutomationRules,
+  type AutomationActionType,
+  type AutomationTriggerType,
+} from "@/lib/automation";
 import { getSegmentCustomers, segmentDefinitions } from "@/lib/marketing";
 import { estimateWorkedHours, getTodayDate, getWeekStartIso } from "@/lib/hr";
 import { getPlanCounts } from "@/lib/superadmin";
@@ -250,6 +255,48 @@ export type WalletTransaction = {
   customers?: { full_name: string; phone: string | null } | null;
 };
 
+export type AutomationRule = {
+  id: string;
+  business_id: string;
+  name: string;
+  trigger_type: AutomationTriggerType;
+  action_type: AutomationActionType;
+  enabled: boolean;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AutomationLog = {
+  id: string;
+  business_id: string;
+  rule_id: string | null;
+  status: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  automation_rules?: {
+    name: string;
+    trigger_type: AutomationTriggerType;
+    action_type: AutomationActionType;
+  } | null;
+};
+
+type RawAutomationLog = Omit<AutomationLog, "automation_rules"> & {
+  automation_rules?:
+    | AutomationLog["automation_rules"]
+    | AutomationLog["automation_rules"][];
+};
+
+function normalizeAutomationLogs(rows: unknown): AutomationLog[] {
+  return ((rows as RawAutomationLog[] | null) ?? []).map((log) => ({
+    ...log,
+    automation_rules: Array.isArray(log.automation_rules)
+      ? log.automation_rules[0] ?? null
+      : log.automation_rules ?? null,
+  }));
+}
+
 export type ReportPeriod = "today" | "7d" | "month" | "90d";
 
 function getReportRange(period: ReportPeriod) {
@@ -293,6 +340,7 @@ export async function getDashboardData() {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
+  const todayStartIso = `${today}T00:00:00.000Z`;
   const monthStart = new Date();
   monthStart.setDate(1);
   const monthStartIso = monthStart.toISOString().slice(0, 10);
@@ -317,6 +365,9 @@ export async function getDashboardData() {
     employeesWorkingNow,
     shiftsToday,
     pendingClockOuts,
+    automationsToday,
+    automationErrorsToday,
+    automationActivity,
     activity,
   ] = await Promise.all([
     supabase
@@ -419,6 +470,24 @@ export async function getDashboardData() {
       .eq("business_id", current.businessId)
       .is("clock_out", null),
     supabase
+      .from("automation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "success")
+      .gte("created_at", todayStartIso),
+    supabase
+      .from("automation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "failed")
+      .gte("created_at", todayStartIso),
+    supabase
+      .from("automation_logs")
+      .select("id, status, message, created_at, automation_rules(name, trigger_type, action_type)")
+      .eq("business_id", current.businessId)
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase
       .from("customer_events")
       .select("id, type, title, description, created_at")
       .eq("business_id", current.businessId)
@@ -464,8 +533,74 @@ export async function getDashboardData() {
       employeesWorkingNow: employeesWorkingNow.count ?? 0,
       shiftsToday: shiftsToday.count ?? 0,
       pendingClockOuts: pendingClockOuts.count ?? 0,
+      automationsToday: automationsToday.count ?? 0,
+      automationErrorsToday: automationErrorsToday.count ?? 0,
     },
+    automationActivity: normalizeAutomationLogs(automationActivity.data ?? []),
     activity: activity.data ?? [],
+  };
+}
+
+export async function getAutomationData(filters: { status?: string; enabled?: string } = {}) {
+  const current = await getCurrentBusiness();
+  await ensureDefaultAutomationRules(current.businessId);
+  const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
+
+  let rulesQuery = supabase
+    .from("automation_rules")
+    .select("*")
+    .eq("business_id", current.businessId)
+    .order("created_at", { ascending: true });
+
+  if (filters.enabled === "true") {
+    rulesQuery = rulesQuery.eq("enabled", true);
+  } else if (filters.enabled === "false") {
+    rulesQuery = rulesQuery.eq("enabled", false);
+  }
+
+  let logsQuery = supabase
+    .from("automation_logs")
+    .select("id, business_id, rule_id, status, message, metadata, created_at, automation_rules(name, trigger_type, action_type)")
+    .eq("business_id", current.businessId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (filters.status && filters.status !== "all") {
+    logsQuery = logsQuery.eq("status", filters.status);
+  }
+
+  const [rules, logs, logsToday, errorsToday] = await Promise.all([
+    rulesQuery,
+    logsQuery,
+    supabase
+      .from("automation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "success")
+      .gte("created_at", `${today}T00:00:00.000Z`),
+    supabase
+      .from("automation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "failed")
+      .gte("created_at", `${today}T00:00:00.000Z`),
+  ]);
+
+  const automationRules = (rules.data ?? []) as AutomationRule[];
+  const automationLogs = normalizeAutomationLogs(logs.data ?? []);
+
+  return {
+    current,
+    rules: automationRules,
+    logs: automationLogs,
+    metrics: {
+      activeRules: automationRules.filter((rule) => rule.enabled).length,
+      inactiveRules: automationRules.filter((rule) => !rule.enabled).length,
+      runsToday: logsToday.count ?? 0,
+      errorsToday: errorsToday.count ?? 0,
+      recentRuns: automationLogs.length,
+    },
   };
 }
 

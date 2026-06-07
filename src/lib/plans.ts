@@ -30,6 +30,7 @@ export const planModules: Record<PlanKey, string[]> = {
     "waste",
     "wallet_placeholder",
     "hr",
+    "automation",
     "multi_location_placeholder",
     "academy_placeholder",
   ],
@@ -104,6 +105,12 @@ export const moduleCatalog: Record<
     description: "Empleados, turnos y checador.",
     requiredPlan: "business",
     benefits: ["Checador", "Turnos", "Horas estimadas"],
+  },
+  automation: {
+    name: "Automatizaciones",
+    description: "Reglas operativas que conectan CRM, reservas, marketing, wallet y merma.",
+    requiredPlan: "business",
+    benefits: ["Triggers por comportamiento", "Acciones simuladas", "Historial de ejecuciones"],
   },
   multi_location_placeholder: {
     name: "Multi-location",
