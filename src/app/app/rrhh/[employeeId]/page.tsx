@@ -8,6 +8,8 @@ import {
 import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
 import { getEmployeeDetail } from "@/lib/data";
 import { employeeStatuses, formatHours, getTodayDate, shiftStatuses, estimateWorkedHours } from "@/lib/hr";
+import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
+import { hasModule } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,10 @@ export default async function EmployeeDetailPage({
 }) {
   const { employeeId } = await params;
   const query = await searchParams;
+  if (!(await hasModule("hr"))) {
+    return <UpgradeModuleScreen moduleKey="hr" />;
+  }
+
   const { employee, upcomingShifts, clockEntries, businessUsers, weekHours } =
     await getEmployeeDetail(employeeId);
   const today = getTodayDate();

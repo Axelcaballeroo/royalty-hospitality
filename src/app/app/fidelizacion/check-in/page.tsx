@@ -7,6 +7,8 @@ import {
 import { getCheckInData } from "@/lib/data";
 import { createQrDataUrl } from "@/lib/qr";
 import { EmptyState, ModuleCard, StatusBadge } from "@/components/ui";
+import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
+import { hasModule } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,10 @@ export default async function LoyaltyCheckInPage({
   searchParams: Promise<{ q?: string; error?: string; success?: string }>;
 }) {
   const params = await searchParams;
+  if (!(await hasModule("loyalty"))) {
+    return <UpgradeModuleScreen moduleKey="loyalty" />;
+  }
+
   const { customers, rewards } = await getCheckInData(params.q);
   const customersWithQr = await Promise.all(
     (customers as CheckInCustomer[]).map(async (customer) => ({

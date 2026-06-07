@@ -7,6 +7,8 @@ import {
 import { getLoyaltyData } from "@/lib/data";
 import { loyaltyTiers } from "@/lib/loyalty";
 import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
+import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
+import { hasModule } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,10 @@ export default async function LoyaltyPage({
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   const params = await searchParams;
+  if (!(await hasModule("loyalty"))) {
+    return <UpgradeModuleScreen moduleKey="loyalty" />;
+  }
+
   const { accounts, rewards, transactions, customers, summary } = await getLoyaltyData();
   const totalPoints = accounts.reduce(
     (sum, account) => sum + account.points_balance,

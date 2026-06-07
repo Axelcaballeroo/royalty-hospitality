@@ -212,6 +212,35 @@ export type TimeClockEntry = {
   shifts?: { date: string; start_time: string; end_time: string; role: string | null } | null;
 };
 
+export type ReportPeriod = "today" | "7d" | "month" | "90d";
+
+function getReportRange(period: ReportPeriod) {
+  const now = new Date();
+  const end = new Date(now);
+  let start = new Date(now);
+
+  if (period === "today") {
+    start.setHours(0, 0, 0, 0);
+  } else if (period === "7d") {
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+  } else if (period === "month") {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else {
+    start.setDate(start.getDate() - 89);
+    start.setHours(0, 0, 0, 0);
+  }
+
+  return {
+    start,
+    end,
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  };
+}
+
 export type ClubCustomer = {
   id: string;
   full_name: string;
@@ -1084,6 +1113,217 @@ export async function getTimeClockData() {
     openEntries: (openEntries.data ?? []) as unknown as TimeClockEntry[],
     entriesToday: (entriesToday.data ?? []) as unknown as TimeClockEntry[],
   };
+}
+
+export async function getExecutiveReportsData(period: ReportPeriod = "month") {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const range = getReportRange(period);
+  const inactiveCutoff = new Date();
+  inactiveCutoff.setDate(inactiveCutoff.getDate() - 60);
+
+  const [
+    reservations,
+    newCustomers,
+    recurringCustomers,
+    inactiveCustomers,
+    vipCustomers,
+    pointsIssued,
+    pointsRedeemed,
+    rewardsRedeemed,
+    loyaltyAccounts,
+    campaignsSent,
+    customersReached,
+    campaignsRedeemed,
+    wasteAlerts,
+    urgentWasteAlerts,
+    wasteAlertsLoss,
+    wasteMovements,
+    activeEmployees,
+    completedShifts,
+    clockEntries,
+    pendingClockOuts,
+  ] = await Promise.all([
+    supabase
+      .from("reservations")
+      .select("id, status")
+      .eq("business_id", current.businessId)
+      .gte("date", range.startDate)
+      .lte("date", range.endDate),
+    supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .gte("created_at", range.startIso)
+      .lte("created_at", range.endIso),
+    supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .gt("total_visits", 1),
+    supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .or(`last_visit_at.is.null,last_visit_at.lt.${inactiveCutoff.toISOString()}`),
+    getSegmentCustomers({ businessId: current.businessId, segmentKey: "vip_customers" }),
+    supabase
+      .from("loyalty_transactions")
+      .select("points")
+      .eq("business_id", current.businessId)
+      .eq("type", "earn")
+      .gte("created_at", range.startIso)
+      .lte("created_at", range.endIso),
+    supabase
+      .from("loyalty_transactions")
+      .select("points")
+      .eq("business_id", current.businessId)
+      .eq("type", "redeem")
+      .gte("created_at", range.startIso)
+      .lte("created_at", range.endIso),
+    supabase
+      .from("loyalty_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("type", "redeem")
+      .gte("created_at", range.startIso)
+      .lte("created_at", range.endIso),
+    supabase
+      .from("loyalty_accounts")
+      .select("tier")
+      .eq("business_id", current.businessId),
+    supabase
+      .from("campaigns")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "sent")
+      .gte("sent_at", range.startIso)
+      .lte("sent_at", range.endIso),
+    supabase
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .gte("created_at", range.startIso)
+      .lte("created_at", range.endIso),
+    supabase
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "redeemed")
+      .gte("redeemed_at", range.startIso)
+      .lte("redeemed_at", range.endIso),
+    supabase
+      .from("waste_alerts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "open"),
+    supabase
+      .from("waste_alerts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "open")
+      .eq("risk_level", "urgent"),
+    supabase
+      .from("waste_alerts")
+      .select("estimated_loss")
+      .eq("business_id", current.businessId)
+      .eq("status", "open"),
+    supabase
+      .from("inventory_movements")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("type", "waste")
+      .gte("created_at", range.startIso)
+      .lte("created_at", range.endIso),
+    supabase
+      .from("employees")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "active"),
+    supabase
+      .from("shifts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "completed")
+      .gte("date", range.startDate)
+      .lte("date", range.endDate),
+    supabase
+      .from("time_clock_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .gte("clock_in", range.startIso)
+      .lte("clock_in", range.endIso),
+    supabase
+      .from("time_clock_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .is("clock_out", null),
+  ]);
+
+  const reservationRows = reservations.data ?? [];
+  const tierRows = loyaltyAccounts.data ?? [];
+  const reached = customersReached.count ?? 0;
+  const redeemedCampaigns = campaignsRedeemed.count ?? 0;
+
+  const metrics = {
+    reservations: {
+      total: reservationRows.length,
+      confirmed: reservationRows.filter((reservation) => reservation.status === "confirmed").length,
+      completed: reservationRows.filter((reservation) => reservation.status === "completed").length,
+      cancelled: reservationRows.filter((reservation) => reservation.status === "cancelled").length,
+      noShows: reservationRows.filter((reservation) => reservation.status === "no_show").length,
+    },
+    customers: {
+      new: newCustomers.count ?? 0,
+      recurring: recurringCustomers.count ?? 0,
+      inactive: inactiveCustomers.count ?? 0,
+      vip: vipCustomers.length,
+    },
+    loyalty: {
+      pointsIssued:
+        pointsIssued.data?.reduce((sum, transaction) => sum + Number(transaction.points), 0) ?? 0,
+      pointsRedeemed:
+        pointsRedeemed.data?.reduce((sum, transaction) => sum + Math.abs(Number(transaction.points)), 0) ?? 0,
+      rewardsRedeemed: rewardsRedeemed.count ?? 0,
+      tiers: {
+        bronze: tierRows.filter((account) => account.tier === "bronze").length,
+        silver: tierRows.filter((account) => account.tier === "silver").length,
+        gold: tierRows.filter((account) => account.tier === "gold").length,
+        black: tierRows.filter((account) => account.tier === "black").length,
+      },
+    },
+    marketing: {
+      campaignsSent: campaignsSent.count ?? 0,
+      customersReached: reached,
+      campaignsRedeemed: redeemedCampaigns,
+      redemptionRate: reached ? Math.round((redeemedCampaigns / reached) * 100) : 0,
+    },
+    inventory: {
+      openAlerts: wasteAlerts.count ?? 0,
+      urgentAlerts: urgentWasteAlerts.count ?? 0,
+      estimatedWaste:
+        wasteAlertsLoss.data?.reduce(
+          (sum, alert) => sum + Number(alert.estimated_loss),
+          0,
+        ) ?? 0,
+      wasteMovements: wasteMovements.count ?? 0,
+    },
+    hr: {
+      activeEmployees: activeEmployees.count ?? 0,
+      completedShifts: completedShifts.count ?? 0,
+      clockEntries: clockEntries.count ?? 0,
+      pendingClockOuts: pendingClockOuts.count ?? 0,
+    },
+  };
+
+  const summary = [
+    `En este periodo tuviste ${metrics.reservations.total} reservas y ${metrics.customers.new} clientes nuevos.`,
+    `Hay ${metrics.customers.inactive} clientes inactivos que podrias recuperar con una campana.`,
+    `Tienes ${metrics.inventory.openAlerts} alertas de merma abiertas.`,
+    `Hay ${metrics.hr.pendingClockOuts} empleados con salida pendiente.`,
+  ];
+
+  return { current, period, range, metrics, summary };
 }
 
 export async function getCheckInData(search?: string) {

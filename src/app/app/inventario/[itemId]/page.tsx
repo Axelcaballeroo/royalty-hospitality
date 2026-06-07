@@ -9,6 +9,8 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
 import { getInventoryItemDetail } from "@/lib/data";
 import { inventoryMovementTypes, inventoryUnits } from "@/lib/inventory";
+import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
+import { hasModule } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,10 @@ export default async function InventoryItemPage({
 }) {
   const { itemId } = await params;
   const query = await searchParams;
+  if (!(await hasModule("inventory"))) {
+    return <UpgradeModuleScreen moduleKey="inventory" />;
+  }
+
   const { item, batches, movements, alerts, stock } = await getInventoryItemDetail(itemId);
 
   if (!item) {

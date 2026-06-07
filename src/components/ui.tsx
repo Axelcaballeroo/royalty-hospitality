@@ -85,6 +85,10 @@ const statusClasses: Record<string, string> = {
   used: "border-stone-200 bg-stone-100 text-stone-600",
   working: "border-emerald-200 bg-emerald-50 text-emerald-700",
   on_break: "border-amber-200 bg-amber-50 text-amber-700",
+  basic: "border-stone-200 bg-stone-50 text-stone-700",
+  pro: "border-sky-200 bg-sky-50 text-sky-700",
+  premium: "border-violet-200 bg-violet-50 text-violet-700",
+  business: "border-stone-900 bg-stone-950 text-white",
 };
 
 export function StatusBadge({ status }: { status: string }) {

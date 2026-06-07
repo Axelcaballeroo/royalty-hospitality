@@ -13,17 +13,17 @@ import {
 } from "lucide-react";
 
 export const privateNavigation = [
-  { name: "Dashboard", href: "/app/dashboard", icon: Home },
-  { name: "Reservas", href: "/app/reservas", icon: Clock3 },
-  { name: "Clientes CRM", href: "/app/clientes", icon: Users },
-  { name: "Calendario", href: "/app/calendario", icon: CalendarDays },
-  { name: "Marketing", href: "/app/marketing", icon: Megaphone },
-  { name: "Fidelizacion", href: "/app/fidelizacion", icon: Gift },
-  { name: "Wallet", href: "/app/wallet", icon: HandCoins },
-  { name: "Inventario", href: "/app/inventario", icon: Package },
-  { name: "RRHH", href: "/app/rrhh", icon: Utensils },
-  { name: "Reportes", href: "/app/reportes", icon: BarChart3 },
-  { name: "Configuracion", href: "/app/configuracion", icon: Settings },
+  { name: "Dashboard", href: "/app/dashboard", icon: Home, moduleKey: "dashboard" },
+  { name: "Reservas", href: "/app/reservas", icon: Clock3, moduleKey: "reservations" },
+  { name: "Clientes CRM", href: "/app/clientes", icon: Users, moduleKey: "crm" },
+  { name: "Calendario", href: "/app/calendario", icon: CalendarDays, moduleKey: "reservations" },
+  { name: "Marketing", href: "/app/marketing", icon: Megaphone, moduleKey: "marketing" },
+  { name: "Fidelizacion", href: "/app/fidelizacion", icon: Gift, moduleKey: "loyalty" },
+  { name: "Wallet", href: "/app/wallet", icon: HandCoins, moduleKey: "wallet_placeholder" },
+  { name: "Inventario", href: "/app/inventario", icon: Package, moduleKey: "inventory" },
+  { name: "RRHH", href: "/app/rrhh", icon: Utensils, moduleKey: "hr" },
+  { name: "Reportes", href: "/app/reportes", icon: BarChart3, moduleKey: "reports_basic" },
+  { name: "Configuracion", href: "/app/configuracion", icon: Settings, moduleKey: "dashboard" },
 ];
 
 export const moduleHighlights = [

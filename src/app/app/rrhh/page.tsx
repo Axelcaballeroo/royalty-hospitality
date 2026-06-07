@@ -10,6 +10,8 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
 import { getHrData } from "@/lib/data";
 import { employeeStatuses, formatHours, getTodayDate, shiftStatuses } from "@/lib/hr";
+import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
+import { hasModule } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,10 @@ export default async function PeoplePage({
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   const params = await searchParams;
+  if (!(await hasModule("hr"))) {
+    return <UpgradeModuleScreen moduleKey="hr" />;
+  }
+
   const {
     employees,
     shiftsToday,

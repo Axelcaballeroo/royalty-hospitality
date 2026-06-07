@@ -7,6 +7,8 @@ import {
 } from "@/app/app/actions";
 import { getCampaignDetail } from "@/lib/data";
 import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
+import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
+import { hasModule } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,10 @@ export default async function CampaignDetailPage({
 }) {
   const { campaignId } = await params;
   const query = await searchParams;
+  if (!(await hasModule("marketing"))) {
+    return <UpgradeModuleScreen moduleKey="marketing" />;
+  }
+
   const { campaign, recipients, metrics } = await getCampaignDetail(campaignId);
 
   if (!campaign) {

@@ -15,40 +15,54 @@ export default async function DashboardPage() {
           {current.business.name}
         </p>
         <h1 className="mt-3 text-3xl font-semibold text-stone-950">
-          Dashboard real
+          Dashboard ejecutivo
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-          Metricas calculadas desde Supabase para el negocio activo.
+          Pulso del negocio por dia, crecimiento, operacion y alertas comerciales.
         </p>
       </div>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-        <StatCard title="Reservas de hoy" value={String(stats.reservationsToday)} detail="Fecha actual del servidor" tone="dark" />
-        <StatCard title="Clientes totales" value={String(stats.customersTotal)} detail="CRM del tenant" />
-        <StatCard title="Nuevos este mes" value={String(stats.customersNew)} detail="Clientes creados desde inicio de mes" />
-        <StatCard title="Pendientes" value={String(stats.pendingReservations)} detail="Reservas por confirmar" />
-        <StatCard title="No-shows del mes" value={String(stats.noShows)} detail="Requieren seguimiento" />
-        <StatCard title="Puntos emitidos" value={String(stats.pointsIssued)} detail="Este mes" />
-        <StatCard title="Campanas enviadas" value={String(stats.campaignsSent)} detail="Este mes" />
-        <StatCard title="Clientes alcanzados" value={String(stats.customersReached)} detail="Este mes" />
-        <StatCard title="Inactivos" value={String(stats.inactiveCustomers)} detail="60 dias" />
-        <StatCard title="Cumpleanos" value={String(stats.birthdayCustomers)} detail="Este mes" />
-        <StatCard title="Canjes" value={String(stats.rewardsRedeemed)} detail="Recompensas este mes" />
-        <StatCard title="Bajo stock" value={String(stats.lowStockItems)} detail="Inventario" />
-        <StatCard title="Alertas merma" value={String(stats.openWasteAlerts)} detail="Abiertas" />
-        <StatCard title="Lotes urgentes" value={String(stats.urgentBatches)} detail="Vencimiento critico" />
-        <StatCard title="Merma estimada" value={`$${stats.estimatedWasteLoss.toFixed(0)}`} detail="MXN en riesgo" />
-        <StatCard title="Trabajando ahora" value={String(stats.employeesWorkingNow)} detail="Checador RRHH" />
-        <StatCard title="Turnos de hoy" value={String(stats.shiftsToday)} detail="Equipo programado" />
-        <StatCard title="Salidas pendientes" value={String(stats.pendingClockOuts)} detail="Entradas abiertas" />
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-stone-950">Hoy</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard title="Reservas hoy" value={String(stats.reservationsToday)} detail="Fecha actual del servidor" tone="dark" />
+          <StatCard title="Turnos de hoy" value={String(stats.shiftsToday)} detail="Equipo programado" />
+          <StatCard title="Trabajando ahora" value={String(stats.employeesWorkingNow)} detail="Checador RRHH" />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-stone-950">Crecimiento</h2>
+        <div className="grid gap-4 md:grid-cols-4">
+          <StatCard title="Clientes nuevos mes" value={String(stats.customersNew)} detail="Creados este mes" />
+          <StatCard title="Clientes inactivos" value={String(stats.inactiveCustomers)} detail="60 dias" />
+          <StatCard title="Campanas enviadas" value={String(stats.campaignsSent)} detail="Este mes" />
+          <StatCard title="Puntos emitidos" value={String(stats.pointsIssued)} detail="Este mes" />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-stone-950">Operacion</h2>
+        <div className="grid gap-4 md:grid-cols-4">
+          <StatCard title="Reservas pendientes" value={String(stats.pendingReservations)} detail="Por confirmar" />
+          <StatCard title="No-shows del mes" value={String(stats.noShows)} detail="Requieren seguimiento" />
+          <StatCard title="Clientes totales" value={String(stats.customersTotal)} detail="CRM del tenant" />
+          <StatCard title="Tareas pendientes" value={String(stats.pendingTasks)} detail="Internas" />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-stone-950">Alertas</h2>
+        <div className="grid gap-4 md:grid-cols-4">
+          <StatCard title="Alertas de merma" value={String(stats.openWasteAlerts)} detail="Abiertas" />
+          <StatCard title="Lotes urgentes" value={String(stats.urgentBatches)} detail="Vencimiento critico" />
+          <StatCard title="Merma estimada" value={`$${stats.estimatedWasteLoss.toFixed(0)}`} detail="MXN en riesgo" />
+          <StatCard title="Salidas pendientes" value={String(stats.pendingClockOuts)} detail="Entradas abiertas" />
+        </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-        <StatCard
-          title="Tareas internas pendientes"
-          value={String(stats.pendingTasks)}
-          detail="Pendientes o en progreso"
-        />
+        <StatCard title="Clientes alcanzados" value={String(stats.customersReached)} detail="Marketing este mes" />
         <ModuleCard title="Acciones rapidas" description="Atajos para operar desde el dashboard.">
           <div className="grid gap-3 sm:grid-cols-3">
             <Link

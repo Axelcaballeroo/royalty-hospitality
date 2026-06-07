@@ -10,6 +10,8 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
 import { getInventoryData } from "@/lib/data";
 import { inventoryMovementTypes, inventoryUnits } from "@/lib/inventory";
+import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
+import { hasModule } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,10 @@ export default async function InventoryPage({
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   const params = await searchParams;
+  if (!(await hasModule("inventory"))) {
+    return <UpgradeModuleScreen moduleKey="inventory" />;
+  }
+
   const { items, batches, alerts, movements, metrics } = await getInventoryData();
   const expiringBatches = batches.filter((batch) =>
     ["near_expiration", "urgent", "expired"].includes(batch.status),

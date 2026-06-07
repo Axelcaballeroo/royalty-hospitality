@@ -10,6 +10,8 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
 import { getTimeClockData } from "@/lib/data";
 import { estimateWorkedHours, formatHours } from "@/lib/hr";
+import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
+import { hasModule } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,10 @@ export default async function TimeClockPage({
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   const params = await searchParams;
+  if (!(await hasModule("hr"))) {
+    return <UpgradeModuleScreen moduleKey="hr" />;
+  }
+
   const { employees, shiftsToday, openEntries, entriesToday } = await getTimeClockData();
   const openEmployeeIds = new Set(openEntries.map((entry) => entry.employee_id));
 

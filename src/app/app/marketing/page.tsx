@@ -7,6 +7,8 @@ import {
 import { getMarketingData } from "@/lib/data";
 import { renderMarketingMessage, segmentDefinitions, suggestedTemplates } from "@/lib/marketing";
 import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
+import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
+import { hasModule } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,10 @@ export default async function MarketingPage({
   }>;
 }) {
   const params = await searchParams;
+  if (!(await hasModule("marketing"))) {
+    return <UpgradeModuleScreen moduleKey="marketing" />;
+  }
+
   const selectedSegment = params.segment ?? "all_customers";
   const defaultCampaignType = campaignTypes.includes(params.type ?? "")
     ? params.type ?? "promotion"

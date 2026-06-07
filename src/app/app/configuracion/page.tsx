@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { updatePublicWebsiteSettingsAction } from "@/app/app/actions";
 import { getBusinessSettingsData } from "@/lib/data";
 import { ModuleCard, StatusBadge } from "@/components/ui";
+import { getModuleAccess, moduleCatalog, planModules } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,10 @@ export default async function SettingsPage({
 }) {
   const params = await searchParams;
   const { current, hours, modules } = await getBusinessSettingsData();
+  const { plan, access } = await getModuleAccess();
   const business = current.business;
+  const includedModules = planModules[plan];
+  const blockedModules = Object.keys(moduleCatalog).filter((moduleKey) => !access[moduleKey]);
 
   return (
     <div className="space-y-6">
@@ -86,10 +90,39 @@ export default async function SettingsPage({
 
         <div className="space-y-4">
           <ModuleCard title="Plan contratado" description="Informacion actual del tenant.">
-            <div className="space-y-3 text-sm text-stone-600">
+            <div className="space-y-4 text-sm text-stone-600">
               <p><span className="font-medium text-stone-950">Slug:</span> {business.slug}</p>
-              <p><span className="font-medium text-stone-950">Plan:</span> {business.plan}</p>
+              <p className="flex items-center justify-between gap-3">
+                <span><span className="font-medium text-stone-950">Plan:</span> {business.plan}</span>
+                <StatusBadge status={plan} />
+              </p>
               <p><span className="font-medium text-stone-950">Timezone:</span> {business.timezone}</p>
+              <button className="h-10 w-full rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">
+                Mejorar plan
+              </button>
+              <p className="text-xs leading-5 text-stone-500">
+                Preparado para que un superadmin cambie el plan manualmente en una fase futura.
+              </p>
+            </div>
+          </ModuleCard>
+          <ModuleCard title="Modulos incluidos por plan" description="Lo que el plan permite comercialmente.">
+            <div className="grid gap-2">
+              {includedModules.map((moduleKey) => (
+                <div key={moduleKey} className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+                  <span className="text-sm font-medium text-stone-700">{moduleCatalog[moduleKey]?.name ?? moduleKey}</span>
+                  <StatusBadge status="active" />
+                </div>
+              ))}
+            </div>
+          </ModuleCard>
+          <ModuleCard title="Modulos bloqueados" description="Oportunidades claras de upgrade.">
+            <div className="grid gap-2">
+              {blockedModules.length ? blockedModules.map((moduleKey) => (
+                <div key={moduleKey} className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+                  <span className="text-sm font-medium text-stone-700">{moduleCatalog[moduleKey]?.name ?? moduleKey}</span>
+                  <StatusBadge status={moduleCatalog[moduleKey]?.requiredPlan ?? "pro"} />
+                </div>
+              )) : <p className="text-sm text-stone-500">Todos los modulos del catalogo estan disponibles.</p>}
             </div>
           </ModuleCard>
           <ModuleCard title="Modulos activos" description="business_modules del negocio.">
