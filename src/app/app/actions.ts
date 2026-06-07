@@ -7,6 +7,7 @@ import { getCurrentBusiness } from "@/lib/current-business";
 import { applyLoyaltyPoints } from "@/lib/loyalty";
 import { generateLoyaltyCode } from "@/lib/loyalty-code";
 import { getSegmentCustomers } from "@/lib/marketing";
+import { getBatchStatus, getRiskLevel, inventoryMovementTypes, inventoryUnits } from "@/lib/inventory";
 
 const validReservationStatuses = [
   "pending",
@@ -25,6 +26,11 @@ function parseTags(value: string) {
     .split(",")
     .map((tag) => tag.trim())
     .filter(Boolean);
+}
+
+function parsePositiveNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 async function createUniqueLoyaltyCode(input: {
@@ -707,6 +713,370 @@ export async function registerConsumptionAction(formData: FormData) {
   revalidatePath(returnTo);
   revalidatePath("/app/fidelizacion");
   redirect(`${returnTo}?success=consumption_registered`);
+}
+
+async function upsertWasteAlert(input: {
+  businessId: string;
+  itemId: string;
+  batchId: string | null;
+  riskLevel: string;
+  message: string;
+  estimatedLoss: number;
+}) {
+  const supabase = await createClient();
+
+  if (!input.batchId) {
+    await supabase.from("waste_alerts").insert({
+      business_id: input.businessId,
+      item_id: input.itemId,
+      batch_id: null,
+      risk_level: input.riskLevel,
+      message: input.message,
+      estimated_loss: input.estimatedLoss,
+      status: "open",
+    });
+    return;
+  }
+
+  const { data: existing } = await supabase
+    .from("waste_alerts")
+    .select("id, estimated_loss")
+    .eq("business_id", input.businessId)
+    .eq("batch_id", input.batchId)
+    .eq("status", "open")
+    .maybeSingle<{ id: string; estimated_loss: number }>();
+
+  if (existing) {
+    await supabase
+      .from("waste_alerts")
+      .update({
+        risk_level: input.riskLevel,
+        message: input.message,
+        estimated_loss: Number(existing.estimated_loss) + input.estimatedLoss,
+      })
+      .eq("business_id", input.businessId)
+      .eq("id", existing.id);
+    return;
+  }
+
+  await supabase.from("waste_alerts").insert({
+    business_id: input.businessId,
+    item_id: input.itemId,
+    batch_id: input.batchId,
+    risk_level: input.riskLevel,
+    message: input.message,
+    estimated_loss: input.estimatedLoss,
+    status: "open",
+  });
+}
+
+export async function createInventoryItemAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const name = requiredString(formData, "name");
+  const unit = requiredString(formData, "unit");
+  const minStock = parsePositiveNumber(requiredString(formData, "min_stock"));
+
+  if (!name || !inventoryUnits.includes(unit) || minStock < 0) {
+    redirect("/app/inventario?error=item_validation");
+  }
+
+  const { data, error } = await supabase
+    .from("inventory_items")
+    .insert({
+      business_id: current.businessId,
+      name,
+      category: requiredString(formData, "category") || null,
+      unit,
+      min_stock: minStock,
+      status: requiredString(formData, "status") || "active",
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !data) {
+    redirect(`/app/inventario?error=${encodeURIComponent(error?.message ?? "inventory_item_failed")}`);
+  }
+
+  revalidatePath("/app/inventario");
+  redirect(`/app/inventario/${data.id}?success=item_created`);
+}
+
+export async function updateInventoryItemAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const id = requiredString(formData, "item_id");
+  const name = requiredString(formData, "name");
+  const unit = requiredString(formData, "unit");
+  const minStock = parsePositiveNumber(requiredString(formData, "min_stock"));
+
+  if (!id || !name || !inventoryUnits.includes(unit) || minStock < 0) {
+    redirect(`/app/inventario/${id}?error=item_validation`);
+  }
+
+  const { error } = await supabase
+    .from("inventory_items")
+    .update({
+      name,
+      category: requiredString(formData, "category") || null,
+      unit,
+      min_stock: minStock,
+      status: requiredString(formData, "status") || "active",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("business_id", current.businessId)
+    .eq("id", id);
+
+  if (error) {
+    redirect(`/app/inventario/${id}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/inventario");
+  revalidatePath(`/app/inventario/${id}`);
+  redirect(`/app/inventario/${id}?success=item_updated`);
+}
+
+export async function createInventoryEntryAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const itemId = requiredString(formData, "item_id");
+  const quantity = parsePositiveNumber(requiredString(formData, "quantity"));
+  const expirationDate = requiredString(formData, "expiration_date") || null;
+  const cost = parsePositiveNumber(requiredString(formData, "cost"));
+  const returnTo = requiredString(formData, "return_to") || "/app/inventario";
+
+  if (!itemId || quantity <= 0 || cost < 0) {
+    redirect(`${returnTo}?error=entry_validation`);
+  }
+
+  const { data: item } = await supabase
+    .from("inventory_items")
+    .select("id")
+    .eq("business_id", current.businessId)
+    .eq("id", itemId)
+    .maybeSingle<{ id: string }>();
+
+  if (!item) {
+    redirect(`${returnTo}?error=item_not_found`);
+  }
+
+  const { data: batch, error: batchError } = await supabase
+    .from("inventory_batches")
+    .insert({
+      business_id: current.businessId,
+      item_id: itemId,
+      quantity,
+      initial_quantity: quantity,
+      expiration_date: expirationDate,
+      cost,
+      status: getBatchStatus(expirationDate),
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (batchError || !batch) {
+    redirect(`${returnTo}?error=${encodeURIComponent(batchError?.message ?? "batch_failed")}`);
+  }
+
+  const { error: movementError } = await supabase.from("inventory_movements").insert({
+    business_id: current.businessId,
+    item_id: itemId,
+    batch_id: batch.id,
+    type: "entry",
+    quantity,
+    reason: requiredString(formData, "reason") || "Entrada de inventario",
+    created_by: current.userId,
+  });
+
+  if (movementError) {
+    redirect(`${returnTo}?error=${encodeURIComponent(movementError.message)}`);
+  }
+
+  revalidatePath("/app/inventario");
+  revalidatePath(`/app/inventario/${itemId}`);
+  redirect(`${returnTo}?success=entry_created`);
+}
+
+export async function createInventoryMovementAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const itemId = requiredString(formData, "item_id");
+  const batchId = requiredString(formData, "batch_id");
+  const type = requiredString(formData, "type");
+  const quantity = parsePositiveNumber(requiredString(formData, "quantity"));
+  const reason = requiredString(formData, "reason");
+  const returnTo = requiredString(formData, "return_to") || "/app/inventario";
+
+  if (!itemId || !inventoryMovementTypes.includes(type) || quantity <= 0) {
+    redirect(`${returnTo}?error=movement_validation`);
+  }
+
+  const { data: item } = await supabase
+    .from("inventory_items")
+    .select("id, name, unit")
+    .eq("business_id", current.businessId)
+    .eq("id", itemId)
+    .maybeSingle<{ id: string; name: string; unit: string }>();
+
+  if (!item) {
+    redirect(`${returnTo}?error=item_not_found`);
+  }
+
+  const consumedBatches: {
+    id: string;
+    quantity: number;
+    cost: number;
+    expiration_date: string | null;
+  }[] = [];
+
+  if (batchId) {
+    const { data: batch } = await supabase
+      .from("inventory_batches")
+      .select("id, quantity, cost, expiration_date")
+      .eq("business_id", current.businessId)
+      .eq("item_id", itemId)
+      .eq("id", batchId)
+      .maybeSingle<{
+        id: string;
+        quantity: number;
+        cost: number;
+        expiration_date: string | null;
+      }>();
+
+    if (!batch || Number(batch.quantity) < quantity) {
+      redirect(`${returnTo}?error=insufficient_stock`);
+    }
+
+    consumedBatches.push({
+      id: batch.id,
+      quantity,
+      cost: Number(batch.cost),
+      expiration_date: batch.expiration_date,
+    });
+  } else {
+    const { data: batches } = await supabase
+      .from("inventory_batches")
+      .select("id, quantity, cost, expiration_date")
+      .eq("business_id", current.businessId)
+      .eq("item_id", itemId)
+      .gt("quantity", 0)
+      .order("expiration_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
+
+    let remaining = quantity;
+    for (const batch of batches ?? []) {
+      if (remaining <= 0) {
+        break;
+      }
+
+      const available = Number(batch.quantity);
+      const consumed = Math.min(available, remaining);
+      consumedBatches.push({
+        id: batch.id,
+        quantity: consumed,
+        cost: Number(batch.cost),
+        expiration_date: batch.expiration_date,
+      });
+      remaining -= consumed;
+    }
+
+    if (remaining > 0) {
+      redirect(`${returnTo}?error=insufficient_stock`);
+    }
+  }
+
+  for (const batch of consumedBatches) {
+    const { data: currentBatch } = await supabase
+      .from("inventory_batches")
+      .select("quantity, expiration_date")
+      .eq("business_id", current.businessId)
+      .eq("id", batch.id)
+      .maybeSingle<{ quantity: number; expiration_date: string | null }>();
+
+    const nextQuantity = Math.max(0, Number(currentBatch?.quantity ?? 0) - batch.quantity);
+    await supabase
+      .from("inventory_batches")
+      .update({
+        quantity: nextQuantity,
+        status: nextQuantity === 0 ? "used" : getBatchStatus(currentBatch?.expiration_date ?? batch.expiration_date),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("business_id", current.businessId)
+      .eq("id", batch.id);
+
+    const { error: movementError } = await supabase.from("inventory_movements").insert({
+      business_id: current.businessId,
+      item_id: itemId,
+      batch_id: batch.id,
+      type,
+      quantity: batch.quantity,
+      reason: reason || (type === "waste" ? "Merma registrada" : "Salida FEFO"),
+      created_by: current.userId,
+    });
+
+    if (movementError) {
+      redirect(`${returnTo}?error=${encodeURIComponent(movementError.message)}`);
+    }
+
+    if (type === "waste") {
+      await upsertWasteAlert({
+        businessId: current.businessId,
+        itemId,
+        batchId: batch.id,
+        riskLevel: "high",
+        message: `Merma registrada: ${batch.quantity} ${item.unit} de ${item.name}.`,
+        estimatedLoss: batch.quantity * batch.cost,
+      });
+    }
+  }
+
+  revalidatePath("/app/inventario");
+  revalidatePath(`/app/inventario/${itemId}`);
+  redirect(`${returnTo}?success=movement_created`);
+}
+
+export async function refreshWasteAlertsAction() {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const { data: batches, error } = await supabase
+    .from("inventory_batches")
+    .select("id, item_id, quantity, expiration_date, cost, inventory_items(name, unit)")
+    .eq("business_id", current.businessId)
+    .gt("quantity", 0)
+    .order("expiration_date", { ascending: true, nullsFirst: false });
+
+  if (error) {
+    redirect(`/app/inventario?error=${encodeURIComponent(error.message)}`);
+  }
+
+  for (const batch of batches ?? []) {
+    const status = getBatchStatus(batch.expiration_date);
+    const item = Array.isArray(batch.inventory_items)
+      ? batch.inventory_items[0]
+      : batch.inventory_items;
+
+    await supabase
+      .from("inventory_batches")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("business_id", current.businessId)
+      .eq("id", batch.id);
+
+    if (status === "ok") {
+      continue;
+    }
+
+    await upsertWasteAlert({
+      businessId: current.businessId,
+      itemId: batch.item_id,
+      batchId: batch.id,
+      riskLevel: getRiskLevel(status),
+      message: `${item?.name ?? "Producto"} tiene ${batch.quantity} ${item?.unit ?? "unidades"} con vencimiento cercano.`,
+      estimatedLoss: Number(batch.quantity) * Number(batch.cost),
+    });
+  }
+
+  revalidatePath("/app/inventario");
+  redirect("/app/inventario?success=waste_alerts_refreshed");
 }
 
 export async function createMessageTemplateAction(formData: FormData) {

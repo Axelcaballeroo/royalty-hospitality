@@ -34,6 +34,10 @@ export default async function DashboardPage() {
         <StatCard title="Inactivos" value={String(stats.inactiveCustomers)} detail="60 dias" />
         <StatCard title="Cumpleanos" value={String(stats.birthdayCustomers)} detail="Este mes" />
         <StatCard title="Canjes" value={String(stats.rewardsRedeemed)} detail="Recompensas este mes" />
+        <StatCard title="Bajo stock" value={String(stats.lowStockItems)} detail="Inventario" />
+        <StatCard title="Alertas merma" value={String(stats.openWasteAlerts)} detail="Abiertas" />
+        <StatCard title="Lotes urgentes" value={String(stats.urgentBatches)} detail="Vencimiento critico" />
+        <StatCard title="Merma estimada" value={`$${stats.estimatedWasteLoss.toFixed(0)}`} detail="MXN en riesgo" />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">

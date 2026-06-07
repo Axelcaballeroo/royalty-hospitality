@@ -131,6 +131,50 @@ export type MessageTemplate = {
   status: string;
 };
 
+export type InventoryItem = {
+  id: string;
+  name: string;
+  category: string | null;
+  unit: string;
+  min_stock: number;
+  status: string;
+  created_at: string;
+};
+
+export type InventoryBatch = {
+  id: string;
+  item_id: string;
+  quantity: number;
+  initial_quantity: number;
+  expiration_date: string | null;
+  cost: number;
+  status: string;
+  inventory_items?: { name: string; unit: string } | null;
+};
+
+export type InventoryMovement = {
+  id: string;
+  item_id: string;
+  batch_id: string | null;
+  type: string;
+  quantity: number;
+  reason: string | null;
+  created_at: string;
+  inventory_items?: { name: string; unit: string } | null;
+};
+
+export type WasteAlert = {
+  id: string;
+  item_id: string;
+  batch_id: string | null;
+  risk_level: string;
+  message: string;
+  estimated_loss: number;
+  status: string;
+  created_at: string;
+  inventory_items?: { name: string; unit: string } | null;
+};
+
 export type ClubCustomer = {
   id: string;
   full_name: string;
@@ -162,6 +206,10 @@ export async function getDashboardData() {
     customersReached,
     inactiveCustomers,
     birthdayCustomers,
+    inventoryItems,
+    openWasteAlerts,
+    urgentBatches,
+    wasteAlertsForLoss,
     activity,
   ] = await Promise.all([
     supabase
@@ -227,6 +275,27 @@ export async function getDashboardData() {
       segmentKey: "birthday_month",
     }),
     supabase
+      .from("inventory_items")
+      .select("id, min_stock, inventory_batches(quantity)")
+      .eq("business_id", current.businessId)
+      .eq("status", "active"),
+    supabase
+      .from("waste_alerts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "open"),
+    supabase
+      .from("inventory_batches")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "urgent")
+      .gt("quantity", 0),
+    supabase
+      .from("waste_alerts")
+      .select("estimated_loss")
+      .eq("business_id", current.businessId)
+      .eq("status", "open"),
+    supabase
       .from("customer_events")
       .select("id, type, title, description, created_at")
       .eq("business_id", current.businessId)
@@ -253,6 +322,22 @@ export async function getDashboardData() {
       customersReached: customersReached.count ?? 0,
       inactiveCustomers: inactiveCustomers.length,
       birthdayCustomers: birthdayCustomers.length,
+      lowStockItems:
+        inventoryItems.data?.filter((item) => {
+          const batches = (item.inventory_batches ?? []) as { quantity: number }[];
+          const stock = batches.reduce(
+            (sum, batch) => sum + Number(batch.quantity),
+            0,
+          );
+          return stock <= Number(item.min_stock);
+        }).length ?? 0,
+      openWasteAlerts: openWasteAlerts.count ?? 0,
+      urgentBatches: urgentBatches.count ?? 0,
+      estimatedWasteLoss:
+        wasteAlertsForLoss.data?.reduce(
+          (sum, alert) => sum + Number(alert.estimated_loss),
+          0,
+        ) ?? 0,
     },
     activity: activity.data ?? [],
   };
@@ -633,6 +718,109 @@ export async function getCampaignDetail(campaignId: string) {
       clicked: recipientRows.filter((recipient) => recipient.clicked_at).length,
       redeemed: recipientRows.filter((recipient) => recipient.redeemed_at).length,
     },
+  };
+}
+
+export async function getInventoryData() {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const [items, batches, alerts, movements] = await Promise.all([
+    supabase
+      .from("inventory_items")
+      .select("id, name, category, unit, min_stock, status, created_at, inventory_batches(quantity)")
+      .eq("business_id", current.businessId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("inventory_batches")
+      .select("id, item_id, quantity, initial_quantity, expiration_date, cost, status, inventory_items(name, unit)")
+      .eq("business_id", current.businessId)
+      .gt("quantity", 0)
+      .order("expiration_date", { ascending: true }),
+    supabase
+      .from("waste_alerts")
+      .select("id, item_id, batch_id, risk_level, message, estimated_loss, status, created_at, inventory_items(name, unit)")
+      .eq("business_id", current.businessId)
+      .eq("status", "open")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("inventory_movements")
+      .select("id, item_id, batch_id, type, quantity, reason, created_at, inventory_items(name, unit)")
+      .eq("business_id", current.businessId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+  ]);
+
+  const itemRows = (items.data ?? []) as unknown as (InventoryItem & {
+    inventory_batches?: { quantity: number }[];
+  })[];
+  const itemsWithStock = itemRows.map((item) => ({
+    ...item,
+    stock: (item.inventory_batches ?? []).reduce(
+      (sum, batch) => sum + Number(batch.quantity),
+      0,
+    ),
+  }));
+  const alertRows = (alerts.data ?? []) as unknown as WasteAlert[];
+
+  return {
+    current,
+    items: itemsWithStock,
+    batches: (batches.data ?? []) as unknown as InventoryBatch[],
+    alerts: alertRows,
+    movements: (movements.data ?? []) as unknown as InventoryMovement[],
+    metrics: {
+      activeItems: itemsWithStock.filter((item) => item.status === "active").length,
+      lowStock: itemsWithStock.filter((item) => item.stock <= Number(item.min_stock)).length,
+      expiringBatches: ((batches.data ?? []) as { status: string }[]).filter(
+        (batch) => batch.status === "near_expiration" || batch.status === "urgent" || batch.status === "expired",
+      ).length,
+      openAlerts: alertRows.length,
+      estimatedLoss: alertRows.reduce(
+        (sum, alert) => sum + Number(alert.estimated_loss),
+        0,
+      ),
+    },
+  };
+}
+
+export async function getInventoryItemDetail(itemId: string) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const [item, batches, movements, alerts] = await Promise.all([
+    supabase
+      .from("inventory_items")
+      .select("id, name, category, unit, min_stock, status, created_at")
+      .eq("business_id", current.businessId)
+      .eq("id", itemId)
+      .maybeSingle<InventoryItem>(),
+    supabase
+      .from("inventory_batches")
+      .select("id, item_id, quantity, initial_quantity, expiration_date, cost, status")
+      .eq("business_id", current.businessId)
+      .eq("item_id", itemId)
+      .order("expiration_date", { ascending: true }),
+    supabase
+      .from("inventory_movements")
+      .select("id, item_id, batch_id, type, quantity, reason, created_at")
+      .eq("business_id", current.businessId)
+      .eq("item_id", itemId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("waste_alerts")
+      .select("id, item_id, batch_id, risk_level, message, estimated_loss, status, created_at")
+      .eq("business_id", current.businessId)
+      .eq("item_id", itemId)
+      .order("created_at", { ascending: false }),
+  ]);
+  const batchRows = (batches.data ?? []) as InventoryBatch[];
+
+  return {
+    current,
+    item: item.data,
+    batches: batchRows,
+    movements: (movements.data ?? []) as InventoryMovement[],
+    alerts: (alerts.data ?? []) as WasteAlert[],
+    stock: batchRows.reduce((sum, batch) => sum + Number(batch.quantity), 0),
   };
 }
 

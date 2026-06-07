@@ -24,10 +24,20 @@ const channels = ["manual", "whatsapp", "email", "sms", "push"];
 export default async function MarketingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string; segment?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    success?: string;
+    segment?: string;
+    type?: string;
+    name?: string;
+    message?: string;
+  }>;
 }) {
   const params = await searchParams;
   const selectedSegment = params.segment ?? "all_customers";
+  const defaultCampaignType = campaignTypes.includes(params.type ?? "")
+    ? params.type ?? "promotion"
+    : "promotion";
   const { current, campaigns, templates, segmentCustomers, segmentSummaries, metrics } =
     await getMarketingData(selectedSegment);
   const previewCustomer = segmentCustomers[0];
@@ -70,9 +80,9 @@ export default async function MarketingPage({
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <ModuleCard title="Crear campana" description="Guarda borrador, agenda o envia una campana simulada.">
           <form action={createCampaignAction} className="grid gap-3">
-            <input required name="name" placeholder="Nombre de campana" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+            <input required name="name" defaultValue={params.name ?? ""} placeholder="Nombre de campana" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <div className="grid gap-3 sm:grid-cols-3">
-              <select required name="type" className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
+              <select required name="type" defaultValue={defaultCampaignType} className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
                 {campaignTypes.map((type) => <option key={type} value={type}>{type}</option>)}
               </select>
               <select required name="segment_key" defaultValue={selectedSegment} className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
@@ -82,7 +92,7 @@ export default async function MarketingPage({
                 {channels.map((channel) => <option key={channel} value={channel}>{channel}</option>)}
               </select>
             </div>
-            <textarea required name="message" placeholder="Mensaje con variables: {{nombre}}, {{negocio}}, {{puntos}}, {{nivel}}" className="min-h-28 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
+            <textarea required name="message" defaultValue={params.message ?? ""} placeholder="Mensaje con variables: {{nombre}}, {{negocio}}, {{puntos}}, {{nivel}}" className="min-h-28 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
             <input type="datetime-local" name="scheduled_at" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <div className="grid gap-3 sm:grid-cols-3">
               <button name="campaign_action" value="draft" className="h-11 rounded-lg border border-stone-200 bg-white text-sm font-medium text-stone-800 transition hover:border-stone-300">
