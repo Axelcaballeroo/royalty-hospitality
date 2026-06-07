@@ -3,6 +3,7 @@ import { getCurrentBusiness } from "@/lib/current-business";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSegmentCustomers, segmentDefinitions } from "@/lib/marketing";
 import { estimateWorkedHours, getTodayDate, getWeekStartIso } from "@/lib/hr";
+import { getPlanCounts } from "@/lib/superadmin";
 
 export type Customer = {
   id: string;
@@ -61,6 +62,20 @@ export type PublicBusiness = {
   whatsapp_url: string | null;
   website_enabled: boolean;
   reservation_enabled: boolean;
+  plan: string;
+  status: string;
+  onboarding_completed?: boolean;
+  onboarding_step?: number;
+};
+
+export type BusinessSettings = {
+  id: string;
+  business_id: string;
+  currency: string;
+  points_per_currency: number;
+  reservation_auto_confirmed: boolean;
+  reservation_interval_minutes: number;
+  timezone: string;
 };
 
 export type CustomerFilters = {
@@ -655,7 +670,7 @@ export async function getCalendarData(date: string) {
 export async function getBusinessSettingsData() {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
-  const [hours, modules] = await Promise.all([
+  const [hours, modules, settings, users] = await Promise.all([
     supabase
       .from("business_hours")
       .select("day_of_week, opens_at, closes_at, is_closed")
@@ -666,12 +681,24 @@ export async function getBusinessSettingsData() {
       .select("module_key, enabled")
       .eq("business_id", current.businessId)
       .order("module_key", { ascending: true }),
+    supabase
+      .from("business_settings")
+      .select("id, business_id, currency, points_per_currency, reservation_auto_confirmed, reservation_interval_minutes, timezone")
+      .eq("business_id", current.businessId)
+      .maybeSingle<BusinessSettings>(),
+    supabase
+      .from("business_users")
+      .select("id, user_id, role, status, created_at")
+      .eq("business_id", current.businessId)
+      .order("created_at", { ascending: true }),
   ]);
 
   return {
     current,
     hours: hours.data ?? [],
     modules: modules.data ?? [],
+    settings: settings.data,
+    users: users.data ?? [],
   };
 }
 
@@ -1564,5 +1591,144 @@ export async function getClubAccountByPhoneAndCode(input: {
     rewards: (rewards.data ?? []) as Reward[],
     walletAccount: walletAccount.data,
     walletTransactions: (walletTransactions.data ?? []) as WalletTransaction[],
+  };
+}
+
+export async function getSuperadminDashboardData() {
+  const admin = createAdminClient();
+  const [
+    businesses,
+    users,
+    reservations,
+    customers,
+    modules,
+  ] = await Promise.all([
+    admin
+      .from("businesses")
+      .select("id, name, slug, type, plan, status, created_at"),
+    admin.auth.admin.listUsers({ page: 1, perPage: 1 }),
+    admin.from("reservations").select("id", { count: "exact", head: true }),
+    admin.from("customers").select("id", { count: "exact", head: true }),
+    admin
+      .from("business_modules")
+      .select("module_key, enabled")
+      .eq("enabled", true),
+  ]);
+
+  const businessRows = businesses.data ?? [];
+  const moduleUsage = Object.entries(
+    (modules.data ?? []).reduce<Record<string, number>>((acc, row) => {
+      acc[row.module_key] = (acc[row.module_key] ?? 0) + 1;
+      return acc;
+    }, {}),
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8);
+
+  return {
+    businesses: businessRows,
+    metrics: {
+      totalBusinesses: businessRows.length,
+      activeBusinesses: businessRows.filter((business) => business.status === "active").length,
+      usersRegistered: users.data.users.length,
+      planCounts: getPlanCounts(businessRows),
+      totalReservations: reservations.count ?? 0,
+      totalCustomers: customers.count ?? 0,
+      mrrPlaceholder: 0,
+      moduleUsage,
+    },
+  };
+}
+
+export async function getSuperadminBusinessesData(search?: string) {
+  const admin = createAdminClient();
+  let query = admin
+    .from("businesses")
+    .select("id, name, slug, type, plan, status, created_at, business_users(id)")
+    .order("created_at", { ascending: false });
+
+  if (search) {
+    const q = search.replace(/[%_,]/g, "");
+    query = query.or(`name.ilike.%${q}%,slug.ilike.%${q}%,type.ilike.%${q}%`);
+  }
+
+  const { data } = await query;
+  return (data ?? []) as unknown as (PublicBusiness & { created_at: string; business_users?: { id: string }[] })[];
+}
+
+export async function getSuperadminBusinessDetail(businessId: string) {
+  const admin = createAdminClient();
+  const [
+    business,
+    modules,
+    users,
+    reservations,
+    customers,
+    events,
+    logs,
+  ] = await Promise.all([
+    admin
+      .from("businesses")
+      .select("*")
+      .eq("id", businessId)
+      .maybeSingle<PublicBusiness & { created_at: string; plan: string; status: string }>(),
+    admin
+      .from("business_modules")
+      .select("id, module_key, enabled")
+      .eq("business_id", businessId)
+      .order("module_key", { ascending: true }),
+    admin
+      .from("business_users")
+      .select("id, user_id, role, status, created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: true }),
+    admin
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId),
+    admin
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId),
+    admin
+      .from("customer_events")
+      .select("id, type, title, description, created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(8),
+    admin
+      .from("admin_audit_logs")
+      .select("id, action, description, metadata, created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(8),
+  ]);
+
+  return {
+    business: business.data,
+    modules: modules.data ?? [],
+    users: users.data ?? [],
+    metrics: {
+      reservations: reservations.count ?? 0,
+      customers: customers.count ?? 0,
+    },
+    events: events.data ?? [],
+    logs: logs.data ?? [],
+  };
+}
+
+export async function getSuperadminUsersData() {
+  const admin = createAdminClient();
+  const [authUsers, memberships] = await Promise.all([
+    admin.auth.admin.listUsers({ page: 1, perPage: 200 }),
+    admin
+      .from("business_users")
+      .select("id, user_id, business_id, role, status, created_at, businesses(name, slug)")
+      .order("created_at", { ascending: false }),
+  ]);
+
+  return {
+    authUsers: authUsers.data.users,
+    memberships: memberships.data ?? [],
   };
 }

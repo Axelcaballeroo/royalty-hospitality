@@ -22,6 +22,15 @@ export default async function DashboardPage() {
         </p>
       </div>
 
+      {!current.business.onboarding_completed ? (
+        <Link
+          href="/app/onboarding"
+          className="block rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800 transition hover:border-amber-300"
+        >
+          Completa la configuracion inicial de tu negocio. Paso {current.business.onboarding_step ?? 1} de 6.
+        </Link>
+      ) : null}
+
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-stone-950">Hoy</h2>
         <div className="grid gap-4 md:grid-cols-3">

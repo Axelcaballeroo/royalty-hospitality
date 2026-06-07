@@ -552,6 +552,117 @@ export async function updatePublicWebsiteSettingsAction(formData: FormData) {
   redirect("/app/configuracion?success=public_settings_updated");
 }
 
+export async function updateBusinessProfileAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+
+  if (!["superadmin", "owner", "manager"].includes(current.role)) {
+    redirect("/app/configuracion?error=forbidden");
+  }
+
+  const { error } = await supabase
+    .from("businesses")
+    .update({
+      name: requiredString(formData, "name") || current.business.name,
+      type: requiredString(formData, "type") || null,
+      phone: requiredString(formData, "phone") || null,
+      email: requiredString(formData, "email") || null,
+      address: requiredString(formData, "address") || null,
+      city: requiredString(formData, "city") || null,
+      country: requiredString(formData, "country") || null,
+      timezone: requiredString(formData, "timezone") || current.business.timezone,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", current.businessId);
+
+  if (error) {
+    redirect(`/app/configuracion?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/configuracion");
+  revalidatePath("/app/dashboard");
+  redirect("/app/configuracion?success=business_profile_updated");
+}
+
+export async function updateBusinessSettingsAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+
+  if (!["superadmin", "owner", "manager"].includes(current.role)) {
+    redirect("/app/configuracion?error=forbidden");
+  }
+
+  const { error } = await supabase.from("business_settings").upsert(
+    {
+      business_id: current.businessId,
+      currency: requiredString(formData, "currency") || "MXN",
+      points_per_currency: parsePositiveNumber(requiredString(formData, "points_per_currency")) || 1,
+      reservation_auto_confirmed: formData.get("reservation_auto_confirmed") === "on",
+      reservation_interval_minutes:
+        Number(requiredString(formData, "reservation_interval_minutes")) || 30,
+      timezone: requiredString(formData, "timezone") || current.business.timezone,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "business_id" },
+  );
+
+  if (error) {
+    redirect(`/app/configuracion?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/configuracion");
+  redirect("/app/configuracion?success=business_settings_updated");
+}
+
+export async function updateBusinessUserAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const membershipId = requiredString(formData, "membership_id");
+  const role = requiredString(formData, "role");
+  const status = requiredString(formData, "status");
+
+  if (!["superadmin", "owner", "manager"].includes(current.role)) {
+    redirect("/app/configuracion?error=forbidden");
+  }
+
+  const { error } = await supabase
+    .from("business_users")
+    .update({ role, status })
+    .eq("business_id", current.businessId)
+    .eq("id", membershipId);
+
+  if (error) {
+    redirect(`/app/configuracion?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/configuracion");
+  redirect("/app/configuracion?success=user_updated");
+}
+
+export async function updateOnboardingStepAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const step = Number(requiredString(formData, "onboarding_step")) || 1;
+  const completed = formData.get("onboarding_completed") === "on";
+
+  const { error } = await supabase
+    .from("businesses")
+    .update({
+      onboarding_step: step,
+      onboarding_completed: completed,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", current.businessId);
+
+  if (error) {
+    redirect(`/app/onboarding?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/onboarding");
+  revalidatePath("/app/dashboard");
+  redirect(completed ? "/app/dashboard?success=onboarding_completed" : "/app/onboarding?success=step_updated");
+}
+
 export async function createRewardAction(formData: FormData) {
   const current = await getCurrentBusiness();
   const supabase = await createClient();

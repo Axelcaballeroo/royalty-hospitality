@@ -25,6 +25,8 @@ export type CurrentBusiness = {
       whatsapp_url?: string | null;
       website_enabled?: boolean;
       reservation_enabled?: boolean;
+      onboarding_completed?: boolean;
+      onboarding_step?: number;
       plan: string;
       status: string;
       timezone: string;
@@ -55,6 +57,8 @@ type BusinessUserRow = {
         whatsapp_url: string | null;
         website_enabled: boolean;
         reservation_enabled: boolean;
+        onboarding_completed: boolean;
+        onboarding_step: number;
         plan: string;
         status: string;
         timezone: string;
@@ -79,6 +83,8 @@ type BusinessUserRow = {
         whatsapp_url: string | null;
         website_enabled: boolean;
         reservation_enabled: boolean;
+        onboarding_completed: boolean;
+        onboarding_step: number;
         plan: string;
         status: string;
         timezone: string;
@@ -98,7 +104,7 @@ export async function getCurrentBusiness(): Promise<CurrentBusiness> {
   const { data, error } = await supabase
     .from("business_users")
     .select(
-      "business_id, role, businesses(id, name, slug, type, logo_url, cover_url, phone, email, address, city, country, public_description, brand_primary_color, brand_secondary_color, instagram_url, facebook_url, whatsapp_url, website_enabled, reservation_enabled, plan, status, timezone)",
+      "business_id, role, businesses(id, name, slug, type, logo_url, cover_url, phone, email, address, city, country, public_description, brand_primary_color, brand_secondary_color, instagram_url, facebook_url, whatsapp_url, website_enabled, reservation_enabled, onboarding_completed, onboarding_step, plan, status, timezone)",
     )
     .eq("user_id", user.id)
     .eq("status", "active")

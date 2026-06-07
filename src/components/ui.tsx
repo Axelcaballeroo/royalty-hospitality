@@ -95,6 +95,10 @@ const statusClasses: Record<string, string> = {
   bonus: "border-yellow-200 bg-yellow-50 text-yellow-800",
   purchase: "border-red-200 bg-red-50 text-red-700",
   refund: "border-sky-200 bg-sky-50 text-sky-700",
+  superadmin: "border-stone-900 bg-stone-950 text-white",
+  owner: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  manager: "border-sky-200 bg-sky-50 text-sky-700",
+  staff: "border-stone-200 bg-stone-50 text-stone-700",
 };
 
 export function StatusBadge({ status }: { status: string }) {

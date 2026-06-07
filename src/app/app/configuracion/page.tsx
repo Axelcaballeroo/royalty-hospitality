@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
-import { updatePublicWebsiteSettingsAction } from "@/app/app/actions";
+import {
+  updateBusinessProfileAction,
+  updateBusinessSettingsAction,
+  updateBusinessUserAction,
+  updatePublicWebsiteSettingsAction,
+} from "@/app/app/actions";
 import { getBusinessSettingsData } from "@/lib/data";
 import { ModuleCard, StatusBadge } from "@/components/ui";
 import { getModuleAccess, moduleCatalog, planModules } from "@/lib/plans";
@@ -13,7 +18,7 @@ export default async function SettingsPage({
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   const params = await searchParams;
-  const { current, hours, modules } = await getBusinessSettingsData();
+  const { current, hours, modules, settings, users } = await getBusinessSettingsData();
   const { plan, access } = await getModuleAccess();
   const business = current.business;
   const includedModules = planModules[plan];
@@ -45,6 +50,40 @@ export default async function SettingsPage({
 
       {params.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{params.error}</p> : null}
       {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p> : null}
+
+      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <ModuleCard title="Perfil del negocio" description="Datos internos principales del tenant.">
+          <form action={updateBusinessProfileAction} className="grid gap-3">
+            <input required name="name" defaultValue={business.name} placeholder="Nombre" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input name="type" defaultValue={business.type ?? ""} placeholder="Tipo" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="timezone" defaultValue={business.timezone} placeholder="Timezone" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="phone" defaultValue={business.phone ?? ""} placeholder="Telefono" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="email" type="email" defaultValue={business.email ?? ""} placeholder="Email" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="address" defaultValue={business.address ?? ""} placeholder="Direccion" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="city" defaultValue={business.city ?? ""} placeholder="Ciudad" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="country" defaultValue={business.country ?? ""} placeholder="Pais" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+            </div>
+            <button className="h-11 rounded-lg bg-stone-950 text-sm font-medium text-white">Guardar perfil</button>
+          </form>
+        </ModuleCard>
+
+        <ModuleCard title="Preferencias" description="Reglas operativas V1 en business_settings.">
+          <form action={updateBusinessSettingsAction} className="grid gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input name="currency" defaultValue={settings?.currency ?? "MXN"} placeholder="Moneda" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="timezone" defaultValue={settings?.timezone ?? business.timezone} placeholder="Timezone" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="points_per_currency" type="number" step="0.01" defaultValue={settings?.points_per_currency ?? 1} placeholder="Puntos por consumo" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="reservation_interval_minutes" type="number" min="5" defaultValue={settings?.reservation_interval_minutes ?? 30} placeholder="Intervalo reservas" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+            </div>
+            <label className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm font-medium text-stone-700">
+              <input name="reservation_auto_confirmed" type="checkbox" defaultChecked={settings?.reservation_auto_confirmed ?? false} />
+              Reservas auto-confirmadas
+            </label>
+            <button className="h-11 rounded-lg bg-stone-950 text-sm font-medium text-white">Guardar preferencias</button>
+          </form>
+        </ModuleCard>
+      </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <ModuleCard title="Web publica" description="Branding, contacto, redes y activacion de reservas publicas.">
@@ -133,6 +172,31 @@ export default async function SettingsPage({
                   <StatusBadge status={module.enabled ? "active" : "inactive"} />
                 </div>
               ))}
+            </div>
+          </ModuleCard>
+          <ModuleCard title="Usuarios" description="Gestion manual V1 de business_users.">
+            <div className="grid gap-3">
+              {users.map((user) => (
+                <form key={user.id} action={updateBusinessUserAction} className="grid gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3">
+                  <input type="hidden" name="membership_id" value={user.id} />
+                  <p className="text-xs font-medium text-stone-500">{user.user_id}</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <select name="role" defaultValue={user.role} className="h-10 rounded-lg border border-stone-200 bg-white px-2 text-xs outline-none">
+                      {["superadmin", "owner", "manager", "staff"].map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                    <select name="status" defaultValue={user.status} className="h-10 rounded-lg border border-stone-200 bg-white px-2 text-xs outline-none">
+                      <option value="active">active</option>
+                      <option value="inactive">inactive</option>
+                    </select>
+                    <button className="h-10 rounded-lg border border-stone-200 bg-white text-xs font-medium text-stone-800">Guardar</button>
+                  </div>
+                </form>
+              ))}
+              <button className="h-10 rounded-lg bg-stone-950 text-sm font-medium text-white">
+                Invitar usuario (placeholder)
+              </button>
             </div>
           </ModuleCard>
           <ModuleCard title="Horarios" description="Se mostraran en la web publica cuando existan.">
