@@ -6,13 +6,20 @@ import {
   createInternalCommentAction,
   createInternalNoteAction,
   createInternalTaskAction,
+  createWalletAccountAction,
   redeemRewardAction,
+  updateWalletStatusAction,
   updateCustomerAction,
   updateTaskStatusAction,
+  walletAdjustmentAction,
+  walletPurchaseAction,
+  walletTopupAction,
 } from "@/app/app/actions";
 import { getCustomerDetail } from "@/lib/data";
 import { createQrDataUrl } from "@/lib/qr";
 import { DataTable, EmptyState, ModuleCard, StatusBadge } from "@/components/ui";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { formatCurrency } from "@/lib/wallet";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +44,8 @@ export default async function CustomerDetailPage({
     loyaltyTransactions,
     rewards,
     campaignRecipients,
+    walletAccount,
+    walletTransactions,
   } =
     await getCustomerDetail(id);
 
@@ -166,6 +175,109 @@ export default async function CustomerDetailPage({
           />
         ) : (
           <EmptyState title="Sin campanas recibidas" description="Cuando envies campanas simuladas, apareceran aqui." />
+        )}
+      </ModuleCard>
+
+      <section className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+        <ModuleCard title="Wallet" description="Monedero interno del cliente, sin pagos reales.">
+          {walletAccount ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-stone-950 p-5 text-white">
+                <p className="text-sm text-stone-400">Saldo actual</p>
+                <p className="mt-3 text-4xl font-semibold">
+                  {formatCurrency(Number(walletAccount.balance), walletAccount.currency)}
+                </p>
+                <div className="mt-4">
+                  <StatusBadge status={walletAccount.status} />
+                </div>
+              </div>
+              <form action={updateWalletStatusAction} className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                <input type="hidden" name="customer_id" value={customer.id} />
+                <input type="hidden" name="return_to" value={`/app/clientes/${customer.id}`} />
+                <select name="status" defaultValue={walletAccount.status} className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
+                  <option value="active">active</option>
+                  <option value="frozen">frozen</option>
+                  <option value="closed">closed</option>
+                </select>
+                <ConfirmSubmitButton
+                  className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 transition hover:border-stone-300"
+                  message="Cambiar estado de wallet?"
+                >
+                  Guardar estado
+                </ConfirmSubmitButton>
+              </form>
+            </div>
+          ) : (
+            <form action={createWalletAccountAction} className="grid gap-3">
+              <input type="hidden" name="customer_id" value={customer.id} />
+              <input type="hidden" name="return_to" value={`/app/clientes/${customer.id}`} />
+              <EmptyState title="Sin wallet" description="Crea una wallet para operar recargas, bonos y consumos internos." />
+              <button className="h-10 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">
+                Crear wallet
+              </button>
+            </form>
+          )}
+        </ModuleCard>
+
+        <ModuleCard title="Operaciones wallet" description="Recargar, consumir, otorgar bono o ajustar saldo.">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <form action={walletTopupAction} className="grid gap-3">
+              <input type="hidden" name="customer_id" value={customer.id} />
+              <input type="hidden" name="return_to" value={`/app/clientes/${customer.id}`} />
+              <input required name="amount" type="number" min="0.01" step="0.01" placeholder="Recarga" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="bonus" type="number" min="0" step="0.01" placeholder="Bono opcional" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="reference" placeholder="Referencia" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="comment" placeholder="Comentario" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <button className="h-10 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">
+                Recargar saldo
+              </button>
+            </form>
+            <form action={walletPurchaseAction} className="grid gap-3">
+              <input type="hidden" name="customer_id" value={customer.id} />
+              <input type="hidden" name="return_to" value={`/app/clientes/${customer.id}`} />
+              <input required name="amount" type="number" min="0.01" step="0.01" placeholder="Consumo" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="reference" placeholder="Ticket / referencia" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="comment" placeholder="Comentario" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <ConfirmSubmitButton
+                className="h-10 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800"
+                message="Registrar consumo con wallet?"
+              >
+                Aplicar consumo
+              </ConfirmSubmitButton>
+            </form>
+            <form action={walletAdjustmentAction} className="grid gap-3 lg:col-span-2">
+              <input type="hidden" name="customer_id" value={customer.id} />
+              <input type="hidden" name="return_to" value={`/app/clientes/${customer.id}`} />
+              <div className="grid gap-3 sm:grid-cols-3">
+                <input required name="amount" type="number" step="0.01" placeholder="Ajuste (+ o -)" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+                <input name="reference" placeholder="Referencia" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+                <input required name="reason" placeholder="Motivo obligatorio" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              </div>
+              <ConfirmSubmitButton
+                className="h-10 rounded-lg border border-stone-200 bg-white text-sm font-medium text-stone-800 transition hover:border-stone-300"
+                message="Aplicar ajuste manual?"
+              >
+                Ajuste manual
+              </ConfirmSubmitButton>
+            </form>
+          </div>
+        </ModuleCard>
+      </section>
+
+      <ModuleCard title="Historial wallet" description="Movimientos recientes del monedero.">
+        {walletTransactions.length ? (
+          <DataTable
+            columns={["Tipo", "Monto", "Referencia", "Descripcion", "Fecha"]}
+            rows={walletTransactions.map((transaction) => [
+              <StatusBadge key="type" status={transaction.type} />,
+              formatCurrency(Number(transaction.amount)),
+              transaction.reference ?? "-",
+              transaction.description ?? "-",
+              new Date(transaction.created_at).toLocaleDateString("es-MX"),
+            ])}
+          />
+        ) : (
+          <EmptyState title="Sin movimientos wallet" description="Las recargas, bonos, consumos y ajustes apareceran aqui." />
         )}
       </ModuleCard>
 

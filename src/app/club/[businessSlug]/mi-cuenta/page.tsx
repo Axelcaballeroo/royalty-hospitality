@@ -4,6 +4,7 @@ import { clubAccountLoginAction } from "@/app/club/actions";
 import { getClubAccountByPhoneAndCode, getPublicBusinessBySlug } from "@/lib/data";
 import { createQrDataUrl } from "@/lib/qr";
 import { DataTable, EmptyState, ModuleCard, StatusBadge } from "@/components/ui";
+import { formatCurrency } from "@/lib/wallet";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,7 @@ export default async function ClubAccountPage({
   }
 
   const account = data.account ?? { points_balance: 0, tier: "bronze" };
+  const wallet = data.walletAccount;
   const qrDataUrl = await createQrDataUrl(data.customer.loyalty_code ?? data.customer.id);
 
   return (
@@ -103,6 +105,15 @@ export default async function ClubAccountPage({
               <div>
                 <StatusBadge status={account.tier} />
               </div>
+            </div>
+            <div className="mt-6 rounded-lg bg-white/10 p-4">
+              <p className="text-sm text-white/70">Saldo wallet</p>
+              <p className="mt-2 text-2xl font-semibold">
+                {wallet ? formatCurrency(Number(wallet.balance), wallet.currency) : formatCurrency(0)}
+              </p>
+              <p className="mt-1 text-xs text-white/65">
+                Solo consulta. Las recargas son internas por ahora.
+              </p>
             </div>
           </div>
           <ModuleCard title="QR personal" description="Muestralo al staff para identificar tu cuenta.">
@@ -148,6 +159,21 @@ export default async function ClubAccountPage({
             )}
           </ModuleCard>
         </section>
+
+        <ModuleCard title="Historial wallet" description="Movimientos recientes de tu monedero.">
+          {data.walletTransactions.length ? (
+            <DataTable
+              columns={["Tipo", "Monto", "Descripcion"]}
+              rows={data.walletTransactions.map((transaction) => [
+                <StatusBadge key="type" status={transaction.type} />,
+                formatCurrency(Number(transaction.amount), wallet?.currency ?? "MXN"),
+                transaction.description ?? "-",
+              ])}
+            />
+          ) : (
+            <EmptyState title="Sin movimientos wallet" description="Cuando uses tu monedero, los movimientos apareceran aqui." />
+          )}
+        </ModuleCard>
       </div>
     </main>
   );

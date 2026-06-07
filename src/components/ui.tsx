@@ -89,6 +89,12 @@ const statusClasses: Record<string, string> = {
   pro: "border-sky-200 bg-sky-50 text-sky-700",
   premium: "border-violet-200 bg-violet-50 text-violet-700",
   business: "border-stone-900 bg-stone-950 text-white",
+  frozen: "border-sky-200 bg-sky-50 text-sky-700",
+  closed: "border-stone-200 bg-stone-100 text-stone-600",
+  topup: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  bonus: "border-yellow-200 bg-yellow-50 text-yellow-800",
+  purchase: "border-red-200 bg-red-50 text-red-700",
+  refund: "border-sky-200 bg-sky-50 text-sky-700",
 };
 
 export function StatusBadge({ status }: { status: string }) {

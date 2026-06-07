@@ -212,6 +212,29 @@ export type TimeClockEntry = {
   shifts?: { date: string; start_time: string; end_time: string; role: string | null } | null;
 };
 
+export type WalletAccount = {
+  id: string;
+  customer_id: string;
+  balance: number;
+  currency: string;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+  customers?: { full_name: string; phone: string | null; email?: string | null } | null;
+  wallet_transactions?: { created_at: string; type: string; amount: number }[];
+};
+
+export type WalletTransaction = {
+  id: string;
+  customer_id: string;
+  type: string;
+  amount: number;
+  description: string | null;
+  reference: string | null;
+  created_at: string;
+  customers?: { full_name: string; phone: string | null } | null;
+};
+
 export type ReportPeriod = "today" | "7d" | "month" | "90d";
 
 function getReportRange(period: ReportPeriod) {
@@ -460,7 +483,7 @@ export async function getCustomersData(filters: CustomerFilters = {}) {
 export async function getCustomerDetail(customerId: string) {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
-  const [customer, events, reservations, notes, tasks, comments, businessUsers, loyaltyAccount, loyaltyTransactions, rewards, campaignRecipients] =
+  const [customer, events, reservations, notes, tasks, comments, businessUsers, loyaltyAccount, loyaltyTransactions, rewards, campaignRecipients, walletAccount, walletTransactions] =
     await Promise.all([
       supabase
         .from("customers")
@@ -530,6 +553,19 @@ export async function getCustomerDetail(customerId: string) {
         .eq("customer_id", customerId)
         .order("created_at", { ascending: false })
         .limit(12),
+      supabase
+        .from("wallet_accounts")
+        .select("id, customer_id, balance, currency, status, created_at, updated_at")
+        .eq("business_id", current.businessId)
+        .eq("customer_id", customerId)
+        .maybeSingle<WalletAccount>(),
+      supabase
+        .from("wallet_transactions")
+        .select("id, customer_id, type, amount, description, reference, created_at")
+        .eq("business_id", current.businessId)
+        .eq("customer_id", customerId)
+        .order("created_at", { ascending: false })
+        .limit(12),
     ]);
 
   return {
@@ -545,6 +581,8 @@ export async function getCustomerDetail(customerId: string) {
     loyaltyTransactions: loyaltyTransactions.data ?? [],
     rewards: (rewards.data ?? []) as Reward[],
     campaignRecipients: campaignRecipients.data ?? [],
+    walletAccount: walletAccount.data,
+    walletTransactions: (walletTransactions.data ?? []) as WalletTransaction[],
   };
 }
 
@@ -701,6 +739,72 @@ export async function getLoyaltyData() {
         gold: loyaltyAccounts.filter((account) => account.tier === "gold").length,
         black: loyaltyAccounts.filter((account) => account.tier === "black").length,
       },
+    },
+  };
+}
+
+export async function getWalletData() {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const monthStartIso = monthStart.toISOString();
+
+  const [accounts, transactions, customers, topups, purchases, bonuses] = await Promise.all([
+    supabase
+      .from("wallet_accounts")
+      .select("id, customer_id, balance, currency, status, created_at, updated_at, customers(full_name, phone, email), wallet_transactions(type, amount, created_at)")
+      .eq("business_id", current.businessId)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("wallet_transactions")
+      .select("id, customer_id, type, amount, description, reference, created_at, customers(full_name, phone)")
+      .eq("business_id", current.businessId)
+      .order("created_at", { ascending: false })
+      .limit(25),
+    supabase
+      .from("customers")
+      .select("id, full_name, phone, email")
+      .eq("business_id", current.businessId)
+      .order("full_name", { ascending: true }),
+    supabase
+      .from("wallet_transactions")
+      .select("amount")
+      .eq("business_id", current.businessId)
+      .eq("type", "topup")
+      .gte("created_at", monthStartIso),
+    supabase
+      .from("wallet_transactions")
+      .select("amount")
+      .eq("business_id", current.businessId)
+      .eq("type", "purchase")
+      .gte("created_at", monthStartIso),
+    supabase
+      .from("wallet_transactions")
+      .select("amount")
+      .eq("business_id", current.businessId)
+      .eq("type", "bonus")
+      .gte("created_at", monthStartIso),
+  ]);
+
+  const accountRows = (accounts.data ?? []) as unknown as WalletAccount[];
+  const transactionRows = (transactions.data ?? []) as unknown as WalletTransaction[];
+
+  return {
+    current,
+    accounts: accountRows,
+    transactions: transactionRows,
+    customers: (customers.data ?? []) as Customer[],
+    metrics: {
+      totalBalance: accountRows.reduce((sum, account) => sum + Number(account.balance), 0),
+      activeWallets: accountRows.filter((account) => account.status === "active").length,
+      topups:
+        topups.data?.reduce((sum, transaction) => sum + Number(transaction.amount), 0) ?? 0,
+      purchases:
+        purchases.data?.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0) ?? 0,
+      bonuses:
+        bonuses.data?.reduce((sum, transaction) => sum + Number(transaction.amount), 0) ?? 0,
     },
   };
 }
@@ -1417,7 +1521,7 @@ export async function getClubAccountByPhoneAndCode(input: {
     return { business, customer: null };
   }
 
-  const [account, transactions, rewards] = await Promise.all([
+  const [account, transactions, rewards, walletAccount, walletTransactions] = await Promise.all([
     admin
       .from("loyalty_accounts")
       .select("id, points_balance, tier")
@@ -1437,6 +1541,19 @@ export async function getClubAccountByPhoneAndCode(input: {
       .eq("business_id", business.id)
       .eq("status", "active")
       .order("points_required", { ascending: true }),
+    admin
+      .from("wallet_accounts")
+      .select("id, customer_id, balance, currency, status")
+      .eq("business_id", business.id)
+      .eq("customer_id", customer.id)
+      .maybeSingle<WalletAccount>(),
+    admin
+      .from("wallet_transactions")
+      .select("id, customer_id, type, amount, description, reference, created_at")
+      .eq("business_id", business.id)
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false })
+      .limit(10),
   ]);
 
   return {
@@ -1445,5 +1562,7 @@ export async function getClubAccountByPhoneAndCode(input: {
     account: account.data,
     transactions: transactions.data ?? [],
     rewards: (rewards.data ?? []) as Reward[],
+    walletAccount: walletAccount.data,
+    walletTransactions: (walletTransactions.data ?? []) as WalletTransaction[],
   };
 }

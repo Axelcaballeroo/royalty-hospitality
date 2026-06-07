@@ -9,6 +9,7 @@ import { generateLoyaltyCode } from "@/lib/loyalty-code";
 import { getSegmentCustomers } from "@/lib/marketing";
 import { getBatchStatus, getRiskLevel, inventoryMovementTypes, inventoryUnits } from "@/lib/inventory";
 import { employeeStatuses, shiftStatuses } from "@/lib/hr";
+import { applyWalletTransaction, ensureWalletAccount, walletStatuses } from "@/lib/wallet";
 
 const validReservationStatuses = [
   "pending",
@@ -1413,6 +1414,203 @@ export async function endBreakAction(formData: FormData) {
   revalidatePath("/app/rrhh");
   revalidatePath("/app/rrhh/checador");
   redirect("/app/rrhh/checador?success=break_ended");
+}
+
+export async function createWalletAccountAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const customerId = requiredString(formData, "customer_id");
+  const returnTo = requiredString(formData, "return_to") || "/app/wallet";
+
+  if (!customerId) {
+    redirect(`${returnTo}?error=customer_required`);
+  }
+
+  try {
+    await ensureWalletAccount({
+      businessId: current.businessId,
+      customerId,
+    });
+  } catch (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error instanceof Error ? error.message : "wallet_create_failed")}`);
+  }
+
+  revalidatePath("/app/wallet");
+  revalidatePath(`/app/clientes/${customerId}`);
+  redirect(`${returnTo}?success=wallet_created`);
+}
+
+export async function walletTopupAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const customerId = requiredString(formData, "customer_id");
+  const amount = parsePositiveNumber(requiredString(formData, "amount"));
+  const bonus = parsePositiveNumber(requiredString(formData, "bonus"));
+  const reference = requiredString(formData, "reference");
+  const comment = requiredString(formData, "comment");
+  const returnTo = requiredString(formData, "return_to") || "/app/wallet";
+
+  if (!customerId || amount <= 0 || bonus < 0) {
+    redirect(`${returnTo}?error=wallet_topup_validation`);
+  }
+
+  try {
+    await applyWalletTransaction({
+      businessId: current.businessId,
+      customerId,
+      type: "topup",
+      amount,
+      description: comment || "Recarga manual de wallet",
+      reference,
+      createdBy: current.userId,
+    });
+
+    if (bonus > 0) {
+      await applyWalletTransaction({
+        businessId: current.businessId,
+        customerId,
+        type: "bonus",
+        amount: bonus,
+        description: "Bono por recarga",
+        reference,
+        createdBy: current.userId,
+      });
+    }
+
+    await addCustomerEvent({
+      businessId: current.businessId,
+      customerId,
+      type: "wallet_topup",
+      title: "Recarga de wallet",
+      description: `Cliente recargo ${amount} MXN${bonus > 0 ? ` y recibio ${bonus} MXN de bono` : ""}`,
+    });
+  } catch (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error instanceof Error ? error.message : "wallet_topup_failed")}`);
+  }
+
+  revalidatePath("/app/wallet");
+  revalidatePath(`/app/clientes/${customerId}`);
+  redirect(`${returnTo}?success=wallet_topup`);
+}
+
+export async function walletPurchaseAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const customerId = requiredString(formData, "customer_id");
+  const amount = parsePositiveNumber(requiredString(formData, "amount"));
+  const reference = requiredString(formData, "reference");
+  const comment = requiredString(formData, "comment");
+  const returnTo = requiredString(formData, "return_to") || "/app/wallet";
+
+  if (!customerId || amount <= 0) {
+    redirect(`${returnTo}?error=wallet_purchase_validation`);
+  }
+
+  try {
+    await applyWalletTransaction({
+      businessId: current.businessId,
+      customerId,
+      type: "purchase",
+      amount,
+      description: comment || "Consumo con wallet",
+      reference,
+      createdBy: current.userId,
+    });
+
+    await addCustomerEvent({
+      businessId: current.businessId,
+      customerId,
+      type: "wallet_purchase",
+      title: "Consumo con wallet",
+      description: `Cliente uso ${amount} MXN de su wallet`,
+    });
+
+    await applyLoyaltyPoints({
+      businessId: current.businessId,
+      customerId,
+      pointsDelta: Math.floor(amount),
+      type: "earn",
+      description: "Puntos por consumo con wallet",
+      createdBy: current.userId,
+    });
+
+    await addCustomerEvent({
+      businessId: current.businessId,
+      customerId,
+      type: "points_earned",
+      title: "Puntos acumulados",
+      description: `Cliente gano ${Math.floor(amount)} puntos por consumo con wallet`,
+    });
+  } catch (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error instanceof Error ? error.message : "wallet_purchase_failed")}`);
+  }
+
+  revalidatePath("/app/wallet");
+  revalidatePath("/app/fidelizacion");
+  revalidatePath(`/app/clientes/${customerId}`);
+  redirect(`${returnTo}?success=wallet_purchase`);
+}
+
+export async function walletAdjustmentAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const customerId = requiredString(formData, "customer_id");
+  const amount = Number(requiredString(formData, "amount"));
+  const reason = requiredString(formData, "reason");
+  const reference = requiredString(formData, "reference");
+  const returnTo = requiredString(formData, "return_to") || "/app/wallet";
+
+  if (!customerId || !Number.isFinite(amount) || amount === 0 || !reason) {
+    redirect(`${returnTo}?error=wallet_adjustment_validation`);
+  }
+
+  try {
+    await applyWalletTransaction({
+      businessId: current.businessId,
+      customerId,
+      type: "adjustment",
+      amount,
+      description: reason,
+      reference,
+      createdBy: current.userId,
+    });
+
+    await addCustomerEvent({
+      businessId: current.businessId,
+      customerId,
+      type: "wallet_adjustment",
+      title: "Ajuste de wallet",
+      description: `${amount} MXN: ${reason}`,
+    });
+  } catch (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error instanceof Error ? error.message : "wallet_adjustment_failed")}`);
+  }
+
+  revalidatePath("/app/wallet");
+  revalidatePath(`/app/clientes/${customerId}`);
+  redirect(`${returnTo}?success=wallet_adjustment`);
+}
+
+export async function updateWalletStatusAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const customerId = requiredString(formData, "customer_id");
+  const status = requiredString(formData, "status");
+  const returnTo = requiredString(formData, "return_to") || "/app/wallet";
+
+  if (!customerId || !walletStatuses.includes(status)) {
+    redirect(`${returnTo}?error=wallet_status_validation`);
+  }
+
+  const { error } = await supabase
+    .from("wallet_accounts")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("business_id", current.businessId)
+    .eq("customer_id", customerId);
+
+  if (error) {
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/wallet");
+  revalidatePath(`/app/clientes/${customerId}`);
+  redirect(`${returnTo}?success=wallet_status_updated`);
 }
 
 export async function createMessageTemplateAction(formData: FormData) {
