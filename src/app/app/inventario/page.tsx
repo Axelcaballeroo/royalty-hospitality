@@ -4,6 +4,7 @@ import {
   createInventoryEntryAction,
   createInventoryItemAction,
   createInventoryMovementAction,
+  createWasteReductionCampaignAction,
   refreshWasteAlertsAction,
 } from "@/app/app/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
@@ -12,6 +13,7 @@ import { getInventoryData } from "@/lib/data";
 import { inventoryMovementTypes, inventoryUnits } from "@/lib/inventory";
 import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
 import { hasModule } from "@/lib/plans";
+import { formatEventType } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -62,12 +64,12 @@ export default async function InventoryPage({
 
       {params.error ? (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {params.error}
+          {formatEventType(params.error)}
         </p>
       ) : null}
       {params.success ? (
         <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {params.success}
+          {formatEventType(params.success)}
         </p>
       ) : null}
 
@@ -188,10 +190,7 @@ export default async function InventoryPage({
           {alerts.length ? (
             <div className="space-y-3">
               {alerts.map((alert) => {
-                const message = encodeURIComponent(
-                  `Hola {{nombre}}, hoy tenemos una promocion especial de ${alert.inventory_items?.name ?? "la casa"} en {{negocio}}. Reserva o visitanos antes de que termine el dia.`,
-                );
-                const name = encodeURIComponent(`Anti-merma ${alert.inventory_items?.name ?? "producto"}`);
+                const itemName = alert.inventory_items?.name ?? "producto";
                 return (
                   <div key={alert.id} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -203,13 +202,14 @@ export default async function InventoryPage({
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-stone-500">
                       <span>{currency.format(Number(alert.estimated_loss))} estimados</span>
-                      <Link
-                        href={`/app/marketing?type=waste_reduction&segment=all_customers&name=${name}&message=${message}`}
-                        className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 font-medium text-stone-800 transition hover:border-stone-300"
-                      >
+                      <form action={createWasteReductionCampaignAction}>
+                        <input type="hidden" name="alert_id" value={alert.id} />
+                        <input type="hidden" name="item_name" value={itemName} />
+                        <button className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 font-medium text-stone-800 transition hover:border-stone-300">
                         <AlertTriangle size={14} />
                         Crear campana anti-merma
-                      </Link>
+                        </button>
+                      </form>
                     </div>
                   </div>
                 );

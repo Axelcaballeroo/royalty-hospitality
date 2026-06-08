@@ -6,6 +6,7 @@ import {
 } from "@/app/app/actions";
 import { getReservationsData } from "@/lib/data";
 import { DataTable, EmptyState, ModuleCard, StatusBadge } from "@/components/ui";
+import { formatEventType, formatStatus } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function ReservationsPage({
     reservation.customers?.full_name ?? "Cliente",
     String(reservation.party_size),
     <StatusBadge key="status" status={reservation.status} />,
-    reservation.source,
+    formatStatus(reservation.source),
     reservation.notes ?? "-",
     <div key="actions" className="flex flex-wrap gap-2">
       {["confirmed", "completed", "no_show"].map((status) => (
@@ -44,7 +45,7 @@ export default async function ReservationsPage({
           <input type="hidden" name="customer_id" value={reservation.customer_id} />
           <input type="hidden" name="status" value={status} />
           <button className="rounded-md border border-stone-200 px-2 py-1 text-xs text-stone-600 hover:bg-stone-50">
-            {status}
+            {formatStatus(status)}
           </button>
         </form>
       ))}
@@ -56,7 +57,7 @@ export default async function ReservationsPage({
           message="Cancelar esta reserva?"
           className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
         >
-          cancelar
+          Cancelar
         </ConfirmSubmitButton>
       </form>
     </div>,
@@ -75,8 +76,8 @@ export default async function ReservationsPage({
           Crea reservas, usa clientes existentes o captura un cliente rapido, y registra eventos de timeline.
         </p>
       </div>
-      {params.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{params.error}</p> : null}
-      {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p> : null}
+      {params.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formatEventType(params.error)}</p> : null}
+      {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{formatEventType(params.success)}</p> : null}
 
       <ModuleCard title="Filtros" description="Refina la lista por fecha, estado o fuente.">
         <form className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
@@ -93,7 +94,7 @@ export default async function ReservationsPage({
           >
             <option value="all">Todos los estados</option>
             {["pending", "confirmed", "cancelled", "completed", "no_show"].map((status) => (
-              <option key={status} value={status}>{status}</option>
+              <option key={status} value={status}>{formatStatus(status)}</option>
             ))}
           </select>
           <select
@@ -102,7 +103,7 @@ export default async function ReservationsPage({
             className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400"
           >
             <option value="all">Todas las fuentes</option>
-            {sources.map((source) => <option key={source} value={source}>{source}</option>)}
+            {sources.map((source) => <option key={source} value={source}>{formatStatus(source)}</option>)}
           </select>
           <button className="h-11 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800">
             Aplicar
@@ -130,7 +131,7 @@ export default async function ReservationsPage({
               <input type="email" name="quick_customer_email" placeholder="Email" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             </div>
             <select name="source" defaultValue="manual" className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
-              {sources.map((source) => <option key={source} value={source}>{source}</option>)}
+              {sources.map((source) => <option key={source} value={source}>{formatStatus(source)}</option>)}
             </select>
             <input name="special_request" placeholder="Solicitud especial" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <textarea name="notes" placeholder="Notas" className="min-h-20 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />

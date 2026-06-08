@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Inbox } from "lucide-react";
+import { formatAnyLabel } from "@/lib/formatters";
 
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-950 focus-visible:ring-offset-2";
@@ -199,7 +200,7 @@ export function StatusBadge({ status }: { status: string }) {
         statusClasses[status] ?? "border-stone-200 bg-stone-50 text-stone-600",
       ].join(" ")}
     >
-      {status.replace("_", " ")}
+      {formatAnyLabel(status)}
     </span>
   );
 }

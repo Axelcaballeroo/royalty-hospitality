@@ -117,7 +117,14 @@ export default async function ClubAccountPage({
             </div>
           </div>
           <ModuleCard title="QR personal" description="Muestralo al staff para identificar tu cuenta.">
+            <a
+              href="#qr-personal"
+              className="mb-4 inline-flex h-10 items-center justify-center rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300"
+            >
+              Mostrar mi QR
+            </a>
             <Image
+              id="qr-personal"
               src={qrDataUrl}
               alt="QR de fidelizacion"
               width={224}

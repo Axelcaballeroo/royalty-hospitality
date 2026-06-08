@@ -207,9 +207,10 @@ export async function createInternalTaskAction(formData: FormData) {
   const supabase = await createClient();
   const customerId = requiredString(formData, "customer_id");
   const title = requiredString(formData, "title");
+  const returnTo = requiredString(formData, "return_to") || (customerId ? `/app/clientes/${customerId}` : "/app/crm-interno");
 
-  if (!customerId || !title) {
-    redirect(`/app/clientes/${customerId}?error=task_validation`);
+  if (!title) {
+    redirect(`${returnTo}?error=task_validation`);
   }
 
   const priority = requiredString(formData, "priority") || "medium";
@@ -219,7 +220,7 @@ export async function createInternalTaskAction(formData: FormData) {
     .from("internal_tasks")
     .insert({
       business_id: current.businessId,
-      customer_id: customerId,
+      customer_id: customerId || null,
       reservation_id: requiredString(formData, "reservation_id") || null,
       assigned_to: requiredString(formData, "assigned_to") || null,
       created_by: current.userId,
@@ -233,19 +234,25 @@ export async function createInternalTaskAction(formData: FormData) {
     .single<{ id: string }>();
 
   if (error || !data) {
-    redirect(`/app/clientes/${customerId}?error=${encodeURIComponent(error?.message ?? "task_failed")}`);
+    redirect(`${returnTo}?error=${encodeURIComponent(error?.message ?? "task_failed")}`);
   }
 
-  await addCustomerEvent({
-    businessId: current.businessId,
-    customerId,
-    type: "task_created",
-    title: "Tarea interna creada",
-    description: title,
-  });
+  if (customerId) {
+    await addCustomerEvent({
+      businessId: current.businessId,
+      customerId,
+      type: "task_created",
+      title: "Tarea interna creada",
+      description: title,
+    });
+  }
 
-  revalidatePath(`/app/clientes/${customerId}`);
-  redirect(`/app/clientes/${customerId}?success=task_created`);
+  revalidatePath(returnTo);
+  revalidatePath("/app/crm-interno");
+  if (customerId) {
+    revalidatePath(`/app/clientes/${customerId}`);
+  }
+  redirect(`${returnTo}?success=task_created`);
 }
 
 export async function updateTaskStatusAction(formData: FormData) {
@@ -254,6 +261,7 @@ export async function updateTaskStatusAction(formData: FormData) {
   const taskId = requiredString(formData, "task_id");
   const customerId = requiredString(formData, "customer_id");
   const status = requiredString(formData, "status");
+  const returnTo = requiredString(formData, "return_to") || (customerId ? `/app/clientes/${customerId}` : "/app/crm-interno");
 
   const { error } = await supabase
     .from("internal_tasks")
@@ -262,11 +270,15 @@ export async function updateTaskStatusAction(formData: FormData) {
     .eq("id", taskId);
 
   if (error) {
-    redirect(`/app/clientes/${customerId}?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath(`/app/clientes/${customerId}`);
-  redirect(`/app/clientes/${customerId}?success=task_updated`);
+  revalidatePath(returnTo);
+  revalidatePath("/app/crm-interno");
+  if (customerId) {
+    revalidatePath(`/app/clientes/${customerId}`);
+  }
+  redirect(`${returnTo}?success=task_updated`);
 }
 
 export async function createInternalCommentAction(formData: FormData) {
@@ -274,16 +286,17 @@ export async function createInternalCommentAction(formData: FormData) {
   const supabase = await createClient();
   const customerId = requiredString(formData, "customer_id");
   const comment = requiredString(formData, "comment");
+  const returnTo = requiredString(formData, "return_to") || (customerId ? `/app/clientes/${customerId}` : "/app/crm-interno");
 
-  if (!customerId || !comment) {
-    redirect(`/app/clientes/${customerId}?error=comment_validation`);
+  if (!comment) {
+    redirect(`${returnTo}?error=comment_validation`);
   }
 
   const taskId = requiredString(formData, "task_id");
   const noteId = requiredString(formData, "note_id");
 
   if (!taskId && !noteId) {
-    redirect(`/app/clientes/${customerId}?error=comment_target_required`);
+    redirect(`${returnTo}?error=comment_target_required`);
   }
 
   const { error } = await supabase.from("internal_comments").insert({
@@ -295,11 +308,15 @@ export async function createInternalCommentAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/app/clientes/${customerId}?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath(`/app/clientes/${customerId}`);
-  redirect(`/app/clientes/${customerId}?success=comment_created`);
+  revalidatePath(returnTo);
+  revalidatePath("/app/crm-interno");
+  if (customerId) {
+    revalidatePath(`/app/clientes/${customerId}`);
+  }
+  redirect(`${returnTo}?success=comment_created`);
 }
 
 export async function createReservationAction(formData: FormData) {
@@ -1190,6 +1207,55 @@ export async function refreshWasteAlertsAction() {
 
   revalidatePath("/app/inventario");
   redirect("/app/inventario?success=waste_alerts_refreshed");
+}
+
+export async function createWasteReductionCampaignAction(formData: FormData) {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+  const alertId = requiredString(formData, "alert_id");
+  const itemName = requiredString(formData, "item_name") || "producto especial";
+
+  if (!alertId) {
+    redirect("/app/inventario?error=waste_alert_required");
+  }
+
+  const message =
+    `Hoy tenemos una promocion especial de ${itemName} en ${current.business.name}. Ven antes de que termine el dia.`;
+
+  const { data, error } = await supabase
+    .from("campaigns")
+    .insert({
+      business_id: current.businessId,
+      name: `Anti-merma ${itemName}`,
+      type: "waste_reduction",
+      segment_key: "all_customers",
+      channel: "manual",
+      message,
+      status: "draft",
+      created_by: current.userId,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !data) {
+    redirect(`/app/inventario?error=${encodeURIComponent(error?.message ?? "waste_campaign_failed")}`);
+  }
+
+  await supabase.from("automation_logs").insert({
+    business_id: current.businessId,
+    rule_id: null,
+    status: "success",
+    message: `Campana anti-merma creada para ${itemName}.`,
+    metadata: {
+      alert_id: alertId,
+      campaign_id: data.id,
+      source: "inventory_waste_alert",
+    },
+  });
+
+  revalidatePath("/app/inventario");
+  revalidatePath("/app/marketing");
+  redirect(`/app/marketing/${data.id}?success=waste_campaign_created`);
 }
 
 export async function createEmployeeAction(formData: FormData) {

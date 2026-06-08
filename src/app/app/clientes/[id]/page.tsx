@@ -20,6 +20,7 @@ import { createQrDataUrl } from "@/lib/qr";
 import { DataTable, EmptyState, ModuleCard, StatusBadge } from "@/components/ui";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { formatCurrency } from "@/lib/wallet";
+import { formatEventType, formatRoleName, formatStatus } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -68,10 +69,10 @@ export default async function CustomerDetailPage({
           {customer.phone ?? "Sin telefono"} / {customer.email ?? "Sin email"}
         </p>
       </div>
-      {messages.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{messages.error}</p> : null}
-      {messages.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{messages.success}</p> : null}
+      {messages.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formatEventType(messages.error)}</p> : null}
+      {messages.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{formatEventType(messages.success)}</p> : null}
 
-      <section className="grid gap-4 xl:grid-cols-[0.7fr_1.3fr]">
+      <section id="fidelizacion" className="grid gap-4 xl:grid-cols-[0.7fr_1.3fr]">
         <ModuleCard title="Fidelizacion" description="Cuenta de puntos, nivel actual y ajuste manual.">
           <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
             <div className="rounded-lg bg-stone-950 p-5 text-white">
@@ -178,7 +179,7 @@ export default async function CustomerDetailPage({
         )}
       </ModuleCard>
 
-      <section className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+      <section id="wallet" className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
         <ModuleCard title="Wallet" description="Monedero interno del cliente, sin pagos reales.">
           {walletAccount ? (
             <div className="space-y-4">
@@ -195,9 +196,9 @@ export default async function CustomerDetailPage({
                 <input type="hidden" name="customer_id" value={customer.id} />
                 <input type="hidden" name="return_to" value={`/app/clientes/${customer.id}`} />
                 <select name="status" defaultValue={walletAccount.status} className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
-                  <option value="active">active</option>
-                  <option value="frozen">frozen</option>
-                  <option value="closed">closed</option>
+                  <option value="active">{formatStatus("active")}</option>
+                  <option value="frozen">{formatStatus("frozen")}</option>
+                  <option value="closed">{formatStatus("closed")}</option>
                 </select>
                 <ConfirmSubmitButton
                   className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 transition hover:border-stone-300"
@@ -303,7 +304,7 @@ export default async function CustomerDetailPage({
               {events.map((event) => (
                 <div key={event.id} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
                   <p className="text-sm font-semibold text-stone-950">{event.title}</p>
-                  <p className="mt-1 text-xs text-stone-500">{event.type}</p>
+                  <p className="mt-1 text-xs text-stone-500">{formatEventType(event.type)}</p>
                   {event.description ? <p className="mt-2 text-sm text-stone-600">{event.description}</p> : null}
                 </div>
               ))}
@@ -363,7 +364,7 @@ export default async function CustomerDetailPage({
               <option value="">Sin responsable</option>
               {businessUsers.map((user) => (
                 <option key={user.user_id} value={user.user_id}>
-                  {user.role} - {user.user_id.slice(0, 8)}
+                  {formatRoleName(user.role)} - {user.user_id.slice(0, 8)}
                 </option>
               ))}
             </select>
@@ -371,7 +372,7 @@ export default async function CustomerDetailPage({
             <textarea name="description" placeholder="Descripcion" className="min-h-20 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
             <div className="grid grid-cols-2 gap-3">
               <select name="priority" defaultValue="medium" className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
-                {["low", "medium", "high", "urgent"].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                {["low", "medium", "high", "urgent"].map((priority) => <option key={priority} value={priority}>{formatStatus(priority)}</option>)}
               </select>
               <input type="datetime-local" name="due_date" className="h-10 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             </div>
@@ -389,7 +390,7 @@ export default async function CustomerDetailPage({
                   <input type="hidden" name="task_id" value={task.id} />
                   <input type="hidden" name="customer_id" value={customer.id} />
                   <select name="status" defaultValue={task.status} className="h-9 rounded-lg border border-stone-200 bg-white px-2 text-xs outline-none">
-                    {["pending", "in_progress", "completed", "cancelled"].map((status) => <option key={status} value={status}>{status}</option>)}
+                    {["pending", "in_progress", "completed", "cancelled"].map((status) => <option key={status} value={status}>{formatStatus(status)}</option>)}
                   </select>
                   <button className="h-9 rounded-lg border border-stone-200 px-3 text-xs font-medium text-stone-700">Actualizar</button>
                 </form>

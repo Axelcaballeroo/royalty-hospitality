@@ -46,6 +46,40 @@ export type BusinessUser = {
   status: string;
 };
 
+export type InternalTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: string;
+  status: string;
+  due_date: string | null;
+  assigned_to: string | null;
+  created_at: string;
+  customers?: { id: string; full_name: string } | null;
+  reservations?: { id: string; date: string; time: string } | null;
+};
+
+export type InternalNote = {
+  id: string;
+  title: string;
+  content: string;
+  customer_id: string | null;
+  reservation_id: string | null;
+  created_at: string;
+  customers?: { id: string; full_name: string } | null;
+  reservations?: { id: string; date: string; time: string } | null;
+};
+
+export type InternalComment = {
+  id: string;
+  task_id: string | null;
+  note_id: string | null;
+  comment: string;
+  created_at: string;
+  internal_tasks?: { title: string } | null;
+  internal_notes?: { title: string } | null;
+};
+
 export type PublicBusiness = {
   id: string;
   name: string;
@@ -733,6 +767,71 @@ export async function getCustomerDetail(customerId: string) {
     campaignRecipients: campaignRecipients.data ?? [],
     walletAccount: walletAccount.data,
     walletTransactions: (walletTransactions.data ?? []) as WalletTransaction[],
+  };
+}
+
+export async function getInternalCrmData() {
+  const current = await getCurrentBusiness();
+  const supabase = await createClient();
+
+  const [tasks, notes, comments, customers, reservations, businessUsers] =
+    await Promise.all([
+      supabase
+        .from("internal_tasks")
+        .select("id, title, description, priority, status, due_date, assigned_to, created_at, customers(id, full_name), reservations(id, date, time)")
+        .eq("business_id", current.businessId)
+        .order("created_at", { ascending: false })
+        .limit(50),
+      supabase
+        .from("internal_notes")
+        .select("id, title, content, customer_id, reservation_id, created_at, customers(id, full_name), reservations(id, date, time)")
+        .eq("business_id", current.businessId)
+        .order("created_at", { ascending: false })
+        .limit(25),
+      supabase
+        .from("internal_comments")
+        .select("id, task_id, note_id, comment, created_at, internal_tasks(title), internal_notes(title)")
+        .eq("business_id", current.businessId)
+        .order("created_at", { ascending: false })
+        .limit(25),
+      supabase
+        .from("customers")
+        .select("id, full_name, phone, email")
+        .eq("business_id", current.businessId)
+        .order("full_name", { ascending: true }),
+      supabase
+        .from("reservations")
+        .select("id, date, time, customer_id, customers(full_name)")
+        .eq("business_id", current.businessId)
+        .order("date", { ascending: false })
+        .limit(50),
+      supabase
+        .from("business_users")
+        .select("user_id, role, status")
+        .eq("business_id", current.businessId)
+        .eq("status", "active")
+        .order("created_at", { ascending: true }),
+    ]);
+
+  const taskRows = (tasks.data ?? []) as unknown as InternalTask[];
+  const noteRows = (notes.data ?? []) as unknown as InternalNote[];
+  const commentRows = (comments.data ?? []) as unknown as InternalComment[];
+
+  return {
+    current,
+    tasks: taskRows,
+    notes: noteRows,
+    comments: commentRows,
+    customers: (customers.data ?? []) as Customer[],
+    reservations: reservations.data ?? [],
+    businessUsers: (businessUsers.data ?? []) as BusinessUser[],
+    metrics: {
+      pendingTasks: taskRows.filter((task) => ["pending", "in_progress"].includes(task.status)).length,
+      completedTasks: taskRows.filter((task) => task.status === "completed").length,
+      notes: noteRows.length,
+      comments: commentRows.length,
+      assignedUsers: new Set(taskRows.map((task) => task.assigned_to).filter(Boolean)).size,
+    },
   };
 }
 

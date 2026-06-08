@@ -9,6 +9,7 @@ import { renderMarketingMessage, segmentDefinitions, suggestedTemplates } from "
 import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
 import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
 import { hasModule } from "@/lib/plans";
+import { formatEventType, formatStatus } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -71,8 +72,8 @@ export default async function MarketingPage({
         </p>
       </div>
 
-      {params.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{params.error}</p> : null}
-      {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p> : null}
+      {params.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formatEventType(params.error)}</p> : null}
+      {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{formatEventType(params.success)}</p> : null}
 
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard title="Campanas creadas" value={String(metrics.campaignsCreated)} detail="Recientes" tone="dark" />
@@ -89,13 +90,13 @@ export default async function MarketingPage({
             <input required name="name" defaultValue={params.name ?? ""} placeholder="Nombre de campana" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <div className="grid gap-3 sm:grid-cols-3">
               <select required name="type" defaultValue={defaultCampaignType} className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
-                {campaignTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                {campaignTypes.map((type) => <option key={type} value={type}>{formatEventType(type)}</option>)}
               </select>
               <select required name="segment_key" defaultValue={selectedSegment} className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
                 {segmentDefinitions.map((segment) => <option key={segment.key} value={segment.key}>{segment.name}</option>)}
               </select>
               <select name="channel" defaultValue="manual" className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
-                {channels.map((channel) => <option key={channel} value={channel}>{channel}</option>)}
+                {channels.map((channel) => <option key={channel} value={channel}>{formatStatus(channel)}</option>)}
               </select>
             </div>
             <textarea required name="message" defaultValue={params.message ?? ""} placeholder="Mensaje con variables: {{nombre}}, {{negocio}}, {{puntos}}, {{nivel}}" className="min-h-28 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
@@ -143,8 +144,8 @@ export default async function MarketingPage({
               columns={["Nombre", "Segmento", "Canal", "Estado", "Detalle"]}
               rows={campaigns.map((campaign) => [
                 campaign.name,
-                campaign.segment_key,
-                campaign.channel,
+                segmentDefinitions.find((segment) => segment.key === campaign.segment_key)?.name ?? campaign.segment_key,
+                formatStatus(campaign.channel),
                 <StatusBadge key="status" status={campaign.status} />,
                 <Link key="detail" href={`/app/marketing/${campaign.id}`} className="font-medium text-stone-950 hover:underline">Abrir</Link>,
               ])}
@@ -171,7 +172,7 @@ export default async function MarketingPage({
           <form action={createMessageTemplateAction} className="grid gap-3">
             <input required name="name" placeholder="Nombre de plantilla" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <select name="type" defaultValue="promotion" className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
-              {campaignTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+              {campaignTypes.map((type) => <option key={type} value={type}>{formatEventType(type)}</option>)}
             </select>
             <textarea required name="message" placeholder="Mensaje" className="min-h-24 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
             <button className="h-11 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">
@@ -184,7 +185,7 @@ export default async function MarketingPage({
             {[...templates, ...suggestedTemplates].slice(0, 8).map((template, index) => (
               <div key={`${template.name}-${index}`} className="rounded-lg border border-stone-200 bg-stone-50 p-3">
                 <p className="text-sm font-semibold text-stone-950">{template.name}</p>
-                <p className="mt-1 text-xs text-stone-500">{template.type}</p>
+                <p className="mt-1 text-xs text-stone-500">{formatEventType(template.type)}</p>
                 <p className="mt-2 text-sm leading-6 text-stone-600">{template.message}</p>
               </div>
             ))}

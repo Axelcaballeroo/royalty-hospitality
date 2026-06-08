@@ -13,7 +13,7 @@ import { moduleHighlights } from "@/lib/navigation";
 
 const modules = [
   { title: "Reservas", text: "Disponibilidad, estados y cliente asociado.", icon: CalendarCheck },
-  { title: "Clientes CRM", text: "Perfil, historial, notas, tareas y comentarios.", icon: ContactRound },
+  { title: "Clientes", text: "Perfil, historial, reservas, puntos y beneficios.", icon: ContactRound },
   { title: "Marketing", text: "Segmentos y campanas sobre comportamiento real.", icon: Megaphone },
   { title: "Fidelizacion", text: "Puntos, niveles y beneficios preparados.", icon: Gift },
   { title: "Wallet", text: "Saldo y recargas futuras sin pagos reales aun.", icon: WalletCards },

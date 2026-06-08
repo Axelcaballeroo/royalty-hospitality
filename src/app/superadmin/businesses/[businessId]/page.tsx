@@ -8,6 +8,7 @@ import {
 import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
 import { getSuperadminBusinessDetail } from "@/lib/data";
 import { moduleCatalog, planOrder } from "@/lib/plans";
+import { formatEventType, formatPlanName, formatStatus } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +43,12 @@ export default async function SuperadminBusinessDetailPage({
         <p className="mt-2 text-sm text-stone-300">{business.slug} / {business.type ?? "sin tipo"}</p>
       </div>
 
-      {query.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{query.error}</p> : null}
-      {query.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{query.success}</p> : null}
+      {query.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formatEventType(query.error)}</p> : null}
+      {query.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{formatEventType(query.success)}</p> : null}
 
       <section className="grid gap-4 md:grid-cols-4">
-        <StatCard title="Plan" value={business.plan} detail="Manual" tone="dark" />
-        <StatCard title="Estado" value={business.status} detail="Tenant" />
+        <StatCard title="Plan" value={formatPlanName(business.plan)} detail="Manual" tone="dark" />
+        <StatCard title="Estado" value={formatStatus(business.status)} detail="Tenant" />
         <StatCard title="Reservas" value={String(metrics.reservations)} detail="Total" />
         <StatCard title="Clientes" value={String(metrics.customers)} detail="Total" />
       </section>
@@ -58,16 +59,16 @@ export default async function SuperadminBusinessDetailPage({
             <form action={superadminUpdateBusinessPlanAction} className="grid gap-3">
               <input type="hidden" name="business_id" value={business.id} />
               <select name="plan" defaultValue={business.plan} className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
-                {planOrder.map((plan) => <option key={plan} value={plan}>{plan}</option>)}
+                {planOrder.map((plan) => <option key={plan} value={plan}>{formatPlanName(plan)}</option>)}
               </select>
               <button className="h-11 rounded-lg bg-stone-950 text-sm font-medium text-white">Cambiar plan</button>
             </form>
             <form action={superadminUpdateBusinessStatusAction} className="grid gap-3">
               <input type="hidden" name="business_id" value={business.id} />
               <select name="status" defaultValue={business.status} className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
-                <option value="active">active</option>
-                <option value="inactive">inactive</option>
-                <option value="suspended">suspended</option>
+                <option value="active">{formatStatus("active")}</option>
+                <option value="inactive">{formatStatus("inactive")}</option>
+                <option value="suspended">{formatStatus("suspended")}</option>
               </select>
               <button className="h-11 rounded-lg border border-stone-200 bg-white text-sm font-medium text-stone-800">Cambiar estado</button>
             </form>
@@ -117,7 +118,7 @@ export default async function SuperadminBusinessDetailPage({
               {events.map((event) => (
                 <div key={event.id} className="rounded-lg border border-stone-200 bg-stone-50 p-3">
                   <p className="text-sm font-semibold text-stone-950">{event.title}</p>
-                  <p className="mt-1 text-xs text-stone-500">{event.type}</p>
+                  <p className="mt-1 text-xs text-stone-500">{formatEventType(event.type)}</p>
                 </div>
               ))}
             </div>
@@ -132,7 +133,7 @@ export default async function SuperadminBusinessDetailPage({
           <DataTable
             columns={["Accion", "Descripcion", "Fecha"]}
             rows={logs.map((log) => [
-              log.action,
+              formatEventType(log.action),
               log.description ?? "-",
               new Date(log.created_at).toLocaleString("es-MX"),
             ])}

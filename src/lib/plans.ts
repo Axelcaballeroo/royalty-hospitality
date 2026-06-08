@@ -47,10 +47,10 @@ export const moduleCatalog: Record<
     benefits: ["Metricas del dia", "Actividad reciente", "Alertas operativas"],
   },
   crm: {
-    name: "Clientes CRM",
-    description: "Cliente como nucleo de la operacion.",
+    name: "Clientes",
+    description: "Base de clientes, historial, reservas y beneficios.",
     requiredPlan: "basic",
-    benefits: ["Historial", "Reservas conectadas", "Notas y tareas"],
+    benefits: ["Historial", "Reservas conectadas", "Puntos y wallet"],
   },
   reservations: {
     name: "Reservas",

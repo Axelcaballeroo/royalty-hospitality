@@ -5,6 +5,7 @@ import {
   Gift,
   HandCoins,
   Home,
+  MessageSquareText,
   Megaphone,
   Package,
   Settings,
@@ -16,7 +17,8 @@ import {
 export const privateNavigation = [
   { name: "Dashboard", href: "/app/dashboard", icon: Home, moduleKey: "dashboard" },
   { name: "Reservas", href: "/app/reservas", icon: Clock3, moduleKey: "reservations" },
-  { name: "Clientes CRM", href: "/app/clientes", icon: Users, moduleKey: "crm" },
+  { name: "Clientes", href: "/app/clientes", icon: Users, moduleKey: "crm" },
+  { name: "CRM Interno", href: "/app/crm-interno", icon: MessageSquareText, moduleKey: "crm" },
   { name: "Calendario", href: "/app/calendario", icon: CalendarDays, moduleKey: "reservations" },
   { name: "Marketing", href: "/app/marketing", icon: Megaphone, moduleKey: "marketing" },
   { name: "Fidelizacion", href: "/app/fidelizacion", icon: Gift, moduleKey: "loyalty" },

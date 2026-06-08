@@ -115,7 +115,7 @@ export async function registerClubMemberAction(formData: FormData) {
       customerId: existing.id,
     });
 
-    redirect(`/club/${businessSlug}/mi-cuenta?phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(code)}&existing=1`);
+    redirect(`/club/${businessSlug}/cuenta?phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(code)}&existing=1`);
   }
 
   const loyaltyCode = await createUniqueLoyaltyCode({
@@ -155,7 +155,7 @@ export async function registerClubMemberAction(formData: FormData) {
     description: "Cliente registrado en programa de fidelizacion",
   });
 
-  redirect(`/club/${businessSlug}/mi-cuenta?phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(loyaltyCode)}&registered=1`);
+  redirect(`/club/${businessSlug}/cuenta?phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(loyaltyCode)}&registered=1`);
 }
 
 export async function clubAccountLoginAction(formData: FormData) {
@@ -164,8 +164,8 @@ export async function clubAccountLoginAction(formData: FormData) {
   const code = requiredString(formData, "code").toUpperCase();
 
   if (!businessSlug || !phone || !code) {
-    redirect(`/club/${businessSlug}/mi-cuenta?error=account_validation`);
+    redirect(`/club/${businessSlug}/login?error=account_validation`);
   }
 
-  redirect(`/club/${businessSlug}/mi-cuenta?phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(code)}`);
+  redirect(`/club/${businessSlug}/cuenta?phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(code)}`);
 }

@@ -13,6 +13,7 @@ import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/comp
 import { getWalletData } from "@/lib/data";
 import { hasModule } from "@/lib/plans";
 import { formatCurrency, walletStatuses } from "@/lib/wallet";
+import { formatEventType, formatStatus, formatTransactionType } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,9 @@ export default async function WalletPage({
 
   const params = await searchParams;
   const { accounts, transactions, customers, metrics } = await getWalletData();
+  const activeAccountsWithBalance = accounts.filter(
+    (account) => account.status === "active" && Number(account.balance) > 0,
+  );
 
   return (
     <div className="space-y-6">
@@ -47,12 +51,12 @@ export default async function WalletPage({
 
       {params.error ? (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {params.error}
+          {formatEventType(params.error)}
         </p>
       ) : null}
       {params.success ? (
         <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {params.success}
+          {formatEventType(params.success)}
         </p>
       ) : null}
 
@@ -60,7 +64,7 @@ export default async function WalletPage({
         <StatCard title="Saldo total" value={formatCurrency(metrics.totalBalance)} detail="Wallets del tenant" tone="dark" />
         <StatCard title="Wallets activas" value={String(metrics.activeWallets)} detail="Clientes con monedero" />
         <StatCard title="Recargas mes" value={formatCurrency(metrics.topups)} detail="Topups manuales" />
-        <StatCard title="Consumos mes" value={formatCurrency(metrics.purchases)} detail="Purchases" />
+        <StatCard title="Consumos mes" value={formatCurrency(metrics.purchases)} detail="Consumos registrados" />
         <StatCard title="Bonos mes" value={formatCurrency(metrics.bonuses)} detail="Bonos otorgados" />
       </section>
 
@@ -110,9 +114,9 @@ export default async function WalletPage({
           <form action={walletPurchaseAction} className="grid gap-3">
             <select required name="customer_id" className={fieldClass}>
               <option value="">Seleccionar cliente</option>
-              {accounts.filter((account) => account.status === "active").map((account) => (
+              {activeAccountsWithBalance.map((account) => (
                 <option key={account.customer_id} value={account.customer_id}>
-                  {account.customers?.full_name ?? "Cliente"} / {formatCurrency(Number(account.balance), account.currency)}
+                  {account.customers?.full_name ?? "Cliente"} - {formatCurrency(Number(account.balance), account.currency)}
                 </option>
               ))}
             </select>
@@ -136,7 +140,7 @@ export default async function WalletPage({
               <option value="">Seleccionar wallet</option>
               {accounts.map((account) => (
                 <option key={account.customer_id} value={account.customer_id}>
-                  {account.customers?.full_name ?? "Cliente"} / {formatCurrency(Number(account.balance), account.currency)}
+                  {account.customers?.full_name ?? "Cliente"} - {formatCurrency(Number(account.balance), account.currency)}
                 </option>
               ))}
             </select>
@@ -170,14 +174,14 @@ export default async function WalletPage({
                 formatCurrency(Number(account.balance), account.currency),
                 <StatusBadge key="status" status={account.status} />,
                 lastTransaction
-                  ? `${lastTransaction.type} / ${formatCurrency(Number(lastTransaction.amount), account.currency)}`
+                  ? `${formatTransactionType(lastTransaction.type)} / ${formatCurrency(Number(lastTransaction.amount), account.currency)}`
                   : "-",
                 <form key="status" action={updateWalletStatusAction} className="flex gap-2">
                   <input type="hidden" name="customer_id" value={account.customer_id} />
                   <select name="status" defaultValue={account.status} className="h-9 rounded-lg border border-stone-200 bg-white px-2 text-xs outline-none">
                     {walletStatuses.map((status) => (
                       <option key={status} value={status}>
-                        {status}
+                        {formatStatus(status)}
                       </option>
                     ))}
                   </select>
