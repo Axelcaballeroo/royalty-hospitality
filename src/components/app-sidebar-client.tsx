@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Crown, LockKeyhole, PanelLeftClose } from "lucide-react";
+import { Crown, LockKeyhole, PanelLeftClose, ShieldCheck } from "lucide-react";
 import { privateNavigation } from "@/lib/navigation";
 
 export function AppSidebarClient({
   businessName,
   plan,
   access,
+  isSuperadmin,
 }: {
   businessName: string;
   plan: string;
   access: Record<string, boolean>;
+  isSuperadmin: boolean;
 }) {
   const pathname = usePathname();
 
@@ -67,6 +69,16 @@ export function AppSidebarClient({
           );
         })}
       </nav>
+
+      {isSuperadmin ? (
+        <Link
+          href="/superadmin"
+          className="mb-3 flex h-11 items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+        >
+          <ShieldCheck size={18} />
+          <span className="min-w-0 flex-1 truncate">Superadmin</span>
+        </Link>
+      ) : null}
 
       <div className="rounded-lg border border-stone-200 bg-white p-4">
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">

@@ -1,9 +1,13 @@
 import Link from "next/link";
-import { Bell, LogOut, Search } from "lucide-react";
+import { Bell, LogOut, Search, ShieldCheck } from "lucide-react";
 import { getCurrentBusiness } from "@/lib/current-business";
+import { isSuperadmin } from "@/lib/superadmin";
 
 export async function AppHeader() {
-  const current = await getCurrentBusiness();
+  const [current, superadmin] = await Promise.all([
+    getCurrentBusiness(),
+    isSuperadmin(),
+  ]);
 
   return (
     <header className="hidden border-b border-stone-200 bg-white/85 px-8 py-4 backdrop-blur lg:block">
@@ -32,6 +36,16 @@ export async function AppHeader() {
           >
             <Bell size={17} />
           </button>
+          {superadmin ? (
+            <Link
+              href="/superadmin"
+              className="flex size-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+              aria-label="Superadmin"
+              title="Superadmin"
+            >
+              <ShieldCheck size={17} />
+            </Link>
+          ) : null}
           <Link
             href="/logout"
             className="flex size-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"

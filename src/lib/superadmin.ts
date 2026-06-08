@@ -13,6 +13,16 @@ export async function isSuperadmin() {
     return false;
   }
 
+  const superadminEmails = (process.env.SUPERADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  const userEmail = user.email?.trim().toLowerCase();
+
+  if (userEmail && superadminEmails.includes(userEmail)) {
+    return true;
+  }
+
   const { data } = await supabase
     .from("business_users")
     .select("id")
@@ -37,6 +47,20 @@ export async function requireSuperadmin() {
 
   const allowed = await isSuperadmin();
   if (!allowed) {
+    if (process.env.NODE_ENV === "development") {
+      const { data: roles } = await supabase
+        .from("business_users")
+        .select("business_id, role, status")
+        .eq("user_id", user.id);
+
+      console.error("SUPERADMIN ACCESS DENIED:", {
+        userId: user.id,
+        email: user.email ?? null,
+        roles: roles ?? [],
+        superadminEmailsConfigured: Boolean(process.env.SUPERADMIN_EMAILS?.trim()),
+      });
+    }
+
     redirect("/app/dashboard?error=forbidden");
   }
 

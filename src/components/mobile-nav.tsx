@@ -1,10 +1,14 @@
 import Link from "next/link";
-import { Crown, LockKeyhole } from "lucide-react";
+import { Crown, LockKeyhole, ShieldCheck } from "lucide-react";
 import { privateNavigation } from "@/lib/navigation";
 import { getModuleAccess } from "@/lib/plans";
+import { isSuperadmin } from "@/lib/superadmin";
 
 export async function MobileNav() {
-  const { access } = await getModuleAccess();
+  const [{ access }, superadmin] = await Promise.all([
+    getModuleAccess(),
+    isSuperadmin(),
+  ]);
 
   return (
     <div className="border-b border-stone-200 bg-stone-50 px-4 py-4 lg:hidden">
@@ -15,6 +19,16 @@ export async function MobileNav() {
           </span>
           <span className="text-sm font-semibold text-stone-950">Royalty OS</span>
         </Link>
+        {superadmin ? (
+          <Link
+            href="/superadmin"
+            className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600"
+            aria-label="Superadmin"
+            title="Superadmin"
+          >
+            <ShieldCheck size={16} />
+          </Link>
+        ) : null}
       </div>
       <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
         {privateNavigation.map((item) => {
