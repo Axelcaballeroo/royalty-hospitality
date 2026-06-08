@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Crown, LockKeyhole, ShieldCheck } from "lucide-react";
-import { privateNavigation } from "@/lib/navigation";
+import { canSeeAdminGuidance, privateNavigation } from "@/lib/navigation";
 import { getModuleAccess } from "@/lib/plans";
 import { isSuperadmin } from "@/lib/superadmin";
 
 export async function MobileNav() {
-  const [{ access }, superadmin] = await Promise.all([
+  const [{ access, current }, superadmin] = await Promise.all([
     getModuleAccess(),
     isSuperadmin(),
   ]);
@@ -31,7 +31,7 @@ export async function MobileNav() {
         ) : null}
       </div>
       <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-        {privateNavigation.map((item) => {
+        {privateNavigation.filter((item) => !item.adminOnly || canSeeAdminGuidance(current.role)).map((item) => {
           const unlocked = access[item.moduleKey] ?? true;
           return (
           <Link

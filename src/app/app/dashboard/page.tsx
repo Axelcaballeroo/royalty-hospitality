@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getDashboardData } from "@/lib/data";
 import { EmptyState, ModuleCard, SectionHeader, StatCard, StatusBadge } from "@/components/ui";
+import { formatEventType } from "@/lib/formatters";
+import { canSeeAdminGuidance } from "@/lib/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -85,12 +87,20 @@ export default async function DashboardPage() {
               Crear cliente
             </Link>
             <Link
-              href="/app/clientes"
+              href="/app/crm-interno"
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-950 focus-visible:ring-offset-2"
             >
               <Plus size={16} />
               Crear tarea interna
             </Link>
+            {canSeeAdminGuidance(current.role) ? (
+              <Link
+                href="/app/demo"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-800 transition hover:border-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-950 focus-visible:ring-offset-2"
+              >
+                Ver recorrido guiado
+              </Link>
+            ) : null}
           </div>
         </ModuleCard>
       </section>
@@ -132,7 +142,7 @@ export default async function DashboardPage() {
             {activity.map((event) => (
               <div key={event.id} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
                 <p className="text-sm font-semibold text-stone-950">{event.title}</p>
-                <p className="mt-1 text-xs text-stone-500">{event.type}</p>
+                <p className="mt-1 text-xs text-stone-500">{formatEventType(event.type)}</p>
                 {event.description ? (
                   <p className="mt-2 text-sm text-stone-600">{event.description}</p>
                 ) : null}

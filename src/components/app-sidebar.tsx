@@ -14,6 +14,7 @@ export async function AppSidebar() {
       plan={plan}
       access={access}
       isSuperadmin={superadmin}
+      role={current.role}
     />
   );
 }

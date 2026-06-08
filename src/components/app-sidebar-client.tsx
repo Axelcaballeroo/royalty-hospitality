@@ -3,18 +3,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Crown, LockKeyhole, PanelLeftClose, ShieldCheck } from "lucide-react";
-import { privateNavigation } from "@/lib/navigation";
+import { canSeeAdminGuidance, privateNavigation } from "@/lib/navigation";
 
 export function AppSidebarClient({
   businessName,
   plan,
   access,
   isSuperadmin,
+  role,
 }: {
   businessName: string;
   plan: string;
   access: Record<string, boolean>;
   isSuperadmin: boolean;
+  role: string;
 }) {
   const pathname = usePathname();
 
@@ -42,7 +44,7 @@ export function AppSidebarClient({
       </div>
 
       <nav className="mt-8 flex flex-1 flex-col gap-1">
-        {privateNavigation.map((item) => {
+        {privateNavigation.filter((item) => !item.adminOnly || canSeeAdminGuidance(role)).map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const unlocked = access[item.moduleKey] ?? true;

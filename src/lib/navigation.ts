@@ -3,12 +3,14 @@ import {
   CalendarDays,
   Clock3,
   Gift,
+  HelpCircle,
   HandCoins,
   Home,
   MessageSquareText,
   Megaphone,
   Package,
   QrCode,
+  Route,
   Settings,
   Users,
   Utensils,
@@ -17,6 +19,7 @@ import {
 
 export const privateNavigation = [
   { name: "Dashboard", href: "/app/dashboard", icon: Home, moduleKey: "dashboard" },
+  { name: "Demo", href: "/app/demo", icon: Route, moduleKey: "dashboard", adminOnly: true },
   { name: "Reservas", href: "/app/reservas", icon: Clock3, moduleKey: "reservations" },
   { name: "Clientes", href: "/app/clientes", icon: Users, moduleKey: "crm" },
   { name: "CRM Interno", href: "/app/crm-interno", icon: MessageSquareText, moduleKey: "crm" },
@@ -29,8 +32,13 @@ export const privateNavigation = [
   { name: "RRHH", href: "/app/rrhh", icon: Utensils, moduleKey: "hr" },
   { name: "Automatizaciones", href: "/app/automatizaciones", icon: Workflow, moduleKey: "automation" },
   { name: "Reportes", href: "/app/reportes", icon: BarChart3, moduleKey: "reports_basic" },
+  { name: "Ayuda", href: "/app/ayuda", icon: HelpCircle, moduleKey: "dashboard" },
   { name: "Configuracion", href: "/app/configuracion", icon: Settings, moduleKey: "dashboard" },
 ];
+
+export function canSeeAdminGuidance(role: string) {
+  return ["superadmin", "owner", "manager", "admin"].includes(role);
+}
 
 export const moduleHighlights = [
   "Reservas conectadas al perfil del cliente",
