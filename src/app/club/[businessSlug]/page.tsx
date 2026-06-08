@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getPublicBusinessBySlug } from "@/lib/data";
 
@@ -26,11 +27,21 @@ export default async function ClubEnrollmentPage({
           <Link href={`/site/${business.slug}`} className="text-sm font-medium text-white/70">
             Volver a {business.name}
           </Link>
+          {business.logo_url ? (
+            <Image
+              src={business.logo_url}
+              alt={`Logo de ${business.name}`}
+              width={88}
+              height={88}
+              className="mt-8 size-20 rounded-lg border border-white/20 bg-white object-contain p-2"
+              unoptimized
+            />
+          ) : null}
           <h1 className="mt-10 text-4xl font-semibold leading-tight md:text-5xl">
             Club de {business.name}
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-white/75">
-            Acumula puntos, consulta recompensas, revisa tu wallet y muestra tu QR personal en cada visita.
+            {business.public_description ?? "Acumula puntos, recibe beneficios exclusivos y accede a promociones especiales."}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link

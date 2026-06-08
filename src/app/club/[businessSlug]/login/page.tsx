@@ -33,7 +33,7 @@ export default async function ClubLoginPage({
         </Link>
         <h1 className="mt-6 text-2xl font-semibold text-stone-950">Ya soy miembro</h1>
         <p className="mt-2 text-sm leading-6 text-stone-500">
-          Ingresa con tu telefono y codigo de fidelizacion.
+          Ingresa con tu telefono y codigo de socio.
         </p>
         {query.error ? (
           <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -41,7 +41,7 @@ export default async function ClubLoginPage({
           </p>
         ) : null}
         <input required name="phone" placeholder="Telefono" className="mt-6 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-        <input required name="code" placeholder="Codigo de fidelizacion" className="mt-3 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm uppercase outline-none focus:border-stone-400" />
+        <input required name="code" placeholder="Codigo de socio" className="mt-3 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm uppercase outline-none focus:border-stone-400" />
         <button className="mt-5 h-11 w-full rounded-lg text-sm font-medium text-white" style={{ backgroundColor: primary }}>
           Ver mi cuenta
         </button>

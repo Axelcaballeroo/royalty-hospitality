@@ -289,6 +289,14 @@ export type WalletTransaction = {
   customers?: { full_name: string; phone: string | null } | null;
 };
 
+export type ClubEvent = {
+  id: string;
+  type: string;
+  title: string;
+  description: string | null;
+  created_at: string;
+};
+
 export type AutomationRule = {
   id: string;
   business_id: string;
@@ -1694,11 +1702,16 @@ export async function getExecutiveReportsData(period: ReportPeriod = "month") {
 export async function getCheckInData(search?: string) {
   const current = await getCurrentBusiness();
   const supabase = await createClient();
-  const term = search?.trim().replace(/[%_,]/g, "");
+  const rawTerm = search?.trim() ?? "";
+  const qrPrefix = `${current.business.slug}:`;
+  const normalizedQrTerm = rawTerm.toLowerCase().startsWith(qrPrefix.toLowerCase())
+    ? rawTerm.slice(qrPrefix.length)
+    : rawTerm;
+  const term = normalizedQrTerm.replace(/[%_,]/g, "");
 
   let query = supabase
     .from("customers")
-    .select("id, full_name, phone, email, loyalty_code, last_visit_at, loyalty_accounts(points_balance, tier)")
+    .select("id, full_name, phone, email, loyalty_code, last_visit_at, loyalty_accounts(points_balance, tier), wallet_accounts(balance, currency, status)")
     .eq("business_id", current.businessId)
     .eq("loyalty_enabled", true);
 
@@ -1782,7 +1795,7 @@ export async function getClubAccountByPhoneAndCode(input: {
     return { business, customer: null };
   }
 
-  const [account, transactions, rewards, walletAccount, walletTransactions] = await Promise.all([
+  const [account, transactions, rewards, walletAccount, walletTransactions, events] = await Promise.all([
     admin
       .from("loyalty_accounts")
       .select("id, points_balance, tier")
@@ -1815,6 +1828,13 @@ export async function getClubAccountByPhoneAndCode(input: {
       .eq("customer_id", customer.id)
       .order("created_at", { ascending: false })
       .limit(10),
+    admin
+      .from("customer_events")
+      .select("id, type, title, description, created_at")
+      .eq("business_id", business.id)
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false })
+      .limit(20),
   ]);
 
   return {
@@ -1825,6 +1845,7 @@ export async function getClubAccountByPhoneAndCode(input: {
     rewards: (rewards.data ?? []) as Reward[],
     walletAccount: walletAccount.data,
     walletTransactions: (walletTransactions.data ?? []) as WalletTransaction[],
+    events: (events.data ?? []) as ClubEvent[],
   };
 }
 

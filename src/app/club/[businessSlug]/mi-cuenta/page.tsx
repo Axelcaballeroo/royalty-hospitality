@@ -5,6 +5,7 @@ import { getClubAccountByPhoneAndCode, getPublicBusinessBySlug } from "@/lib/dat
 import { createQrDataUrl } from "@/lib/qr";
 import { DataTable, EmptyState, ModuleCard, StatusBadge } from "@/components/ui";
 import { formatCurrency } from "@/lib/wallet";
+import { formatEventType, formatTransactionType } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export default async function ClubAccountPage({
           <input type="hidden" name="business_slug" value={business.slug} />
           <h1 className="text-2xl font-semibold text-stone-950">Mi cuenta del club</h1>
           <p className="mt-2 text-sm leading-6 text-stone-500">
-            Ingresa con tu telefono y codigo de fidelizacion.
+            Ingresa con tu telefono y codigo de socio.
           </p>
           {query.error ? (
             <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -47,7 +48,7 @@ export default async function ClubAccountPage({
             </p>
           ) : null}
           <input required name="phone" placeholder="Telefono" className="mt-6 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-          <input required name="code" placeholder="Codigo, ej. MART-1938" className="mt-3 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm uppercase outline-none focus:border-stone-400" />
+          <input required name="code" placeholder="Codigo de socio" className="mt-3 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm uppercase outline-none focus:border-stone-400" />
           <button className="mt-5 h-11 w-full rounded-lg text-sm font-medium text-white" style={{ backgroundColor: primary }}>
             Ver mi cuenta
           </button>
@@ -77,14 +78,34 @@ export default async function ClubAccountPage({
 
   const account = data.account ?? { points_balance: 0, tier: "bronze" };
   const wallet = data.walletAccount;
-  const qrDataUrl = await createQrDataUrl(data.customer.loyalty_code ?? data.customer.id);
+  const qrDataUrl = await createQrDataUrl(`${business.slug}:${data.customer.loyalty_code ?? data.customer.id}`);
+  const history = [
+    ...data.events.map((event) => ({
+      id: `event-${event.id}`,
+      label: formatEventType(event.type),
+      detail: event.description ?? event.title,
+      createdAt: event.created_at,
+    })),
+    ...data.transactions.map((transaction) => ({
+      id: `points-${transaction.id}`,
+      label: formatTransactionType(transaction.type),
+      detail: `${transaction.points > 0 ? "+" : ""}${transaction.points} puntos${transaction.description ? ` - ${transaction.description}` : ""}`,
+      createdAt: transaction.created_at,
+    })),
+    ...data.walletTransactions.map((transaction) => ({
+      id: `wallet-${transaction.id}`,
+      label: formatTransactionType(transaction.type),
+      detail: `${formatCurrency(Number(transaction.amount), wallet?.currency ?? "MXN")}${transaction.description ? ` - ${transaction.description}` : ""}`,
+      createdAt: transaction.created_at,
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-8">
       <div className="mx-auto max-w-6xl space-y-6">
         {query.registered ? (
           <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-            Registro completado. Bienvenido al club.
+            Bienvenido al Club. Tu cuenta esta lista.
           </p>
         ) : null}
         {query.existing ? (
@@ -96,14 +117,15 @@ export default async function ClubAccountPage({
           <div className="rounded-lg p-6 text-white shadow-sm" style={{ backgroundColor: primary }}>
             <p className="text-sm text-white/70">{business.name}</p>
             <h1 className="mt-4 text-4xl font-semibold">{data.customer.full_name}</h1>
-            <p className="mt-2 text-sm text-white/75">{data.customer.loyalty_code}</p>
+            <p className="mt-2 text-sm text-white/75">Codigo de socio: {data.customer.loyalty_code}</p>
             <div className="mt-8 grid grid-cols-2 gap-4">
               <div>
                 <p className="text-4xl font-semibold">{account.points_balance}</p>
-                <p className="mt-1 text-sm text-white/70">puntos</p>
+                <p className="mt-1 text-sm text-white/70">Mis puntos</p>
               </div>
               <div>
                 <StatusBadge status={account.tier} />
+                <p className="mt-2 text-sm text-white/70">Mi nivel</p>
               </div>
             </div>
             <div className="mt-6 rounded-lg bg-white/10 p-4">
@@ -126,7 +148,7 @@ export default async function ClubAccountPage({
             <Image
               id="qr-personal"
               src={qrDataUrl}
-              alt="QR de fidelizacion"
+              alt="Mi QR"
               width={224}
               height={224}
               unoptimized
@@ -136,7 +158,7 @@ export default async function ClubAccountPage({
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2">
-          <ModuleCard title="Recompensas" description="Beneficios activos del negocio.">
+          <ModuleCard title="Mis recompensas" description="Beneficios activos del negocio.">
             {data.rewards.length ? (
               <div className="grid gap-3">
                 {data.rewards.map((reward) => (
@@ -151,10 +173,10 @@ export default async function ClubAccountPage({
               <EmptyState title="Sin recompensas" description="El negocio aun no tiene beneficios activos." />
             )}
           </ModuleCard>
-          <ModuleCard title="Historial de puntos" description="Tus ultimos movimientos.">
+          <ModuleCard title="Mis movimientos de puntos" description="Tus ultimos movimientos.">
             {data.transactions.length ? (
               <DataTable
-                columns={["Tipo", "Puntos", "Descripcion"]}
+                columns={["Movimiento", "Puntos", "Descripcion"]}
                 rows={data.transactions.map((transaction) => [
                   <StatusBadge key="type" status={transaction.type} />,
                   String(transaction.points),
@@ -167,10 +189,10 @@ export default async function ClubAccountPage({
           </ModuleCard>
         </section>
 
-        <ModuleCard title="Historial wallet" description="Movimientos recientes de tu monedero.">
+        <ModuleCard title="Mi monedero" description="Movimientos recientes de tu monedero.">
           {data.walletTransactions.length ? (
             <DataTable
-              columns={["Tipo", "Monto", "Descripcion"]}
+              columns={["Movimiento", "Monto", "Descripcion"]}
               rows={data.walletTransactions.map((transaction) => [
                 <StatusBadge key="type" status={transaction.type} />,
                 formatCurrency(Number(transaction.amount), wallet?.currency ?? "MXN"),
@@ -179,6 +201,30 @@ export default async function ClubAccountPage({
             />
           ) : (
             <EmptyState title="Sin movimientos wallet" description="Cuando uses tu monedero, los movimientos apareceran aqui." />
+          )}
+        </ModuleCard>
+
+        <ModuleCard title="Mi perfil" description="Datos registrados en el club.">
+          <div className="grid gap-3 text-sm text-stone-700 md:grid-cols-3">
+            <p><span className="font-medium text-stone-950">Nombre:</span> {data.customer.full_name}</p>
+            <p><span className="font-medium text-stone-950">Telefono:</span> {data.customer.phone ?? "-"}</p>
+            <p><span className="font-medium text-stone-950">Cumpleanos:</span> {data.customer.birthday ?? "-"}</p>
+          </div>
+        </ModuleCard>
+
+        <ModuleCard title="Mi historial" description="Reservas, puntos, wallet y promociones en orden reciente.">
+          {history.length ? (
+            <div className="space-y-3">
+              {history.slice(0, 25).map((item) => (
+                <div key={item.id} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+                  <p className="text-sm font-semibold text-stone-950">{item.label}</p>
+                  <p className="mt-1 text-sm text-stone-600">{item.detail}</p>
+                  <p className="mt-2 text-xs text-stone-500">{new Date(item.createdAt).toLocaleString("es-MX")}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="Sin historial" description="Tus visitas, puntos y movimientos apareceran aqui." />
           )}
         </ModuleCard>
       </div>
