@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { ModuleCard, SectionHeader } from "@/components/ui";
 import { canSeeAdminGuidance } from "@/lib/navigation";
-import { getCurrentBusiness } from "@/lib/current-business";
+import { requireCurrentBusiness } from "@/lib/current-business";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +67,7 @@ const demoSteps = [
 ];
 
 export default async function DemoPage() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
 
   if (!canSeeAdminGuidance(current.role)) {
     redirect("/app/dashboard");

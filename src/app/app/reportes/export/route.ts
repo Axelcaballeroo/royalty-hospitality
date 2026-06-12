@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentBusiness } from "@/lib/current-business";
+import { requireCurrentBusiness } from "@/lib/current-business";
 import { createClient } from "@/lib/supabase/server";
 import { getExecutiveReportsData, type ReportPeriod } from "@/lib/data";
 
@@ -39,7 +39,7 @@ function getRange(period: ReportPeriod) {
 }
 
 export async function GET(request: Request) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const url = new URL(request.url);
   const type = url.searchParams.get("type") ?? "report";

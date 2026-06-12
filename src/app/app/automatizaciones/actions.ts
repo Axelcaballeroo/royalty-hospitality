@@ -7,7 +7,7 @@ import {
   runAutomationRule,
   type AutomationRuleRecord,
 } from "@/lib/automation";
-import { getCurrentBusiness } from "@/lib/current-business";
+import { requireCurrentBusiness } from "@/lib/current-business";
 import { createClient } from "@/lib/supabase/server";
 
 function requiredString(formData: FormData, key: string) {
@@ -16,7 +16,7 @@ function requiredString(formData: FormData, key: string) {
 }
 
 export async function ensureAutomationDefaultsAction() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
 
   try {
     await ensureDefaultAutomationRules(current.businessId);
@@ -35,7 +35,7 @@ export async function ensureAutomationDefaultsAction() {
 export async function toggleAutomationRuleAction(formData: FormData) {
   const ruleId = requiredString(formData, "rule_id");
   const enabled = requiredString(formData, "enabled") === "true";
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
 
   if (!ruleId) {
@@ -61,7 +61,7 @@ export async function toggleAutomationRuleAction(formData: FormData) {
 
 export async function runAutomationRuleAction(formData: FormData) {
   const ruleId = requiredString(formData, "rule_id");
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
 
   if (!ruleId) {

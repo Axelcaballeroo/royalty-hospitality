@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Bell, LogOut, Search, ShieldCheck } from "lucide-react";
-import { getCurrentBusiness } from "@/lib/current-business";
+import { requireCurrentBusiness } from "@/lib/current-business";
 import { isSuperadmin } from "@/lib/superadmin";
 
 export async function AppHeader() {
   const [current, superadmin] = await Promise.all([
-    getCurrentBusiness(),
+    requireCurrentBusiness(),
     isSuperadmin(),
   ]);
 

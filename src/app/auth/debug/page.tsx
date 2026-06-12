@@ -1,7 +1,4 @@
-import { cookies } from "next/headers";
-import { AuthDebugClient } from "@/app/auth/debug/auth-debug-client";
-import { demoUserEmailCookie, demoUserIdCookie, getDemoAuthCookieUser } from "@/lib/demo-auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { cookies, headers } from "next/headers";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,28 +21,24 @@ type BusinessUserDebugRow = {
 
 export default async function AuthDebugPage() {
   const cookieStore = await cookies();
+  const headerStore = await headers();
   const { supabaseUrl } = getSupabaseBrowserEnv();
-  const demoUserIdDetected = Boolean(cookieStore.get(demoUserIdCookie)?.value);
-  const demoUserEmailDetected = Boolean(cookieStore.get(demoUserEmailCookie)?.value);
   const supabaseCookiesDetected = cookieStore
     .getAll()
     .some((cookie) => cookie.name.startsWith("sb-"));
+  const currentHost =
+    headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "unknown";
 
   const supabase = await createClient();
   const {
     data: { user: supabaseUser },
   } = await supabase.auth.getUser();
-  const demoCookieUser = await getDemoAuthCookieUser();
-  const fallbackUser = supabaseUser
-    ? { id: supabaseUser.id, email: supabaseUser.email ?? null, source: "supabase" }
-    : demoCookieUser;
-  const businessClient = fallbackUser?.source === "demo-cookie" ? createAdminClient() : supabase;
 
-  const { data: businessUser } = fallbackUser
-    ? await businessClient
+  const { data: businessUser } = supabaseUser
+    ? await supabase
         .from("business_users")
         .select("business_id, role, businesses(id, name, slug)")
-        .eq("user_id", fallbackUser.id)
+        .eq("user_id", supabaseUser.id)
         .eq("status", "active")
         .limit(1)
         .maybeSingle<BusinessUserDebugRow>()
@@ -56,22 +49,16 @@ export default async function AuthDebugPage() {
     : businessUser?.businesses;
 
   const rows = [
-    ["Supabase server user found", supabaseUser ? "yes" : "no"],
-    [`Cookie ${demoUserIdCookie}`, demoUserIdDetected ? "yes" : "no"],
-    [`Cookie ${demoUserEmailCookie}`, demoUserEmailDetected ? "yes" : "no"],
-    ["Demo cookie user found", demoCookieUser ? "yes" : "no"],
-    ["Demo user id", demoCookieUser?.id ?? "Not found"],
-    ["Demo user email", demoCookieUser?.email ?? "Not found"],
-    ["Effective auth source", fallbackUser?.source ?? "none"],
-    ["User email", fallbackUser?.email ?? "No authenticated user"],
-    ["User id", fallbackUser?.id ?? "No authenticated user"],
-    ["Current business found", business ? "yes" : "no"],
+    ["Server user found", supabaseUser ? "yes" : "no"],
+    ["User email", supabaseUser?.email ?? "No authenticated user"],
+    ["User id", supabaseUser?.id ?? "No authenticated user"],
     ["Current business", business ? `${business.name} (${business.id})` : "Not found"],
+    ["Current business found", business ? "yes" : "no"],
     ["Business slug", business?.slug ?? "Not found"],
     ["Business role", businessUser?.role ?? "Not found"],
     ["Supabase cookies detected", supabaseCookiesDetected ? "yes" : "no"],
-    ["Supabase URL env", supabaseUrl],
-    ["Vercel URL env", process.env.VERCEL_URL ?? "Not set"],
+    ["Current host", currentHost],
+    ["NEXT_PUBLIC_SUPABASE_URL present", supabaseUrl ? "yes" : "no"],
   ];
 
   return (
@@ -84,7 +71,6 @@ export default async function AuthDebugPage() {
             <dd className="break-words text-sm text-stone-950">{value}</dd>
           </div>
         ))}
-        <AuthDebugClient />
       </dl>
     </main>
   );

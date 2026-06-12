@@ -1,4 +1,4 @@
-import { getCurrentBusiness } from "@/lib/current-business";
+import { requireCurrentBusiness } from "@/lib/current-business";
 import { createClient } from "@/lib/supabase/server";
 
 export type PlanKey = "basic" | "pro" | "premium" | "business";
@@ -136,7 +136,7 @@ export function planIncludesModule(plan: string | null | undefined, moduleKey: s
 }
 
 export async function getModuleAccess() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const plan = normalizePlan(current.business.plan);
   const { data } = await supabase

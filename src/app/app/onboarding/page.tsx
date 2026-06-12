@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { updateOnboardingStepAction } from "@/app/app/actions";
-import { getCurrentBusiness } from "@/lib/current-business";
+import { requireCurrentBusiness } from "@/lib/current-business";
 import { ModuleCard, StatusBadge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export default async function OnboardingPage({
 }: {
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const params = await searchParams;
   const currentStep = current.business.onboarding_step ?? 1;
 

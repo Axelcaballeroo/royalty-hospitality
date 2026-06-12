@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentBusiness } from "@/lib/current-business";
+import { requireCurrentBusiness } from "@/lib/current-business";
 import { applyLoyaltyPoints } from "@/lib/loyalty";
 import { generateLoyaltyCode } from "@/lib/loyalty-code";
 import { getSegmentCustomers } from "@/lib/marketing";
@@ -67,7 +67,7 @@ async function addCustomerEvent(input: {
   reservationId?: string;
 }) {
   const supabase = await createClient();
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
 
   await supabase.from("customer_events").insert({
     business_id: input.businessId,
@@ -81,7 +81,7 @@ async function addCustomerEvent(input: {
 }
 
 export async function createCustomerAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const fullName = requiredString(formData, "full_name");
   const phone = requiredString(formData, "phone");
@@ -128,7 +128,7 @@ export async function createCustomerAction(formData: FormData) {
 }
 
 export async function updateCustomerAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const id = requiredString(formData, "id");
   const fullName = requiredString(formData, "full_name");
@@ -162,7 +162,7 @@ export async function updateCustomerAction(formData: FormData) {
 }
 
 export async function createInternalNoteAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const customerId = requiredString(formData, "customer_id");
   const reservationId = requiredString(formData, "reservation_id");
@@ -203,7 +203,7 @@ export async function createInternalNoteAction(formData: FormData) {
 }
 
 export async function createInternalTaskAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const customerId = requiredString(formData, "customer_id");
   const title = requiredString(formData, "title");
@@ -256,7 +256,7 @@ export async function createInternalTaskAction(formData: FormData) {
 }
 
 export async function updateTaskStatusAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const taskId = requiredString(formData, "task_id");
   const customerId = requiredString(formData, "customer_id");
@@ -282,7 +282,7 @@ export async function updateTaskStatusAction(formData: FormData) {
 }
 
 export async function createInternalCommentAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const customerId = requiredString(formData, "customer_id");
   const comment = requiredString(formData, "comment");
@@ -320,7 +320,7 @@ export async function createInternalCommentAction(formData: FormData) {
 }
 
 export async function createReservationAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   let customerId = requiredString(formData, "customer_id");
   const date = requiredString(formData, "date");
@@ -406,7 +406,7 @@ export async function createReservationAction(formData: FormData) {
 }
 
 export async function updateReservationStatusAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const id = requiredString(formData, "reservation_id");
   const customerId = requiredString(formData, "customer_id");
@@ -504,7 +504,7 @@ export async function updateReservationStatusAction(formData: FormData) {
 }
 
 export async function updateReservationAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const id = requiredString(formData, "reservation_id");
   const partySize = Number(requiredString(formData, "party_size"));
@@ -535,7 +535,7 @@ export async function updateReservationAction(formData: FormData) {
 }
 
 export async function updatePublicWebsiteSettingsAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
 
   const { error } = await supabase
@@ -570,7 +570,7 @@ export async function updatePublicWebsiteSettingsAction(formData: FormData) {
 }
 
 export async function updateBusinessProfileAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
 
   if (!["superadmin", "owner", "manager"].includes(current.role)) {
@@ -602,7 +602,7 @@ export async function updateBusinessProfileAction(formData: FormData) {
 }
 
 export async function updateBusinessSettingsAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
 
   if (!["superadmin", "owner", "manager"].includes(current.role)) {
@@ -632,7 +632,7 @@ export async function updateBusinessSettingsAction(formData: FormData) {
 }
 
 export async function updateBusinessUserAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const membershipId = requiredString(formData, "membership_id");
   const role = requiredString(formData, "role");
@@ -657,7 +657,7 @@ export async function updateBusinessUserAction(formData: FormData) {
 }
 
 export async function updateOnboardingStepAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const step = Number(requiredString(formData, "onboarding_step")) || 1;
   const completed = formData.get("onboarding_completed") === "on";
@@ -681,7 +681,7 @@ export async function updateOnboardingStepAction(formData: FormData) {
 }
 
 export async function createRewardAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const name = requiredString(formData, "name");
   const pointsRequired = Number(requiredString(formData, "points_required"));
@@ -707,7 +707,7 @@ export async function createRewardAction(formData: FormData) {
 }
 
 export async function adjustLoyaltyPointsAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const customerId = requiredString(formData, "customer_id");
   const points = Number(requiredString(formData, "points"));
   const reason = requiredString(formData, "reason");
@@ -743,7 +743,7 @@ export async function adjustLoyaltyPointsAction(formData: FormData) {
 }
 
 export async function redeemRewardAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const customerId = requiredString(formData, "customer_id");
   const rewardId = requiredString(formData, "reward_id");
@@ -807,7 +807,7 @@ export async function redeemRewardAction(formData: FormData) {
 }
 
 export async function registerConsumptionAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const customerId = requiredString(formData, "customer_id");
   const amount = Number(requiredString(formData, "amount"));
   const comment = requiredString(formData, "comment");
@@ -901,7 +901,7 @@ async function upsertWasteAlert(input: {
 }
 
 export async function createInventoryItemAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const name = requiredString(formData, "name");
   const unit = requiredString(formData, "unit");
@@ -933,7 +933,7 @@ export async function createInventoryItemAction(formData: FormData) {
 }
 
 export async function updateInventoryItemAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const id = requiredString(formData, "item_id");
   const name = requiredString(formData, "name");
@@ -967,7 +967,7 @@ export async function updateInventoryItemAction(formData: FormData) {
 }
 
 export async function createInventoryEntryAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const itemId = requiredString(formData, "item_id");
   const quantity = parsePositiveNumber(requiredString(formData, "quantity"));
@@ -1028,7 +1028,7 @@ export async function createInventoryEntryAction(formData: FormData) {
 }
 
 export async function createInventoryMovementAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const itemId = requiredString(formData, "item_id");
   const batchId = requiredString(formData, "batch_id");
@@ -1166,7 +1166,7 @@ export async function createInventoryMovementAction(formData: FormData) {
 }
 
 export async function refreshWasteAlertsAction() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const { data: batches, error } = await supabase
     .from("inventory_batches")
@@ -1210,7 +1210,7 @@ export async function refreshWasteAlertsAction() {
 }
 
 export async function createWasteReductionCampaignAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const alertId = requiredString(formData, "alert_id");
   const itemName = requiredString(formData, "item_name") || "producto especial";
@@ -1259,7 +1259,7 @@ export async function createWasteReductionCampaignAction(formData: FormData) {
 }
 
 export async function createEmployeeAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const fullName = requiredString(formData, "full_name");
   const status = requiredString(formData, "status") || "active";
@@ -1293,7 +1293,7 @@ export async function createEmployeeAction(formData: FormData) {
 }
 
 export async function updateEmployeeAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const employeeId = requiredString(formData, "employee_id");
   const fullName = requiredString(formData, "full_name");
@@ -1329,7 +1329,7 @@ export async function updateEmployeeAction(formData: FormData) {
 }
 
 export async function createShiftAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const employeeId = requiredString(formData, "employee_id");
   const date = requiredString(formData, "date");
@@ -1374,7 +1374,7 @@ export async function createShiftAction(formData: FormData) {
 }
 
 export async function updateShiftAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const shiftId = requiredString(formData, "shift_id");
   const employeeId = requiredString(formData, "employee_id");
@@ -1413,7 +1413,7 @@ export async function updateShiftAction(formData: FormData) {
 }
 
 export async function cancelShiftAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const shiftId = requiredString(formData, "shift_id");
   const employeeId = requiredString(formData, "employee_id");
@@ -1436,7 +1436,7 @@ export async function cancelShiftAction(formData: FormData) {
 }
 
 export async function clockInAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const employeeId = requiredString(formData, "employee_id");
   const shiftId = requiredString(formData, "shift_id");
@@ -1476,7 +1476,7 @@ export async function clockInAction(formData: FormData) {
 }
 
 export async function clockOutAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const employeeId = requiredString(formData, "employee_id");
   const { data: openEntry } = await supabase
@@ -1524,7 +1524,7 @@ export async function clockOutAction(formData: FormData) {
 }
 
 export async function startBreakAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const employeeId = requiredString(formData, "employee_id");
   const { data: openEntry } = await supabase
@@ -1559,7 +1559,7 @@ export async function startBreakAction(formData: FormData) {
 }
 
 export async function endBreakAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const employeeId = requiredString(formData, "employee_id");
   const { data: openEntry } = await supabase
@@ -1594,7 +1594,7 @@ export async function endBreakAction(formData: FormData) {
 }
 
 export async function createWalletAccountAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const customerId = requiredString(formData, "customer_id");
   const returnTo = requiredString(formData, "return_to") || "/app/wallet";
 
@@ -1617,7 +1617,7 @@ export async function createWalletAccountAction(formData: FormData) {
 }
 
 export async function walletTopupAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const customerId = requiredString(formData, "customer_id");
   const amount = parsePositiveNumber(requiredString(formData, "amount"));
   const bonus = parsePositiveNumber(requiredString(formData, "bonus"));
@@ -1669,7 +1669,7 @@ export async function walletTopupAction(formData: FormData) {
 }
 
 export async function walletPurchaseAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const customerId = requiredString(formData, "customer_id");
   const amount = parsePositiveNumber(requiredString(formData, "amount"));
   const reference = requiredString(formData, "reference");
@@ -1726,7 +1726,7 @@ export async function walletPurchaseAction(formData: FormData) {
 }
 
 export async function walletAdjustmentAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const customerId = requiredString(formData, "customer_id");
   const amount = Number(requiredString(formData, "amount"));
   const reason = requiredString(formData, "reason");
@@ -1765,7 +1765,7 @@ export async function walletAdjustmentAction(formData: FormData) {
 }
 
 export async function updateWalletStatusAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const customerId = requiredString(formData, "customer_id");
   const status = requiredString(formData, "status");
@@ -1791,7 +1791,7 @@ export async function updateWalletStatusAction(formData: FormData) {
 }
 
 export async function createMessageTemplateAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const name = requiredString(formData, "name");
   const type = requiredString(formData, "type");
@@ -1819,7 +1819,7 @@ export async function createMessageTemplateAction(formData: FormData) {
 }
 
 export async function createCampaignAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const name = requiredString(formData, "name");
   const type = requiredString(formData, "type");
@@ -1863,7 +1863,7 @@ export async function createCampaignAction(formData: FormData) {
 }
 
 export async function sendCampaignAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const campaignId = requiredString(formData, "campaign_id");
 
@@ -1934,7 +1934,7 @@ export async function sendCampaignAction(formData: FormData) {
 }
 
 export async function updateCampaignRecipientStatusAction(formData: FormData) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const campaignId = requiredString(formData, "campaign_id");
   const recipientId = requiredString(formData, "recipient_id");

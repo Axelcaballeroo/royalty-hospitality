@@ -1,6 +1,4 @@
 import { redirect } from "next/navigation";
-import { getAuthenticatedUser } from "@/lib/demo-auth";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type CurrentBusiness = {
@@ -93,14 +91,16 @@ type BusinessUserRow = {
       }[];
 };
 
-export async function getCurrentBusiness(): Promise<CurrentBusiness> {
-  const user = await getAuthenticatedUser();
+export async function getCurrentBusiness(): Promise<CurrentBusiness | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login");
+    return null;
   }
 
-  const supabase = user.source === "demo-cookie" ? createAdminClient() : await createClient();
   const { data, error } = await supabase
     .from("business_users")
     .select(
@@ -112,7 +112,7 @@ export async function getCurrentBusiness(): Promise<CurrentBusiness> {
     .maybeSingle<BusinessUserRow>();
 
   if (error || !data) {
-    redirect("/login?error=missing_business");
+    return null;
   }
 
   const business = Array.isArray(data.businesses)
@@ -120,7 +120,7 @@ export async function getCurrentBusiness(): Promise<CurrentBusiness> {
     : data.businesses;
 
   if (!business) {
-    redirect("/login?error=missing_business");
+    return null;
   }
 
   return {
@@ -129,4 +129,14 @@ export async function getCurrentBusiness(): Promise<CurrentBusiness> {
     role: data.role,
     business,
   };
+}
+
+export async function requireCurrentBusiness(): Promise<CurrentBusiness> {
+  const current = await getCurrentBusiness();
+
+  if (!current) {
+    redirect("/login");
+  }
+
+  return current;
 }

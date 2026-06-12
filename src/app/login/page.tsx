@@ -1,18 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Crown } from "lucide-react";
 import { Suspense, useState, type FormEvent } from "react";
 import { isValidEmail, normalizeEmail } from "@/lib/auth-email";
-
-type LoginResponse = {
-  ok: boolean;
-  userId?: string;
-  email?: string;
-  redirectTo?: string;
-  error?: string;
-};
+import { createClient } from "@/lib/supabase/client";
 
 function safeNextPath(nextPath: string | null) {
   if (nextPath?.startsWith("/app") || nextPath?.startsWith("/superadmin")) {
@@ -23,6 +16,7 @@ function safeNextPath(nextPath: string | null) {
 }
 
 function LoginContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = safeNextPath(searchParams.get("next"));
   const initialError = searchParams.get("error");
@@ -44,41 +38,20 @@ function LoginContent() {
       return;
     }
 
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email,
-        password,
-        next: nextPath,
-      }),
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
-    const data = (await response.json()) as LoginResponse;
 
-    if (!data.ok) {
-      setError(data.error ?? "No se pudo iniciar sesion.");
+    if (signInError) {
+      setError(signInError.message);
       setIsSubmitting(false);
       return;
     }
 
-    if (!data.userId) {
-      setError("No se pudo preparar la sesion demo.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    const secure = window.location.protocol === "https:" ? "; Secure" : "";
-    document.cookie = `rh_demo_user_id=${encodeURIComponent(
-      data.userId,
-    )}; path=/; max-age=604800; SameSite=Lax${secure}`;
-    document.cookie = `rh_demo_user_email=${encodeURIComponent(
-      data.email ?? email,
-    )}; path=/; max-age=604800; SameSite=Lax${secure}`;
-
-    window.location.href = data.redirectTo ?? nextPath;
+    router.replace(nextPath);
+    router.refresh();
   }
 
   return (

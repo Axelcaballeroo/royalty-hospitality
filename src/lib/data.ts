@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentBusiness } from "@/lib/current-business";
+import { requireCurrentBusiness } from "@/lib/current-business";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   ensureDefaultAutomationRules,
@@ -379,7 +379,7 @@ export type ClubCustomer = {
 };
 
 export async function getDashboardData() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
   const todayStartIso = `${today}T00:00:00.000Z`;
@@ -584,7 +584,7 @@ export async function getDashboardData() {
 }
 
 export async function getAutomationData(filters: { status?: string; enabled?: string } = {}) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   await ensureDefaultAutomationRules(current.businessId);
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -647,7 +647,7 @@ export async function getAutomationData(filters: { status?: string; enabled?: st
 }
 
 export async function getCustomersData(filters: CustomerFilters = {}) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   let query = supabase
     .from("customers")
@@ -673,7 +673,7 @@ export async function getCustomersData(filters: CustomerFilters = {}) {
 }
 
 export async function getCustomerDetail(customerId: string) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const [customer, events, reservations, notes, tasks, comments, businessUsers, loyaltyAccount, loyaltyTransactions, rewards, campaignRecipients, walletAccount, walletTransactions] =
     await Promise.all([
@@ -779,7 +779,7 @@ export async function getCustomerDetail(customerId: string) {
 }
 
 export async function getInternalCrmData() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
 
   const [tasks, notes, comments, customers, reservations, businessUsers] =
@@ -844,7 +844,7 @@ export async function getInternalCrmData() {
 }
 
 export async function getReservationsData(filters: ReservationFilters = {}) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   let reservationsQuery = supabase
     .from("reservations")
@@ -882,7 +882,7 @@ export async function getReservationsData(filters: ReservationFilters = {}) {
 }
 
 export async function getCalendarData(date: string) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const dayStart = `${date}T00:00:00.000Z`;
   const dayEnd = `${date}T23:59:59.999Z`;
@@ -910,7 +910,7 @@ export async function getCalendarData(date: string) {
 }
 
 export async function getBusinessSettingsData() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const [hours, modules, settings, users] = await Promise.all([
     supabase
@@ -945,7 +945,7 @@ export async function getBusinessSettingsData() {
 }
 
 export async function getLoyaltyData() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const [accounts, rewards, transactions, customers, earnTransactions, redeemTransactions] = await Promise.all([
     supabase
@@ -1013,7 +1013,7 @@ export async function getLoyaltyData() {
 }
 
 export async function getWalletData() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const monthStart = new Date();
   monthStart.setDate(1);
@@ -1079,7 +1079,7 @@ export async function getWalletData() {
 }
 
 export async function getMarketingData(selectedSegment = "all_customers") {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const segmentCustomers = await getSegmentCustomers({
     businessId: current.businessId,
@@ -1149,7 +1149,7 @@ export async function getMarketingData(selectedSegment = "all_customers") {
 }
 
 export async function getCampaignDetail(campaignId: string) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const [campaign, recipients] = await Promise.all([
     supabase
@@ -1183,7 +1183,7 @@ export async function getCampaignDetail(campaignId: string) {
 }
 
 export async function getInventoryData() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const [items, batches, alerts, movements] = await Promise.all([
     supabase
@@ -1245,7 +1245,7 @@ export async function getInventoryData() {
 }
 
 export async function getInventoryItemDetail(itemId: string) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const [item, batches, movements, alerts] = await Promise.all([
     supabase
@@ -1286,7 +1286,7 @@ export async function getInventoryItemDetail(itemId: string) {
 }
 
 export async function getHrData() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const today = getTodayDate();
   const weekStart = getWeekStartIso();
@@ -1391,7 +1391,7 @@ export async function getHrData() {
 }
 
 export async function getEmployeeDetail(employeeId: string) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const today = getTodayDate();
   const weekStart = getWeekStartIso();
@@ -1447,7 +1447,7 @@ export async function getEmployeeDetail(employeeId: string) {
 }
 
 export async function getTimeClockData() {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const today = getTodayDate();
   const [employees, shiftsToday, openEntries, entriesToday] = await Promise.all([
@@ -1489,7 +1489,7 @@ export async function getTimeClockData() {
 }
 
 export async function getExecutiveReportsData(period: ReportPeriod = "month") {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const range = getReportRange(period);
   const inactiveCutoff = new Date();
@@ -1700,7 +1700,7 @@ export async function getExecutiveReportsData(period: ReportPeriod = "month") {
 }
 
 export async function getCheckInData(search?: string) {
-  const current = await getCurrentBusiness();
+  const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const rawTerm = search?.trim() ?? "";
   const qrPrefix = `${current.business.slug}:`;
