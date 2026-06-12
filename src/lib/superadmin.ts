@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSuperadminEmailsEnv } from "@/lib/supabase/env";
 import { moduleCatalog, normalizePlan, planModules, type PlanKey } from "@/lib/plans";
 
 export async function isSuperadmin() {
@@ -13,10 +14,7 @@ export async function isSuperadmin() {
     return false;
   }
 
-  const superadminEmails = (process.env.SUPERADMIN_EMAILS ?? "")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
+  const superadminEmails = getSuperadminEmailsEnv();
   const userEmail = user.email?.trim().toLowerCase();
 
   if (userEmail && superadminEmails.includes(userEmail)) {
