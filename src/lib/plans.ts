@@ -1,4 +1,5 @@
-import { requireCurrentBusiness } from "@/lib/current-business";
+import { getCurrentBusiness } from "@/lib/current-business";
+import { getSuperadminEmailsEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 export type PlanKey = "basic" | "pro" | "premium" | "business";
@@ -135,10 +136,55 @@ export function planIncludesModule(plan: string | null | undefined, moduleKey: s
   return planModules[normalizedPlan].includes(moduleKey);
 }
 
+function canAccessEveryModule(input: {
+  plan: PlanKey;
+  role: string;
+  userEmail: string | null;
+}) {
+  if (input.plan === "business" || input.role === "superadmin") {
+    return true;
+  }
+
+  const userEmail = input.userEmail?.trim().toLowerCase();
+  return Boolean(userEmail && getSuperadminEmailsEnv().includes(userEmail));
+}
+
 export async function getModuleAccess() {
-  const current = await requireCurrentBusiness();
+  const current = await getCurrentBusiness();
+
+  if (!current) {
+    return {
+      current: null,
+      plan: "basic" as PlanKey,
+      access: Object.fromEntries(Object.keys(moduleCatalog).map((moduleKey) => [moduleKey, false])) as Record<
+        string,
+        boolean
+      >,
+      overrides: new Map<string, boolean>(),
+    };
+  }
+
   const supabase = await createClient();
   const plan = normalizePlan(current.business.plan);
+
+  if (
+    canAccessEveryModule({
+      plan,
+      role: current.role,
+      userEmail: current.userEmail,
+    })
+  ) {
+    return {
+      current,
+      plan,
+      access: Object.fromEntries(Object.keys(moduleCatalog).map((moduleKey) => [moduleKey, true])) as Record<
+        string,
+        boolean
+      >,
+      overrides: new Map<string, boolean>(),
+    };
+  }
+
   const { data } = await supabase
     .from("business_modules")
     .select("module_key, enabled")

@@ -8,6 +8,10 @@ export async function AppSidebar() {
     isSuperadmin(),
   ]);
 
+  if (!current) {
+    return null;
+  }
+
   return (
     <AppSidebarClient
       businessName={current.business.name}

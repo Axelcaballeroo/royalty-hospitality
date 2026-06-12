@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export type CurrentBusiness = {
   userId: string;
+  userEmail: string | null;
   businessId: string;
   role: string;
     business: {
@@ -125,6 +126,7 @@ export async function getCurrentBusiness(): Promise<CurrentBusiness | null> {
 
   return {
     userId: user.id,
+    userEmail: user.email ?? null,
     businessId: data.business_id,
     role: data.role,
     business,

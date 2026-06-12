@@ -10,6 +10,10 @@ export async function MobileNav() {
     isSuperadmin(),
   ]);
 
+  if (!current) {
+    return null;
+  }
+
   return (
     <div className="border-b border-stone-200 bg-stone-50 px-4 py-4 lg:hidden">
       <div className="flex items-center justify-between">
