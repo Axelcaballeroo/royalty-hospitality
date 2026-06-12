@@ -45,6 +45,16 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
       return;
     }
 
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      setError("No se pudo confirmar la sesion en el navegador. Intenta de nuevo.");
+      setIsSubmitting(false);
+      return;
+    }
+
     router.replace(safeNextPath(nextPath));
     router.refresh();
   }

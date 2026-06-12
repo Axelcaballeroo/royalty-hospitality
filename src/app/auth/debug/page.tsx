@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { AuthDebugClient } from "@/app/auth/debug/auth-debug-client";
+import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 type BusinessUserDebugRow = {
@@ -21,6 +22,7 @@ type BusinessUserDebugRow = {
 
 export default async function AuthDebugPage() {
   const cookieStore = await cookies();
+  const { supabaseUrl } = getSupabaseBrowserEnv();
   const supabaseCookiesDetected = cookieStore
     .getAll()
     .some((cookie) => cookie.name.startsWith("sb-"));
@@ -53,6 +55,8 @@ export default async function AuthDebugPage() {
     ["Business slug", business?.slug ?? "Not found"],
     ["Business role", businessUser?.role ?? "Not found"],
     ["Supabase cookies detected", supabaseCookiesDetected ? "yes" : "no"],
+    ["Supabase URL env", supabaseUrl],
+    ["Vercel URL env", process.env.VERCEL_URL ?? "Not set"],
   ];
 
   return (

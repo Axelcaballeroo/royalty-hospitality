@@ -5,6 +5,9 @@ import { createClient } from "@/lib/supabase/client";
 
 export function AuthDebugClient() {
   const [sessionFound, setSessionFound] = useState<boolean | null>(null);
+  const [currentUrl] = useState(() =>
+    typeof window === "undefined" ? "" : window.location.href,
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -31,9 +34,15 @@ export function AuthDebugClient() {
     sessionFound === null ? "checking..." : sessionFound ? "yes" : "no";
 
   return (
-    <div className="grid gap-1 p-4 sm:grid-cols-[180px_1fr]">
-      <dt className="text-sm font-medium text-stone-500">Client session found</dt>
-      <dd className="break-words text-sm text-stone-950">{value}</dd>
-    </div>
+    <>
+      <div className="grid gap-1 p-4 sm:grid-cols-[180px_1fr]">
+        <dt className="text-sm font-medium text-stone-500">Client session found</dt>
+        <dd className="break-words text-sm text-stone-950">{value}</dd>
+      </div>
+      <div className="grid gap-1 p-4 sm:grid-cols-[180px_1fr]">
+        <dt className="text-sm font-medium text-stone-500">Browser URL</dt>
+        <dd className="break-words text-sm text-stone-950">{currentUrl || "checking..."}</dd>
+      </div>
+    </>
   );
 }
