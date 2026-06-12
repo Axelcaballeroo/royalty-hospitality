@@ -8,6 +8,8 @@ import { isValidEmail, normalizeEmail } from "@/lib/auth-email";
 
 type LoginResponse = {
   ok: boolean;
+  userId?: string;
+  email?: string;
   redirectTo?: string;
   error?: string;
 };
@@ -61,6 +63,20 @@ function LoginContent() {
       setIsSubmitting(false);
       return;
     }
+
+    if (!data.userId) {
+      setError("No se pudo preparar la sesion demo.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `rh_demo_user_id=${encodeURIComponent(
+      data.userId,
+    )}; path=/; max-age=604800; SameSite=Lax${secure}`;
+    document.cookie = `rh_demo_user_email=${encodeURIComponent(
+      data.email ?? email,
+    )}; path=/; max-age=604800; SameSite=Lax${secure}`;
 
     window.location.href = data.redirectTo ?? nextPath;
   }

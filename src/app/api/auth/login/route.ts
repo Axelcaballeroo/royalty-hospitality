@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isValidEmail, normalizeEmail } from "@/lib/auth-email";
-import { demoUserEmailCookie, demoUserIdCookie, isSafePrivateNextPath } from "@/lib/demo-auth";
+import { isSafePrivateNextPath } from "@/lib/demo-auth";
 import { createClient } from "@/lib/supabase/server";
 
 type LoginBody = {
@@ -42,23 +42,9 @@ export async function POST(request: Request) {
 
   const response = NextResponse.json({
     ok: true,
-    cookieMode: "response.cookies.set without domain",
+    userId: data.user.id,
+    email: data.user.email ?? email,
     redirectTo,
-  });
-
-  response.cookies.set(demoUserIdCookie, data.user.id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-  response.cookies.set(demoUserEmailCookie, data.user.email ?? "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
   });
 
   return response;
