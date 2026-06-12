@@ -109,7 +109,7 @@ function LoginContent() {
       return;
     }
 
-    router.replace(nextPath);
+    router.replace(`/auth/confirm?next=${encodeURIComponent(nextPath)}`);
     router.refresh();
   }
 
