@@ -1,5 +1,6 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getDemoAuthCookieUser } from "@/lib/demo-auth";
+import { demoUserEmailCookie, demoUserIdCookie } from "@/lib/demo-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type BusinessUserMeRow = {
@@ -20,13 +21,15 @@ type BusinessUserMeRow = {
 };
 
 export async function GET() {
-  const user = await getDemoAuthCookieUser();
+  const cookieStore = await cookies();
+  const userId = cookieStore.get(demoUserIdCookie)?.value ?? null;
+  const email = cookieStore.get(demoUserEmailCookie)?.value ?? null;
 
-  if (!user) {
+  if (!userId) {
     return NextResponse.json(
       {
         authenticated: false,
-        user_id: null,
+        userId: null,
         email: null,
         business: null,
         role: null,
@@ -43,7 +46,7 @@ export async function GET() {
   const { data: businessUser } = await admin
     .from("business_users")
     .select("business_id, role, businesses(id, name, slug)")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("status", "active")
     .limit(1)
     .maybeSingle<BusinessUserMeRow>();
@@ -55,8 +58,8 @@ export async function GET() {
   return NextResponse.json(
     {
       authenticated: true,
-      user_id: user.id,
-      email: user.email,
+      userId,
+      email,
       business: business
         ? {
             id: business.id,
