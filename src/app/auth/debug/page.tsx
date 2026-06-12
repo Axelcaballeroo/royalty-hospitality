@@ -1,4 +1,5 @@
 import { cookies, headers } from "next/headers";
+import { AuthDebugClient } from "@/app/auth/debug/auth-debug-client";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -71,6 +72,7 @@ export default async function AuthDebugPage() {
             <dd className="break-words text-sm text-stone-950">{value}</dd>
           </div>
         ))}
+        <AuthDebugClient />
       </dl>
     </main>
   );
