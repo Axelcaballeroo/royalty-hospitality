@@ -66,8 +66,8 @@ function LoginContent() {
       password,
     });
 
-    console.log("LOGIN ERROR", signInError);
-    console.log("LOGIN DATA", data);
+    console.log("LOGIN_ERROR", signInError);
+    console.log("LOGIN_DATA", data);
 
     setDebugState((current) => ({
       ...current,
@@ -83,7 +83,7 @@ function LoginContent() {
     }
 
     if (!data.session) {
-      setError("Supabase no devolvio sesion. Revisa email confirmation, proyecto o anon key.");
+      setError("Login válido pero Supabase no devolvió sesión.");
       setIsSubmitting(false);
       return;
     }
@@ -96,7 +96,7 @@ function LoginContent() {
       data: sessionCheck,
     } = await supabase.auth.getSession();
 
-    console.log("SESSION CHECK", sessionCheck);
+    console.log("SESSION_CHECK", sessionCheck);
 
     setDebugState((current) => ({
       ...current,
@@ -104,7 +104,7 @@ function LoginContent() {
     }));
 
     if (!sessionCheck.session) {
-      setError("Login valido, pero la sesion no quedo guardada en el navegador.");
+      setError("La sesión no quedó guardada en el navegador.");
       setIsSubmitting(false);
       return;
     }
@@ -184,15 +184,15 @@ function LoginContent() {
                 <dd className="text-right">{debugState.errorMessage || "none"}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt>data.user</dt>
+                <dt>data.user existe</dt>
                 <dd>{debugState.signInUserFound ? "yes" : "no"}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt>data.session</dt>
+                <dt>data.session existe</dt>
                 <dd>{debugState.signInSessionFound ? "yes" : "no"}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt>getSession</dt>
+                <dt>getSession session existe</dt>
                 <dd>{debugState.sessionCheckFound ? "yes" : "no"}</dd>
               </div>
               <div className="flex justify-between gap-3">
