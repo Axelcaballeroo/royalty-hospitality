@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { ensureDevEmail, isValidEmail, normalizeEmail } from "@/lib/auth-email";
+import { clearDemoAuthCookies, isSafePrivateNextPath, setDemoAuthCookies } from "@/lib/demo-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -41,13 +42,18 @@ export async function loginAction(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  if (error || !data.user) {
+    redirect(`/login?error=${encodeURIComponent(error?.message ?? "Login invalido")}`);
   }
 
-  redirect(next.startsWith("/app") ? next : "/app/dashboard");
+  await setDemoAuthCookies({
+    id: data.user.id,
+    email: data.user.email ?? email,
+  });
+
+  redirect(isSafePrivateNextPath(next) ? next : "/app/dashboard");
 }
 
 export async function registerAction(formData: FormData) {
@@ -148,5 +154,6 @@ export async function registerAction(formData: FormData) {
 export async function logoutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  await clearDemoAuthCookies();
   redirect("/login");
 }

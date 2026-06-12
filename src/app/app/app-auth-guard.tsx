@@ -2,7 +2,6 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export function AppAuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -13,16 +12,16 @@ export function AppAuthGuard({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     async function checkSession() {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const response = await fetch("/api/auth/me", {
+        cache: "no-store",
+      });
+      const data = (await response.json()) as { authenticated?: boolean };
 
       if (!mounted) {
         return;
       }
 
-      if (!session) {
+      if (!data.authenticated) {
         router.replace(`/login?next=${encodeURIComponent(pathname)}`);
         return;
       }

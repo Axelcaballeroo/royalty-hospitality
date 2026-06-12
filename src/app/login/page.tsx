@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Crown } from "lucide-react";
-import { LoginForm } from "@/app/login/login-form";
+import { loginAction } from "@/app/auth/actions";
 
 export default async function LoginPage({
   searchParams,
@@ -39,7 +39,31 @@ export default async function LoginPage({
               {decodeURIComponent(params.error)}
             </p>
           ) : null}
-          <LoginForm nextPath={params.next ?? "/app/dashboard"} />
+          <form action={loginAction}>
+            <input type="hidden" name="next" value={params.next ?? "/app/dashboard"} />
+            <label className="mt-6 block text-sm font-medium text-stone-700">
+              Email
+              <input
+                required
+                type="text"
+                inputMode="email"
+                name="email"
+                className="mt-2 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none transition focus:border-stone-400"
+              />
+            </label>
+            <label className="mt-4 block text-sm font-medium text-stone-700">
+              Password
+              <input
+                required
+                type="password"
+                name="password"
+                className="mt-2 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none transition focus:border-stone-400"
+              />
+            </label>
+            <button className="mt-6 h-11 w-full rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">
+              Entrar
+            </button>
+          </form>
           <p className="mt-5 text-center text-sm text-stone-500">
             No tienes cuenta?{" "}
             <Link href="/register" className="font-medium text-stone-950">

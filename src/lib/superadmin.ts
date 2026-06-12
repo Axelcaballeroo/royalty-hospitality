@@ -1,14 +1,12 @@
 import { redirect } from "next/navigation";
+import { getAuthenticatedUser } from "@/lib/demo-auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSuperadminEmailsEnv } from "@/lib/supabase/env";
 import { moduleCatalog, normalizePlan, planModules, type PlanKey } from "@/lib/plans";
 
 export async function isSuperadmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
 
   if (!user) {
     return false;
@@ -21,6 +19,7 @@ export async function isSuperadmin() {
     return true;
   }
 
+  const supabase = user.source === "demo-cookie" ? createAdminClient() : await createClient();
   const { data } = await supabase
     .from("business_users")
     .select("id")
@@ -34,10 +33,7 @@ export async function isSuperadmin() {
 }
 
 export async function requireSuperadmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
 
   if (!user) {
     redirect("/login");
@@ -46,6 +42,7 @@ export async function requireSuperadmin() {
   const allowed = await isSuperadmin();
   if (!allowed) {
     if (process.env.NODE_ENV === "development") {
+      const supabase = user.source === "demo-cookie" ? createAdminClient() : await createClient();
       const { data: roles } = await supabase
         .from("business_users")
         .select("business_id, role, status")

@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 import { AuthDebugClient } from "@/app/auth/debug/auth-debug-client";
+import { getDemoAuthCookieUser } from "@/lib/demo-auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,14 +31,19 @@ export default async function AuthDebugPage() {
 
   const supabase = await createClient();
   const {
-    data: { user },
+    data: { user: supabaseUser },
   } = await supabase.auth.getUser();
+  const demoCookieUser = await getDemoAuthCookieUser();
+  const fallbackUser = supabaseUser
+    ? { id: supabaseUser.id, email: supabaseUser.email ?? null, source: "supabase" }
+    : demoCookieUser;
+  const businessClient = fallbackUser?.source === "demo-cookie" ? createAdminClient() : supabase;
 
-  const { data: businessUser } = user
-    ? await supabase
+  const { data: businessUser } = fallbackUser
+    ? await businessClient
         .from("business_users")
         .select("business_id, role, businesses(id, name, slug)")
-        .eq("user_id", user.id)
+        .eq("user_id", fallbackUser.id)
         .eq("status", "active")
         .limit(1)
         .maybeSingle<BusinessUserDebugRow>()
@@ -47,9 +54,13 @@ export default async function AuthDebugPage() {
     : businessUser?.businesses;
 
   const rows = [
-    ["Server user found", user ? "yes" : "no"],
-    ["User email", user?.email ?? "No authenticated user"],
-    ["User id", user?.id ?? "No authenticated user"],
+    ["Supabase server user found", supabaseUser ? "yes" : "no"],
+    ["Demo cookie user found", demoCookieUser ? "yes" : "no"],
+    ["Demo user id", demoCookieUser?.id ?? "Not found"],
+    ["Demo user email", demoCookieUser?.email ?? "Not found"],
+    ["Effective auth source", fallbackUser?.source ?? "none"],
+    ["User email", fallbackUser?.email ?? "No authenticated user"],
+    ["User id", fallbackUser?.id ?? "No authenticated user"],
     ["Current business found", business ? "yes" : "no"],
     ["Current business", business ? `${business.name} (${business.id})` : "Not found"],
     ["Business slug", business?.slug ?? "Not found"],

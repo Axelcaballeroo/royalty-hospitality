@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { getAuthenticatedUser } from "@/lib/demo-auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type CurrentBusiness = {
@@ -92,15 +94,13 @@ type BusinessUserRow = {
 };
 
 export async function getCurrentBusiness(): Promise<CurrentBusiness> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
 
   if (!user) {
     redirect("/login");
   }
 
+  const supabase = user.source === "demo-cookie" ? createAdminClient() : await createClient();
   const { data, error } = await supabase
     .from("business_users")
     .select(
