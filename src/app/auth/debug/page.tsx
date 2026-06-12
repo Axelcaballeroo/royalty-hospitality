@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { AuthDebugClient } from "@/app/auth/debug/auth-debug-client";
-import { getDemoAuthCookieUser } from "@/lib/demo-auth";
+import { demoUserEmailCookie, demoUserIdCookie, getDemoAuthCookieUser } from "@/lib/demo-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
@@ -25,6 +25,8 @@ type BusinessUserDebugRow = {
 export default async function AuthDebugPage() {
   const cookieStore = await cookies();
   const { supabaseUrl } = getSupabaseBrowserEnv();
+  const demoUserIdDetected = Boolean(cookieStore.get(demoUserIdCookie)?.value);
+  const demoUserEmailDetected = Boolean(cookieStore.get(demoUserEmailCookie)?.value);
   const supabaseCookiesDetected = cookieStore
     .getAll()
     .some((cookie) => cookie.name.startsWith("sb-"));
@@ -55,6 +57,8 @@ export default async function AuthDebugPage() {
 
   const rows = [
     ["Supabase server user found", supabaseUser ? "yes" : "no"],
+    [`Cookie ${demoUserIdCookie}`, demoUserIdDetected ? "yes" : "no"],
+    [`Cookie ${demoUserEmailCookie}`, demoUserEmailDetected ? "yes" : "no"],
     ["Demo cookie user found", demoCookieUser ? "yes" : "no"],
     ["Demo user id", demoCookieUser?.id ?? "Not found"],
     ["Demo user email", demoCookieUser?.email ?? "Not found"],

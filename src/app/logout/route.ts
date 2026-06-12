@@ -1,11 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { clearDemoAuthCookies } from "@/lib/demo-auth";
+import { demoAuthCookieOptions, demoUserEmailCookie, demoUserIdCookie } from "@/lib/demo-auth";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  await clearDemoAuthCookies();
+  const response = NextResponse.redirect(new URL("/login", request.url));
+  const expiredCookieOptions = {
+    ...demoAuthCookieOptions,
+    maxAge: 0,
+  };
 
-  return NextResponse.redirect(new URL("/login", request.url));
+  response.cookies.set(demoUserIdCookie, "", expiredCookieOptions);
+  response.cookies.set(demoUserEmailCookie, "", expiredCookieOptions);
+
+  return response;
 }

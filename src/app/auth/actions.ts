@@ -1,8 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { ensureDevEmail, isValidEmail, normalizeEmail } from "@/lib/auth-email";
-import { clearDemoAuthCookies, isSafePrivateNextPath, setDemoAuthCookies } from "@/lib/demo-auth";
+import { ensureDevEmail, isValidEmail } from "@/lib/auth-email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -30,30 +29,6 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)+/g, "")
     .slice(0, 60);
-}
-
-export async function loginAction(formData: FormData) {
-  const email = normalizeEmail(String(formData.get("email") ?? ""));
-  const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/app/dashboard");
-
-  if (!email || !password || !isValidEmail(email)) {
-    redirect("/login?error=missing_fields");
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error || !data.user) {
-    redirect(`/login?error=${encodeURIComponent(error?.message ?? "Login invalido")}`);
-  }
-
-  await setDemoAuthCookies({
-    id: data.user.id,
-    email: data.user.email ?? email,
-  });
-
-  redirect(isSafePrivateNextPath(next) ? next : "/app/dashboard");
 }
 
 export async function registerAction(formData: FormData) {
@@ -149,11 +124,4 @@ export async function registerAction(formData: FormData) {
   }
 
   redirect("/app/dashboard");
-}
-
-export async function logoutAction() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  await clearDemoAuthCookies();
-  redirect("/login");
 }

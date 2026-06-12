@@ -12,16 +12,24 @@ export function AppAuthGuard({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     async function checkSession() {
-      const response = await fetch("/api/auth/me", {
-        cache: "no-store",
-      });
-      const data = (await response.json()) as { authenticated?: boolean };
+      let authenticated = false;
+
+      try {
+        const response = await fetch("/api/auth/me", {
+          cache: "no-store",
+          credentials: "include",
+        });
+        const data = (await response.json()) as { authenticated?: boolean };
+        authenticated = Boolean(data.authenticated);
+      } catch {
+        authenticated = false;
+      }
 
       if (!mounted) {
         return;
       }
 
-      if (!data.authenticated) {
+      if (!authenticated) {
         router.replace(`/login?next=${encodeURIComponent(pathname)}`);
         return;
       }

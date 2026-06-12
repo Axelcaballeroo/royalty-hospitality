@@ -22,27 +22,6 @@ export function isSafePrivateNextPath(nextPath: string) {
   return nextPath.startsWith("/app") || nextPath.startsWith("/superadmin");
 }
 
-export async function setDemoAuthCookies(user: { id: string; email?: string | null }) {
-  const cookieStore = await cookies();
-
-  cookieStore.set(demoUserIdCookie, user.id, demoAuthCookieOptions);
-
-  if (user.email) {
-    cookieStore.set(demoUserEmailCookie, user.email, demoAuthCookieOptions);
-  }
-}
-
-export async function clearDemoAuthCookies() {
-  const cookieStore = await cookies();
-  const expiredCookieOptions = {
-    ...demoAuthCookieOptions,
-    maxAge: 0,
-  };
-
-  cookieStore.set(demoUserIdCookie, "", expiredCookieOptions);
-  cookieStore.set(demoUserEmailCookie, "", expiredCookieOptions);
-}
-
 export async function getDemoAuthCookieUser(): Promise<AuthenticatedUser | null> {
   const cookieStore = await cookies();
   const userId = cookieStore.get(demoUserIdCookie)?.value;
