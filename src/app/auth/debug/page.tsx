@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { AuthDebugClient } from "@/app/auth/debug/auth-debug-client";
 import { createClient } from "@/lib/supabase/server";
 
 type BusinessUserDebugRow = {
@@ -29,32 +30,25 @@ export default async function AuthDebugPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return (
-      <main className="mx-auto max-w-2xl px-6 py-12">
-        <h1 className="text-2xl font-semibold text-stone-950">Auth debug</h1>
-        <p className="mt-4 rounded-lg border border-stone-200 bg-white p-4 text-sm text-stone-700">
-          No authenticated user.
-        </p>
-      </main>
-    );
-  }
-
-  const { data: businessUser } = await supabase
-    .from("business_users")
-    .select("business_id, role, businesses(id, name, slug)")
-    .eq("user_id", user.id)
-    .eq("status", "active")
-    .limit(1)
-    .maybeSingle<BusinessUserDebugRow>();
+  const { data: businessUser } = user
+    ? await supabase
+        .from("business_users")
+        .select("business_id, role, businesses(id, name, slug)")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .limit(1)
+        .maybeSingle<BusinessUserDebugRow>()
+    : { data: null };
 
   const business = Array.isArray(businessUser?.businesses)
     ? businessUser?.businesses[0]
     : businessUser?.businesses;
 
   const rows = [
-    ["User email", user.email ?? "No email"],
-    ["User id", user.id],
+    ["Server user found", user ? "yes" : "no"],
+    ["User email", user?.email ?? "No authenticated user"],
+    ["User id", user?.id ?? "No authenticated user"],
+    ["Current business found", business ? "yes" : "no"],
     ["Current business", business ? `${business.name} (${business.id})` : "Not found"],
     ["Business slug", business?.slug ?? "Not found"],
     ["Business role", businessUser?.role ?? "Not found"],
@@ -71,6 +65,7 @@ export default async function AuthDebugPage() {
             <dd className="break-words text-sm text-stone-950">{value}</dd>
           </div>
         ))}
+        <AuthDebugClient />
       </dl>
     </main>
   );

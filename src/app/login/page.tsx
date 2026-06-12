@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Crown } from "lucide-react";
-import { loginAction } from "@/app/auth/actions";
+import { LoginForm } from "@/app/login/login-form";
 
 export default async function LoginPage({
   searchParams,
@@ -29,10 +29,7 @@ export default async function LoginPage({
       </section>
 
       <section className="flex items-center justify-center px-6 py-12">
-        <form
-          action={loginAction}
-          className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-6 shadow-sm"
-        >
+        <div className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold text-stone-950">Iniciar sesion</h2>
           <p className="mt-2 text-sm leading-6 text-stone-500">
             Entra con tu email y password de Supabase Auth.
@@ -42,36 +39,14 @@ export default async function LoginPage({
               {decodeURIComponent(params.error)}
             </p>
           ) : null}
-          <input type="hidden" name="next" value={params.next ?? "/app/dashboard"} />
-          <label className="mt-6 block text-sm font-medium text-stone-700">
-            Email
-            <input
-              required
-              type="text"
-              inputMode="email"
-              name="email"
-              className="mt-2 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none transition focus:border-stone-400"
-            />
-          </label>
-          <label className="mt-4 block text-sm font-medium text-stone-700">
-            Password
-            <input
-              required
-              type="password"
-              name="password"
-              className="mt-2 h-11 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none transition focus:border-stone-400"
-            />
-          </label>
-          <button className="mt-6 h-11 w-full rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">
-            Entrar
-          </button>
+          <LoginForm nextPath={params.next ?? "/app/dashboard"} />
           <p className="mt-5 text-center text-sm text-stone-500">
             No tienes cuenta?{" "}
             <Link href="/register" className="font-medium text-stone-950">
               Crear negocio
             </Link>
           </p>
-        </form>
+        </div>
       </section>
     </main>
   );
