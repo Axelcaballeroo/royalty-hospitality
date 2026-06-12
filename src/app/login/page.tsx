@@ -7,6 +7,14 @@ import { Suspense, useState, type FormEvent } from "react";
 import { isValidEmail, normalizeEmail } from "@/lib/auth-email";
 import { createClient } from "@/lib/supabase/client";
 
+type LoginDebugState = {
+  errorMessage: string;
+  signInUserFound: boolean;
+  signInSessionFound: boolean;
+  sessionCheckFound: boolean;
+  supabaseUrl: string;
+};
+
 function safeNextPath(nextPath: string | null) {
   if (nextPath?.startsWith("/app") || nextPath?.startsWith("/superadmin")) {
     return nextPath;
@@ -22,11 +30,25 @@ function LoginContent() {
   const initialError = searchParams.get("error");
   const [error, setError] = useState(initialError ? decodeURIComponent(initialError) : "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [debugState, setDebugState] = useState<LoginDebugState>({
+    errorMessage: initialError ? decodeURIComponent(initialError) : "",
+    signInUserFound: false,
+    signInSessionFound: false,
+    sessionCheckFound: false,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "missing",
+  });
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setIsSubmitting(true);
+    setDebugState({
+      errorMessage: "",
+      signInUserFound: false,
+      signInSessionFound: false,
+      sessionCheckFound: false,
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "missing",
+    });
 
     const formData = new FormData(event.currentTarget);
     const email = normalizeEmail(String(formData.get("email") ?? ""));
@@ -39,10 +61,20 @@ function LoginContent() {
     }
 
     const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+
+    console.log("LOGIN ERROR", signInError);
+    console.log("LOGIN DATA", data);
+
+    setDebugState((current) => ({
+      ...current,
+      errorMessage: signInError?.message ?? "",
+      signInUserFound: Boolean(data.user),
+      signInSessionFound: Boolean(data.session),
+    }));
 
     if (signInError) {
       setError(signInError.message);
@@ -50,12 +82,29 @@ function LoginContent() {
       return;
     }
 
+    if (!data.session) {
+      setError("Supabase no devolvio sesion. Revisa email confirmation, proyecto o anon key.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 300);
+    });
+
     const {
-      data: { session },
+      data: sessionCheck,
     } = await supabase.auth.getSession();
 
-    if (!session) {
-      setError("No se pudo crear la sesion en el navegador.");
+    console.log("SESSION CHECK", sessionCheck);
+
+    setDebugState((current) => ({
+      ...current,
+      sessionCheckFound: Boolean(sessionCheck.session),
+    }));
+
+    if (!sessionCheck.session) {
+      setError("Login valido, pero la sesion no quedo guardada en el navegador.");
       setIsSubmitting(false);
       return;
     }
@@ -127,6 +176,31 @@ function LoginContent() {
               Crear negocio
             </Link>
           </p>
+          <div className="mt-6 rounded-lg border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
+            <p className="font-semibold text-stone-800">Debug login</p>
+            <dl className="mt-2 space-y-1">
+              <div className="flex justify-between gap-3">
+                <dt>Error</dt>
+                <dd className="text-right">{debugState.errorMessage || "none"}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt>data.user</dt>
+                <dd>{debugState.signInUserFound ? "yes" : "no"}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt>data.session</dt>
+                <dd>{debugState.signInSessionFound ? "yes" : "no"}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt>getSession</dt>
+                <dd>{debugState.sessionCheckFound ? "yes" : "no"}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt>Supabase URL</dt>
+                <dd className="max-w-[220px] truncate text-right">{debugState.supabaseUrl}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
       </section>
     </main>
