@@ -9,7 +9,6 @@ import {
   FileWarning,
   Gift,
   HelpCircle,
-  Home,
   MessageSquareText,
   Megaphone,
   Package,
@@ -20,29 +19,6 @@ import {
   Utensils,
   Workflow,
 } from "lucide-react";
-
-export const privateNavigation = [
-  { name: "Operacion de hoy", href: "/app/operacion", icon: ClipboardList, moduleKey: "dashboard" },
-  { name: "Reservas", href: "/app/reservas", icon: Clock3, moduleKey: "reservations" },
-  { name: "Clientes", href: "/app/clientes", icon: Users, moduleKey: "crm" },
-  { name: "Ventas / Check-in", href: "/app/checkin", icon: QrCode, moduleKey: "loyalty" },
-  { name: "Inventario", href: "/app/inventario", icon: Package, moduleKey: "inventory" },
-  { name: "Marketing", href: "/app/marketing", icon: Megaphone, moduleKey: "marketing" },
-  { name: "Equipo", href: "/app/rrhh", icon: Utensils, moduleKey: "hr" },
-  { name: "Reportes", href: "/app/reportes", icon: BarChart3, moduleKey: "reports_basic" },
-  { name: "Cierre del dia", href: "/app/cierre", icon: ClipboardCheck, moduleKey: "dashboard" },
-  { name: "Ayuda", href: "/app/ayuda", icon: HelpCircle, moduleKey: "dashboard" },
-  { name: "Configuracion", href: "/app/configuracion", icon: Settings, moduleKey: "dashboard" },
-];
-
-export const secondaryNavigation = [
-  { name: "Dashboard ejecutivo", href: "/app/dashboard", icon: Home, moduleKey: "dashboard" },
-  { name: "Calendario", href: "/app/calendario", icon: CalendarDays, moduleKey: "reservations" },
-  { name: "Automatizaciones", href: "/app/automatizaciones", icon: Workflow, moduleKey: "automation" },
-  { name: "Configuracion", href: "/app/configuracion", icon: Settings, moduleKey: "dashboard" },
-  { name: "Ayuda", href: "/app/ayuda", icon: HelpCircle, moduleKey: "dashboard" },
-  { name: "Demo", href: "/app/demo", icon: Route, moduleKey: "dashboard", adminOnly: true },
-];
 
 export const navigationGroups = [
   {
@@ -111,6 +87,19 @@ export const navigationGroups = [
       { name: "Operacion", href: "/app/reportes?period=today", icon: ClipboardList, moduleKey: "reports_basic" },
     ],
   },
+];
+
+export const footerNavigation = [
+  {
+    name: "Configuracion",
+    href: "/app/configuracion",
+    icon: Settings,
+    moduleKey: "dashboard",
+    children: [
+      { name: "Automatizaciones", href: "/app/automatizaciones", icon: Workflow, moduleKey: "automation" },
+    ],
+  },
+  { name: "Ayuda", href: "/app/ayuda", icon: HelpCircle, moduleKey: "dashboard" },
 ];
 
 export function canSeeAdminGuidance(role: string) {
