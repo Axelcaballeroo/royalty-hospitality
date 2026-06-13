@@ -230,6 +230,39 @@ export type WasteAlert = {
   inventory_items?: { name: string; unit: string } | null;
 };
 
+export type Courtesy = {
+  id: string;
+  closure_id: string | null;
+  customer_id: string | null;
+  employee_id: string | null;
+  date: string;
+  item_name: string;
+  quantity: number;
+  estimated_value: number;
+  reason: string;
+  authorized_by: string | null;
+  notes: string | null;
+  created_at: string;
+  customers?: { full_name: string } | null;
+  employees?: { full_name: string } | null;
+};
+
+export type DailyClosure = {
+  id: string;
+  date: string;
+  summary: string | null;
+  estimated_sales: number;
+  completed_reservations: number;
+  no_shows: number;
+  courtesy_total: number;
+  waste_total: number;
+  incidents: string | null;
+  manager_notes: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Employee = {
   id: string;
   user_id: string | null;
@@ -580,6 +613,257 @@ export async function getDashboardData() {
     },
     automationActivity: normalizeAutomationLogs(automationActivity.data ?? []),
     activity: activity.data ?? [],
+  };
+}
+
+type OperationReservation = Reservation & {
+  customers: {
+    id: string;
+    full_name: string;
+    phone: string | null;
+    loyalty_code?: string | null;
+    loyalty_accounts?: { points_balance: number; tier: string }[] | { points_balance: number; tier: string } | null;
+  } | null;
+};
+
+type LowStockRow = {
+  id: string;
+  name: string;
+  unit: string;
+  min_stock: number;
+  inventory_batches?: { quantity: number }[];
+};
+
+export async function getOperationData() {
+  const current = await requireCurrentBusiness();
+  const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sevenDaysAgoDate = sevenDaysAgo.toISOString().slice(0, 10);
+
+  const [
+    reservations,
+    pendingReservations,
+    recentNoShows,
+    tasks,
+    overdueTasks,
+    openClockEntries,
+    wasteAlerts,
+    urgentBatches,
+    inventoryItems,
+    courtesies,
+    campaigns,
+    closure,
+  ] = await Promise.all([
+    supabase
+      .from("reservations")
+      .select("id, date, time, party_size, status, source, notes, special_request, customer_id, customers(id, full_name, phone, loyalty_code, loyalty_accounts(points_balance, tier))")
+      .eq("business_id", current.businessId)
+      .eq("date", today)
+      .order("time", { ascending: true }),
+    supabase
+      .from("reservations")
+      .select("id, date, time, party_size, status, customer_id, customers(id, full_name, phone)")
+      .eq("business_id", current.businessId)
+      .eq("status", "pending")
+      .gte("date", today)
+      .order("date", { ascending: true })
+      .limit(6),
+    supabase
+      .from("reservations")
+      .select("id, date, time, party_size, status, customer_id, customers(id, full_name, phone)")
+      .eq("business_id", current.businessId)
+      .eq("status", "no_show")
+      .gte("date", sevenDaysAgoDate)
+      .order("date", { ascending: false })
+      .limit(5),
+    supabase
+      .from("internal_tasks")
+      .select("id, title, description, priority, status, due_date, assigned_to, created_at, customers(id, full_name), reservations(id, date, time)")
+      .eq("business_id", current.businessId)
+      .in("status", ["pending", "in_progress"])
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .limit(8),
+    supabase
+      .from("internal_tasks")
+      .select("id, title, description, priority, status, due_date, assigned_to, created_at, customers(id, full_name), reservations(id, date, time)")
+      .eq("business_id", current.businessId)
+      .in("status", ["pending", "in_progress"])
+      .lt("due_date", `${today}T00:00:00.000Z`)
+      .order("due_date", { ascending: true })
+      .limit(6),
+    supabase
+      .from("time_clock_entries")
+      .select("id, employee_id, shift_id, clock_in, clock_out, break_start, break_end, notes, created_at, employees(full_name, position), shifts(date, start_time, end_time, role)")
+      .eq("business_id", current.businessId)
+      .is("clock_out", null)
+      .order("clock_in", { ascending: false }),
+    supabase
+      .from("waste_alerts")
+      .select("id, item_id, batch_id, risk_level, message, estimated_loss, status, created_at, inventory_items(name, unit)")
+      .eq("business_id", current.businessId)
+      .eq("status", "open")
+      .order("created_at", { ascending: false })
+      .limit(8),
+    supabase
+      .from("inventory_batches")
+      .select("id, item_id, quantity, initial_quantity, expiration_date, cost, status, inventory_items(name, unit)")
+      .eq("business_id", current.businessId)
+      .in("status", ["near_expiration", "urgent", "expired"])
+      .gt("quantity", 0)
+      .order("expiration_date", { ascending: true })
+      .limit(8),
+    supabase
+      .from("inventory_items")
+      .select("id, name, unit, min_stock, inventory_batches(quantity)")
+      .eq("business_id", current.businessId)
+      .eq("status", "active"),
+    supabase
+      .from("courtesies")
+      .select("id, closure_id, customer_id, employee_id, date, item_name, quantity, estimated_value, reason, authorized_by, notes, created_at, customers(full_name), employees(full_name)")
+      .eq("business_id", current.businessId)
+      .eq("date", today)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("campaigns")
+      .select("id, name, type, segment_key, message, channel, status, scheduled_at, sent_at, created_at")
+      .eq("business_id", current.businessId)
+      .eq("status", "draft")
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("daily_closures")
+      .select("id, date, summary, estimated_sales, completed_reservations, no_shows, courtesy_total, waste_total, incidents, manager_notes, status, created_at, updated_at")
+      .eq("business_id", current.businessId)
+      .eq("date", today)
+      .maybeSingle<DailyClosure>(),
+  ]);
+
+  const reservationRows = (reservations.data ?? []) as unknown as OperationReservation[];
+  const vipReservations = reservationRows.filter((reservation) => {
+    const account = Array.isArray(reservation.customers?.loyalty_accounts)
+      ? reservation.customers?.loyalty_accounts[0]
+      : reservation.customers?.loyalty_accounts;
+    return reservation.customers?.loyalty_code || ["gold", "black"].includes(account?.tier ?? "");
+  });
+  const lowStockItems = ((inventoryItems.data ?? []) as LowStockRow[])
+    .map((item) => {
+      const stock = (item.inventory_batches ?? []).reduce(
+        (sum, batch) => sum + Number(batch.quantity),
+        0,
+      );
+      return { ...item, stock };
+    })
+    .filter((item) => item.stock <= Number(item.min_stock));
+  const courtesyRows = (courtesies.data ?? []) as unknown as Courtesy[];
+  const courtesyTotal = courtesyRows.reduce(
+    (sum, courtesy) => sum + Number(courtesy.estimated_value) * Number(courtesy.quantity),
+    0,
+  );
+  const closureRow = closure.data ?? null;
+
+  return {
+    current,
+    today,
+    reservations: reservationRows,
+    pendingReservations: (pendingReservations.data ?? []) as unknown as OperationReservation[],
+    recentNoShows: (recentNoShows.data ?? []) as unknown as OperationReservation[],
+    vipReservations,
+    tasks: (tasks.data ?? []) as unknown as InternalTask[],
+    overdueTasks: (overdueTasks.data ?? []) as unknown as InternalTask[],
+    openClockEntries: (openClockEntries.data ?? []) as unknown as TimeClockEntry[],
+    wasteAlerts: (wasteAlerts.data ?? []) as unknown as WasteAlert[],
+    urgentBatches: (urgentBatches.data ?? []) as unknown as InventoryBatch[],
+    lowStockItems,
+    courtesies: courtesyRows,
+    courtesyTotal,
+    campaigns: (campaigns.data ?? []) as Campaign[],
+    closure: closureRow,
+    stats: {
+      reservationsToday: reservationRows.length,
+      expectedCustomers: reservationRows.reduce(
+        (sum, reservation) => sum + Number(reservation.party_size),
+        0,
+      ),
+      vipToday: vipReservations.length,
+      pendingTasks: tasks.data?.length ?? 0,
+      employeesWorking: openClockEntries.data?.length ?? 0,
+      wasteAlerts: wasteAlerts.data?.length ?? 0,
+      courtesiesToday: courtesyRows.length,
+      suggestedCampaigns: (campaigns.data?.length ?? 0) + (wasteAlerts.data?.length ? 1 : 0),
+      closurePending: closureRow?.status === "closed" ? 0 : 1,
+    },
+  };
+}
+
+export async function getDailyClosureData(dateInput?: string) {
+  const current = await requireCurrentBusiness();
+  const supabase = await createClient();
+  const date = dateInput || new Date().toISOString().slice(0, 10);
+
+  const [closure, courtesies, customers, employees, reservationCounts, wasteMovements] =
+    await Promise.all([
+      supabase
+        .from("daily_closures")
+        .select("id, date, summary, estimated_sales, completed_reservations, no_shows, courtesy_total, waste_total, incidents, manager_notes, status, created_at, updated_at")
+        .eq("business_id", current.businessId)
+        .eq("date", date)
+        .maybeSingle<DailyClosure>(),
+      supabase
+        .from("courtesies")
+        .select("id, closure_id, customer_id, employee_id, date, item_name, quantity, estimated_value, reason, authorized_by, notes, created_at, customers(full_name), employees(full_name)")
+        .eq("business_id", current.businessId)
+        .eq("date", date)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("customers")
+        .select("id, full_name, phone, email, birthday, loyalty_code, loyalty_enabled, tags, notes, total_visits, total_spent, last_visit_at, status, created_at")
+        .eq("business_id", current.businessId)
+        .eq("status", "active")
+        .order("full_name", { ascending: true })
+        .limit(80),
+      supabase
+        .from("employees")
+        .select("id, user_id, full_name, phone, email, position, status, created_at")
+        .eq("business_id", current.businessId)
+        .eq("status", "active")
+        .order("full_name", { ascending: true }),
+      supabase
+        .from("reservations")
+        .select("id, status")
+        .eq("business_id", current.businessId)
+        .eq("date", date),
+      supabase
+        .from("inventory_movements")
+        .select("quantity")
+        .eq("business_id", current.businessId)
+        .eq("type", "waste")
+        .gte("created_at", `${date}T00:00:00.000Z`)
+        .lt("created_at", `${date}T23:59:59.999Z`),
+    ]);
+
+  const courtesyRows = (courtesies.data ?? []) as unknown as Courtesy[];
+  const courtesyTotal = courtesyRows.reduce(
+    (sum, courtesy) => sum + Number(courtesy.estimated_value) * Number(courtesy.quantity),
+    0,
+  );
+  const reservationRows = reservationCounts.data ?? [];
+
+  return {
+    current,
+    date,
+    closure: closure.data,
+    courtesies: courtesyRows,
+    customers: (customers.data ?? []) as Customer[],
+    employees: (employees.data ?? []) as Employee[],
+    defaults: {
+      completedReservations: reservationRows.filter((reservation) => reservation.status === "completed").length,
+      noShows: reservationRows.filter((reservation) => reservation.status === "no_show").length,
+      courtesyTotal,
+      wasteTotal:
+        wasteMovements.data?.reduce((sum, movement) => sum + Number(movement.quantity), 0) ?? 0,
+    },
   };
 }
 

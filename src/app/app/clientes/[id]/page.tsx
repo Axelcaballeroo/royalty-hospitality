@@ -19,6 +19,7 @@ import { getCustomerDetail } from "@/lib/data";
 import { createQrDataUrl } from "@/lib/qr";
 import { DataTable, EmptyState, ModuleCard, StatusBadge } from "@/components/ui";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { PublicLinkActions } from "@/components/public-link-actions";
 import { formatCurrency } from "@/lib/wallet";
 import { formatEventType, formatRoleName, formatStatus } from "@/lib/formatters";
 
@@ -47,6 +48,7 @@ export default async function CustomerDetailPage({
     campaignRecipients,
     walletAccount,
     walletTransactions,
+    current,
   } =
     await getCustomerDetail(id);
 
@@ -55,6 +57,7 @@ export default async function CustomerDetailPage({
   }
 
   const qrDataUrl = await createQrDataUrl(customer.loyalty_code ?? customer.id);
+  const clubLink = `/club/${current.business.slug}`;
 
   return (
     <div className="space-y-6">
@@ -71,6 +74,27 @@ export default async function CustomerDetailPage({
       </div>
       {messages.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formatEventType(messages.error)}</p> : null}
       {messages.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{formatEventType(messages.success)}</p> : null}
+
+      <ModuleCard title="Acceso al Club" description="Cliente ya puede acceder al Club con su telefono y codigo.">
+        <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+          <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+            <p className="text-sm font-semibold text-stone-950">Codigo de club</p>
+            <p className="mt-2 text-2xl font-semibold text-stone-950">{customer.loyalty_code ?? "Sin codigo"}</p>
+            <p className="mt-2 break-all text-sm text-stone-500">{clubLink}</p>
+            <div className="mt-4">
+              <PublicLinkActions href={clubLink} />
+            </div>
+          </div>
+          <Image
+            src={qrDataUrl}
+            alt="QR del club del cliente"
+            width={144}
+            height={144}
+            unoptimized
+            className="size-36 rounded-lg border border-stone-200 bg-white p-2"
+          />
+        </div>
+      </ModuleCard>
 
       <section id="fidelizacion" className="grid gap-4 xl:grid-cols-[0.7fr_1.3fr]">
         <ModuleCard title="Fidelizacion" description="Cuenta de puntos, nivel actual y ajuste manual.">

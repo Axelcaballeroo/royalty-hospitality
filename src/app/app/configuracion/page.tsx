@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ExternalLink } from "lucide-react";
 import {
   updateBusinessProfileAction,
@@ -8,6 +9,7 @@ import {
 } from "@/app/app/actions";
 import { getBusinessSettingsData } from "@/lib/data";
 import { ModuleCard, StatusBadge } from "@/components/ui";
+import { PublicLinkActions } from "@/components/public-link-actions";
 import { getModuleAccess, moduleCatalog, planModules } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +23,15 @@ export default async function SettingsPage({
   const { current, hours, modules, settings, users } = await getBusinessSettingsData();
   const { plan, access } = await getModuleAccess();
   const business = current.business;
+  const headerStore = await headers();
+  const protocol = headerStore.get("x-forwarded-proto") ?? "https";
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "";
+  const origin = host ? `${protocol}://${host}` : "";
+  const publicLinks = [
+    { label: "Link del Club", href: `${origin}/club/${business.slug}` },
+    { label: "Link de Reservas", href: `${origin}/site/${business.slug}/reservas` },
+    { label: "Link Web publica", href: `${origin}/site/${business.slug}` },
+  ];
   const includedModules = planModules[plan];
   const blockedModules = Object.keys(moduleCatalog).filter((moduleKey) => !access[moduleKey]);
 
@@ -128,6 +139,19 @@ export default async function SettingsPage({
         </ModuleCard>
 
         <div className="space-y-4">
+          <ModuleCard title="Links publicos" description="Accesos listos para compartir con clientes y staff.">
+            <div className="grid gap-3">
+              {publicLinks.map((item) => (
+                <div key={item.href} className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+                  <p className="text-sm font-semibold text-stone-950">{item.label}</p>
+                  <p className="mt-1 break-all text-xs text-stone-500">{item.href}</p>
+                  <div className="mt-3">
+                    <PublicLinkActions href={item.href} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ModuleCard>
           <ModuleCard title="Plan contratado" description="Informacion actual del tenant.">
             <div className="space-y-4 text-sm text-stone-600">
               <p><span className="font-medium text-stone-950">Slug:</span> {business.slug}</p>

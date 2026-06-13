@@ -1,6 +1,8 @@
 import {
   BarChart3,
   CalendarDays,
+  ClipboardCheck,
+  ClipboardList,
   Clock3,
   Gift,
   HelpCircle,
@@ -18,7 +20,9 @@ import {
 } from "lucide-react";
 
 export const privateNavigation = [
+  { name: "Operacion de hoy", href: "/app/operacion", icon: ClipboardList, moduleKey: "dashboard" },
   { name: "Dashboard", href: "/app/dashboard", icon: Home, moduleKey: "dashboard" },
+  { name: "Cierre del dia", href: "/app/cierre", icon: ClipboardCheck, moduleKey: "dashboard" },
   { name: "Demo", href: "/app/demo", icon: Route, moduleKey: "dashboard", adminOnly: true },
   { name: "Reservas", href: "/app/reservas", icon: Clock3, moduleKey: "reservations" },
   { name: "Clientes", href: "/app/clientes", icon: Users, moduleKey: "crm" },

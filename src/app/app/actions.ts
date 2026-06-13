@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentBusiness } from "@/lib/current-business";
-import { applyLoyaltyPoints } from "@/lib/loyalty";
+import { applyLoyaltyPoints, ensureLoyaltyAccount } from "@/lib/loyalty";
 import { generateLoyaltyCode } from "@/lib/loyalty-code";
 import { getSegmentCustomers } from "@/lib/marketing";
 import { getBatchStatus, getRiskLevel, inventoryMovementTypes, inventoryUnits } from "@/lib/inventory";
@@ -80,6 +80,40 @@ async function addCustomerEvent(input: {
   });
 }
 
+async function ensureCustomerClubAccess(input: {
+  businessId: string;
+  customerId: string;
+  prefixSource: string;
+}) {
+  const supabase = await createClient();
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("loyalty_code")
+    .eq("business_id", input.businessId)
+    .eq("id", input.customerId)
+    .maybeSingle<{ loyalty_code: string | null }>();
+
+  if (!customer?.loyalty_code) {
+    await supabase
+      .from("customers")
+      .update({
+        loyalty_code: await createUniqueLoyaltyCode({
+          businessId: input.businessId,
+          prefixSource: input.prefixSource,
+        }),
+        loyalty_enabled: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("business_id", input.businessId)
+      .eq("id", input.customerId);
+  }
+
+  await ensureLoyaltyAccount({
+    businessId: input.businessId,
+    customerId: input.customerId,
+  });
+}
+
 export async function createCustomerAction(formData: FormData) {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
@@ -122,6 +156,16 @@ export async function createCustomerAction(formData: FormData) {
     title: "Cliente creado",
     description: `Se creo el cliente ${fullName}`,
   });
+
+  try {
+    await ensureCustomerClubAccess({
+      businessId: current.businessId,
+      customerId: data.id,
+      prefixSource: current.business.slug,
+    });
+  } catch (error) {
+    redirect(`/app/clientes?error=${encodeURIComponent(error instanceof Error ? error.message : "club_access_failed")}`);
+  }
 
   revalidatePath("/app/clientes");
   redirect(`/app/clientes/${data.id}`);
@@ -371,6 +415,16 @@ export async function createReservationAction(formData: FormData) {
     });
   }
 
+  try {
+    await ensureCustomerClubAccess({
+      businessId: current.businessId,
+      customerId,
+      prefixSource: current.business.slug,
+    });
+  } catch (error) {
+    redirect(`/app/reservas?error=${encodeURIComponent(error instanceof Error ? error.message : "club_access_failed")}`);
+  }
+
   const { data, error } = await supabase
     .from("reservations")
     .insert({
@@ -402,6 +456,7 @@ export async function createReservationAction(formData: FormData) {
   });
 
   revalidatePath("/app/reservas");
+  revalidatePath("/app/operacion");
   redirect("/app/reservas?success=reservation_created");
 }
 
@@ -411,9 +466,10 @@ export async function updateReservationStatusAction(formData: FormData) {
   const id = requiredString(formData, "reservation_id");
   const customerId = requiredString(formData, "customer_id");
   const status = requiredString(formData, "status");
+  const returnTo = requiredString(formData, "return_to") || "/app/reservas";
 
   if (!validReservationStatuses.includes(status)) {
-    redirect("/app/reservas?error=invalid_status");
+    redirect(`${returnTo}?error=invalid_status`);
   }
 
   const { data: existingReservation } = await supabase
@@ -435,7 +491,7 @@ export async function updateReservationStatusAction(formData: FormData) {
     .eq("id", id);
 
   if (error) {
-    redirect(`/app/reservas?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
   }
 
   if (status === "completed" && existingReservation?.status !== "completed") {
@@ -475,7 +531,7 @@ export async function updateReservationStatusAction(formData: FormData) {
         reservationId: id,
       });
     } catch (loyaltyError) {
-      redirect(`/app/reservas?error=${encodeURIComponent(loyaltyError instanceof Error ? loyaltyError.message : "loyalty_points_failed")}`);
+      redirect(`${returnTo}?error=${encodeURIComponent(loyaltyError instanceof Error ? loyaltyError.message : "loyalty_points_failed")}`);
     }
   }
 
@@ -500,7 +556,8 @@ export async function updateReservationStatusAction(formData: FormData) {
   });
 
   revalidatePath("/app/reservas");
-  redirect("/app/reservas?success=status_updated");
+  revalidatePath("/app/operacion");
+  redirect(`${returnTo}?success=status_updated`);
 }
 
 export async function updateReservationAction(formData: FormData) {
@@ -1214,13 +1271,14 @@ export async function createWasteReductionCampaignAction(formData: FormData) {
   const supabase = await createClient();
   const alertId = requiredString(formData, "alert_id");
   const itemName = requiredString(formData, "item_name") || "producto especial";
+  const returnTo = requiredString(formData, "return_to") || "/app/inventario";
 
   if (!alertId) {
-    redirect("/app/inventario?error=waste_alert_required");
+    redirect(`${returnTo}?error=waste_alert_required`);
   }
 
   const message =
-    `Hoy tenemos una promocion especial de ${itemName} en ${current.business.name}. Ven antes de que termine el dia.`;
+    "Hoy tenemos una promoción especial en productos seleccionados. Reserva o visítanos antes de que termine el día.";
 
   const { data, error } = await supabase
     .from("campaigns")
@@ -1228,17 +1286,18 @@ export async function createWasteReductionCampaignAction(formData: FormData) {
       business_id: current.businessId,
       name: `Anti-merma ${itemName}`,
       type: "waste_reduction",
-      segment_key: "all_customers",
+      segment_key: "customers_with_points",
       channel: "manual",
       message,
       status: "draft",
       created_by: current.userId,
+      waste_alert_id: alertId,
     })
     .select("id")
     .single<{ id: string }>();
 
   if (error || !data) {
-    redirect(`/app/inventario?error=${encodeURIComponent(error?.message ?? "waste_campaign_failed")}`);
+    redirect(`${returnTo}?error=${encodeURIComponent(error?.message ?? "waste_campaign_failed")}`);
   }
 
   await supabase.from("automation_logs").insert({
@@ -1255,6 +1314,7 @@ export async function createWasteReductionCampaignAction(formData: FormData) {
 
   revalidatePath("/app/inventario");
   revalidatePath("/app/marketing");
+  revalidatePath("/app/operacion");
   redirect(`/app/marketing/${data.id}?success=waste_campaign_created`);
 }
 
@@ -1931,6 +1991,92 @@ export async function sendCampaignAction(formData: FormData) {
   revalidatePath("/app/marketing");
   revalidatePath(`/app/marketing/${campaign.id}`);
   redirect(`/app/marketing/${campaign.id}?success=campaign_sent`);
+}
+
+export async function upsertDailyClosureAction(formData: FormData) {
+  const current = await requireCurrentBusiness();
+  const supabase = await createClient();
+  const date = requiredString(formData, "date") || new Date().toISOString().slice(0, 10);
+  const status = requiredString(formData, "status") === "closed" ? "closed" : "draft";
+
+  const payload = {
+    business_id: current.businessId,
+    date,
+    summary: requiredString(formData, "summary") || null,
+    estimated_sales: parsePositiveNumber(requiredString(formData, "estimated_sales")),
+    completed_reservations: Math.max(0, Math.round(parsePositiveNumber(requiredString(formData, "completed_reservations")))),
+    no_shows: Math.max(0, Math.round(parsePositiveNumber(requiredString(formData, "no_shows")))),
+    courtesy_total: parsePositiveNumber(requiredString(formData, "courtesy_total")),
+    waste_total: parsePositiveNumber(requiredString(formData, "waste_total")),
+    incidents: requiredString(formData, "incidents") || null,
+    manager_notes: requiredString(formData, "manager_notes") || null,
+    status,
+    created_by: current.userId,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("daily_closures")
+    .upsert(payload, { onConflict: "business_id,date" })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !data) {
+    redirect(`/app/cierre?date=${date}&error=${encodeURIComponent(error?.message ?? "closure_failed")}`);
+  }
+
+  await supabase
+    .from("courtesies")
+    .update({ closure_id: data.id })
+    .eq("business_id", current.businessId)
+    .eq("date", date)
+    .is("closure_id", null);
+
+  revalidatePath("/app/cierre");
+  revalidatePath("/app/operacion");
+  redirect(`/app/cierre?date=${date}&success=${status === "closed" ? "closure_closed" : "closure_saved"}`);
+}
+
+export async function createCourtesyAction(formData: FormData) {
+  const current = await requireCurrentBusiness();
+  const supabase = await createClient();
+  const date = requiredString(formData, "date") || new Date().toISOString().slice(0, 10);
+  const itemName = requiredString(formData, "item_name");
+  const reason = requiredString(formData, "reason") || "otro";
+  const returnTo = requiredString(formData, "return_to") || `/app/cierre?date=${date}`;
+
+  if (!itemName) {
+    redirect(`${returnTo}&error=courtesy_validation`);
+  }
+
+  const { data: closure } = await supabase
+    .from("daily_closures")
+    .select("id")
+    .eq("business_id", current.businessId)
+    .eq("date", date)
+    .maybeSingle<{ id: string }>();
+
+  const { error } = await supabase.from("courtesies").insert({
+    business_id: current.businessId,
+    closure_id: closure?.id ?? null,
+    customer_id: requiredString(formData, "customer_id") || null,
+    employee_id: requiredString(formData, "employee_id") || null,
+    date,
+    item_name: itemName,
+    quantity: Math.max(1, Math.round(parsePositiveNumber(requiredString(formData, "quantity")) || 1)),
+    estimated_value: parsePositiveNumber(requiredString(formData, "estimated_value")),
+    reason,
+    authorized_by: requiredString(formData, "authorized_by") || null,
+    notes: requiredString(formData, "notes") || null,
+  });
+
+  if (error) {
+    redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/app/cierre");
+  revalidatePath("/app/operacion");
+  redirect(`${returnTo}&success=courtesy_created`);
 }
 
 export async function updateCampaignRecipientStatusAction(formData: FormData) {

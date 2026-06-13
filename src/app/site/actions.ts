@@ -98,6 +98,28 @@ export async function createPublicReservationAction(formData: FormData) {
     if (customerUpdateError) {
       redirect(`/site/${businessSlug}/reservas?error=${encodeURIComponent(customerUpdateError.message)}`);
     }
+
+    const { data: updatedCustomer } = await admin
+      .from("customers")
+      .select("loyalty_code")
+      .eq("business_id", business.id)
+      .eq("id", customerId)
+      .maybeSingle<{ loyalty_code: string | null }>();
+
+    if (!updatedCustomer?.loyalty_code) {
+      await admin
+        .from("customers")
+        .update({
+          loyalty_code: await createUniqueLoyaltyCode({
+            businessId: business.id,
+            prefixSource: businessSlug,
+          }),
+          loyalty_enabled: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("business_id", business.id)
+        .eq("id", customerId);
+    }
   } else {
     const { data: customer, error: customerError } = await admin
       .from("customers")
@@ -121,6 +143,20 @@ export async function createPublicReservationAction(formData: FormData) {
     }
 
     customerId = customer.id;
+  }
+
+  const { error: loyaltyError } = await admin.from("loyalty_accounts").upsert(
+    {
+      business_id: business.id,
+      customer_id: customerId,
+      points_balance: 0,
+      tier: "bronze",
+    },
+    { onConflict: "business_id,customer_id", ignoreDuplicates: true },
+  );
+
+  if (loyaltyError) {
+    redirect(`/site/${businessSlug}/reservas?error=${encodeURIComponent(loyaltyError.message)}`);
   }
 
   const { data: reservation, error: reservationError } = await admin

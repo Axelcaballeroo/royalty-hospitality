@@ -205,6 +205,7 @@ export default async function InventoryPage({
                       <form action={createWasteReductionCampaignAction}>
                         <input type="hidden" name="alert_id" value={alert.id} />
                         <input type="hidden" name="item_name" value={itemName} />
+                        <input type="hidden" name="return_to" value="/app/inventario" />
                         <button className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 font-medium text-stone-800 transition hover:border-stone-300">
                         <AlertTriangle size={14} />
                         Crear campana anti-merma

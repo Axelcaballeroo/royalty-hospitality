@@ -23,6 +23,43 @@ const campaignTypes = [
   "event",
 ];
 const channels = ["manual", "whatsapp", "email", "sms", "push"];
+const marketingPlays = [
+  {
+    title: "Recuperar clientes inactivos",
+    description: "Invita a volver a quienes no visitan hace 60 dias.",
+    type: "inactive_customers",
+    segment: "inactive_60d",
+    message: "Hola {{nombre}}, te extranamos en {{negocio}}. Vuelve esta semana y recibe un beneficio especial.",
+  },
+  {
+    title: "Promocionar producto por vencer",
+    description: "Convierte riesgo de merma en visita hoy.",
+    type: "waste_reduction",
+    segment: "customers_with_points",
+    message: "Hoy tenemos una promoción especial en productos seleccionados. Reserva o visítanos antes de que termine el día.",
+  },
+  {
+    title: "Cumpleaños del mes",
+    description: "Activa un beneficio para clientes que cumplen este mes.",
+    type: "birthday",
+    segment: "birthday_month",
+    message: "Hola {{nombre}}, en {{negocio}} queremos celebrar contigo. Este mes tienes un beneficio especial.",
+  },
+  {
+    title: "Clientes VIP",
+    description: "Comunica experiencias especiales a clientes frecuentes.",
+    type: "vip",
+    segment: "vip_customers",
+    message: "Hola {{nombre}}, tenemos una experiencia especial para clientes VIP en {{negocio}}.",
+  },
+  {
+    title: "Clientes con puntos disponibles",
+    description: "Recuerda a clientes con saldo que pueden volver a usarlo.",
+    type: "reward",
+    segment: "customers_with_points",
+    message: "Hola {{nombre}}, tienes {{puntos}} puntos disponibles. Puedes usarlos en tu proxima visita.",
+  },
+];
 
 export default async function MarketingPage({
   searchParams,
@@ -83,6 +120,23 @@ export default async function MarketingPage({
         <StatCard title="Cumpleanos" value={String(metrics.birthdayCustomers)} detail="Este mes" />
         <StatCard title="Clientes VIP" value={String(metrics.vipCustomers)} detail="Visitas o gasto" />
       </section>
+
+      <ModuleCard title="Acciones de marketing" description="Elige el objetivo de negocio y crea una campana lista para editar.">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {marketingPlays.map((play) => (
+            <div key={play.title} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+              <p className="text-sm font-semibold text-stone-950">{play.title}</p>
+              <p className="mt-2 text-sm leading-6 text-stone-600">{play.description}</p>
+              <Link
+                href={`/app/marketing?type=${play.type}&segment=${play.segment}&name=${encodeURIComponent(play.title)}&message=${encodeURIComponent(play.message)}`}
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-stone-950 px-3 text-sm font-medium text-white transition hover:bg-stone-800"
+              >
+                Crear campana
+              </Link>
+            </div>
+          ))}
+        </div>
+      </ModuleCard>
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <ModuleCard title="Crear campana" description="Guarda borrador, agenda o envia una campana simulada.">

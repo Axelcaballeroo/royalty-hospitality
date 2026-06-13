@@ -16,6 +16,14 @@ export default async function DashboardPage() {
         eyebrow={current.business.name}
         title="Dashboard ejecutivo"
         description="Pulso del negocio por dia, crecimiento, operacion y alertas comerciales."
+        actions={
+          <Link
+            href="/app/operacion"
+            className="inline-flex h-11 items-center justify-center rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
+          >
+            Ir a operacion de hoy
+          </Link>
+        }
       />
 
       {!current.business.onboarding_completed ? (
@@ -73,8 +81,14 @@ export default async function DashboardPage() {
         <ModuleCard title="Acciones rapidas" description="Atajos para operar desde el dashboard.">
           <div className="grid gap-3 sm:grid-cols-3">
             <Link
-              href="/app/reservas"
+              href="/app/operacion"
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-950 focus-visible:ring-offset-2"
+            >
+              Operacion de hoy
+            </Link>
+            <Link
+              href="/app/reservas"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-950 focus-visible:ring-offset-2"
             >
               <Plus size={16} />
               Crear reserva
