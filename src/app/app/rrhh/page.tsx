@@ -7,7 +7,7 @@ import {
   updateShiftAction,
 } from "@/app/app/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
-import { DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
+import { ActionCard, DataTable, EmptyState, ModuleCard, StatCard, StatusBadge } from "@/components/ui";
 import { getHrData } from "@/lib/data";
 import { employeeStatuses, formatHours, getTodayDate, shiftStatuses } from "@/lib/hr";
 import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
@@ -44,13 +44,13 @@ export default async function PeoplePage({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-700">
-            RRHH
+            Equipo
           </p>
           <h1 className="mt-3 text-3xl font-semibold text-stone-950">
-            RRHH V1 y checador
+            Equipo y operacion interna
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            Control operativo de empleados, turnos y entradas/salidas. Nomina y reglas avanzadas quedan para una fase futura.
+            Empleados, turnos, tareas internas, comentarios y checador en un solo flujo operativo.
           </p>
         </div>
         <Link
@@ -82,8 +82,16 @@ export default async function PeoplePage({
         <StatCard title="Horas semana" value={formatHours(summary.weekHours)} detail="Estimadas, sin nomina" />
       </section>
 
+      <ModuleCard title="Flujos del equipo" description="Accesos principales para coordinar sala, cocina y administracion.">
+        <div className="grid gap-3 md:grid-cols-3">
+          <ActionCard title="Checador" description="Registra entradas, salidas y descansos." href="/app/rrhh/checador" action="Abrir" />
+          <ActionCard title="Tareas internas" description="Coordina pendientes del equipo." href="/app/crm-interno" action="Ver tareas" />
+          <ActionCard title="Comentarios" description="Da seguimiento a notas operativas." href="/app/crm-interno" action="Abrir" />
+        </div>
+      </ModuleCard>
+
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <ModuleCard title="Crear empleado" description="No requiere usuario del sistema; el checador manual funciona igual.">
+        <ModuleCard title="Crear empleado" description="Agrega a una persona del equipo para turnos y checador.">
           <form action={createEmployeeAction} className="grid gap-3">
             <input required name="full_name" placeholder="Nombre completo" className={fieldClass} />
             <div className="grid gap-3 sm:grid-cols-2">
@@ -95,7 +103,7 @@ export default async function PeoplePage({
               <select name="status" defaultValue="active" className={fieldClass}>
                 {employeeStatuses.map((status) => (
                   <option key={status} value={status}>
-                    {status}
+                    {status === "active" ? "activo" : "inactivo"}
                   </option>
                 ))}
               </select>
@@ -135,7 +143,7 @@ export default async function PeoplePage({
               <select name="status" defaultValue="scheduled" className={fieldClass}>
                 {shiftStatuses.map((status) => (
                   <option key={status} value={status}>
-                    {status}
+                    {status === "scheduled" ? "programado" : status === "completed" ? "completado" : "cancelado"}
                   </option>
                 ))}
               </select>
@@ -259,11 +267,11 @@ export default async function PeoplePage({
         </ModuleCard>
       </section>
 
-      <ModuleCard title="Reportes basicos" description="Resumen operativo sin calculo de nomina.">
+        <ModuleCard title="Resumen del equipo" description="Lectura operativa sin calculo de nomina.">
         <div className="grid gap-3 md:grid-cols-5">
           {[
             ["Horas semana", formatHours(summary.weekHours)],
-            ["Entradas tardias", `${summary.lateEntries} placeholder`],
+            ["Entradas tardias", `${summary.lateEntries} registros`],
             ["Salidas pendientes", String(summary.pendingClockOuts)],
             ["Turnos completados", String(summary.completedShifts)],
             ["Turnos perdidos", String(summary.missedShifts)],

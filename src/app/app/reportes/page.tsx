@@ -45,7 +45,7 @@ export default async function ReportsPage({
             Reportes ejecutivos
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            Lectura multi-modulo del negocio activo. Todos los datos se filtran por tenant.
+            Lectura de todos los modulos del negocio activo, lista para decisiones ejecutivas.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

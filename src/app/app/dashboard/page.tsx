@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getDashboardData } from "@/lib/data";
-import { EmptyState, ModuleCard, SectionHeader, StatCard, StatusBadge } from "@/components/ui";
+import { ActionCard, EmptyState, ModuleCard, SectionHeader, StatCard, StatusBadge } from "@/components/ui";
 import { formatEventType } from "@/lib/formatters";
 import { canSeeAdminGuidance } from "@/lib/navigation";
 
@@ -15,11 +15,11 @@ export default async function DashboardPage() {
       <SectionHeader
         eyebrow={current.business.name}
         title="Dashboard ejecutivo"
-        description="Pulso del negocio por dia, crecimiento, operacion y alertas comerciales."
+        description="Lectura ejecutiva de crecimiento, clientes, fidelizacion, marketing, merma y equipo."
         actions={
           <Link
             href="/app/operacion"
-            className="inline-flex h-11 items-center justify-center rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
+            className="inline-flex h-12 items-center justify-center rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800"
           >
             Ir a operacion de hoy
           </Link>
@@ -35,46 +35,22 @@ export default async function DashboardPage() {
         </Link>
       ) : null}
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-stone-950">Hoy</h2>
-        <div className="grid gap-4 md:grid-cols-3">
-          <StatCard title="Reservas hoy" value={String(stats.reservationsToday)} detail="Fecha actual del servidor" tone="dark" />
-          <StatCard title="Turnos de hoy" value={String(stats.shiftsToday)} detail="Equipo programado" />
-          <StatCard title="Trabajando ahora" value={String(stats.employeesWorkingNow)} detail="Checador RRHH" />
-        </div>
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <StatCard title="Clientes nuevos" value={String(stats.customersNew)} detail="Crecimiento mensual" tone="dark" />
+        <StatCard title="Clientes inactivos" value={String(stats.inactiveCustomers)} detail="Oportunidad de recuperacion" />
+        <StatCard title="Puntos emitidos" value={String(stats.pointsIssued)} detail="Fidelizacion" />
+        <StatCard title="Campanas enviadas" value={String(stats.campaignsSent)} detail="Marketing" />
+        <StatCard title="Merma estimada" value={`$${stats.estimatedWasteLoss.toFixed(0)}`} detail="Perdida en riesgo" />
+        <StatCard title="Equipo trabajando" value={String(stats.employeesWorkingNow)} detail="Operacion en sala" />
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-stone-950">Crecimiento</h2>
-        <div className="grid gap-4 md:grid-cols-4">
-          <StatCard title="Clientes nuevos mes" value={String(stats.customersNew)} detail="Creados este mes" />
-          <StatCard title="Clientes inactivos" value={String(stats.inactiveCustomers)} detail="60 dias" />
-          <StatCard title="Campanas enviadas" value={String(stats.campaignsSent)} detail="Este mes" />
-          <StatCard title="Puntos emitidos" value={String(stats.pointsIssued)} detail="Este mes" />
+      <ModuleCard title="Lectura ejecutiva" description="Senales para decidir que mover hoy sin entrar al detalle operativo.">
+        <div className="grid gap-3 md:grid-cols-3">
+          <ActionCard title="Clientes" description={`${stats.inactiveCustomers} clientes necesitan una razon para volver.`} href="/app/clientes" action="Ver clientes" />
+          <ActionCard title="Marketing" description={`${stats.customersReached} clientes alcanzados por campanas recientes.`} href="/app/marketing" action="Ver acciones" />
+          <ActionCard title="Merma" description={`${stats.openWasteAlerts} alertas abiertas pueden convertirse en promocion.`} href="/app/inventario" action="Controlar" />
         </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-stone-950">Operacion</h2>
-        <div className="grid gap-4 md:grid-cols-4">
-          <StatCard title="Reservas pendientes" value={String(stats.pendingReservations)} detail="Por confirmar" />
-          <StatCard title="No-shows del mes" value={String(stats.noShows)} detail="Requieren seguimiento" />
-          <StatCard title="Clientes totales" value={String(stats.customersTotal)} detail="CRM del tenant" />
-          <StatCard title="Tareas pendientes" value={String(stats.pendingTasks)} detail="Internas" />
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-stone-950">Alertas</h2>
-        <div className="grid gap-4 md:grid-cols-4">
-          <StatCard title="Alertas de merma" value={String(stats.openWasteAlerts)} detail="Abiertas" />
-          <StatCard title="Lotes urgentes" value={String(stats.urgentBatches)} detail="Vencimiento critico" />
-          <StatCard title="Merma estimada" value={`$${stats.estimatedWasteLoss.toFixed(0)}`} detail="MXN en riesgo" />
-          <StatCard title="Salidas pendientes" value={String(stats.pendingClockOuts)} detail="Entradas abiertas" />
-          <StatCard title="Automatizaciones" value={String(stats.automationsToday)} detail="Ejecutadas hoy" />
-          <StatCard title="Errores auto" value={String(stats.automationErrorsToday)} detail="Revisar logs" />
-        </div>
-      </section>
+      </ModuleCard>
 
       <section className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <StatCard title="Clientes alcanzados" value={String(stats.customersReached)} detail="Marketing este mes" />

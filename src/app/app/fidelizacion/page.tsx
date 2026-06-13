@@ -39,7 +39,7 @@ export default async function LoyaltyPage({
           Puntos, niveles y beneficios
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-          Programa V1 multi-tenant conectado a clientes, reservas completadas y timeline CRM.
+          Programa conectado a clientes, reservas completadas e historial comercial.
         </p>
       </div>
 
@@ -58,10 +58,10 @@ export default async function LoyaltyPage({
 
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
         <StatCard title="Puntos activos" value={String(totalPoints)} detail="Balance total de cuentas" tone="dark" />
-        <StatCard title="Clientes registrados" value={String(summary.registeredCustomers)} detail="loyalty_accounts" />
+        <StatCard title="Clientes registrados" value={String(summary.registeredCustomers)} detail="Cuentas de puntos" />
         <StatCard title="Recompensas activas" value={String(activeRewards.length)} detail="Beneficios disponibles" />
-        <StatCard title="Puntos emitidos" value={String(summary.pointsIssued)} detail="Historico earn" />
-        <StatCard title="Puntos canjeados" value={String(summary.pointsRedeemed)} detail="Historico redeem" />
+        <StatCard title="Puntos emitidos" value={String(summary.pointsIssued)} detail="Acumulado historico" />
+        <StatCard title="Puntos canjeados" value={String(summary.pointsRedeemed)} detail="Beneficios usados" />
       </section>
 
       <section className="grid gap-4 md:grid-cols-4">
@@ -72,7 +72,7 @@ export default async function LoyaltyPage({
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.8fr]">
-        <ModuleCard title="Clientes con puntos" description="Resumen de loyalty_accounts por cliente.">
+        <ModuleCard title="Clientes con puntos" description="Resumen de puntos por cliente.">
           {accounts.length ? (
             <DataTable
               columns={["Cliente", "Telefono", "Puntos", "Nivel"]}
@@ -92,7 +92,7 @@ export default async function LoyaltyPage({
           )}
         </ModuleCard>
 
-        <ModuleCard title="Niveles" description="Tier automatico segun points_balance.">
+        <ModuleCard title="Niveles" description="Nivel automatico segun puntos acumulados.">
           <div className="grid gap-3">
             {loyaltyTiers.map((tier) => (
               <div key={tier.key} className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-3">
@@ -111,8 +111,8 @@ export default async function LoyaltyPage({
             <textarea name="description" placeholder="Descripcion" className="min-h-20 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
             <input required min={1} type="number" name="points_required" placeholder="Puntos requeridos" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <select name="status" defaultValue="active" className="h-11 rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400">
-              <option value="active">active</option>
-              <option value="inactive">inactive</option>
+              <option value="active">activa</option>
+              <option value="inactive">pausada</option>
             </select>
             <button className="h-11 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">
               Crear recompensa
@@ -157,7 +157,7 @@ export default async function LoyaltyPage({
           </form>
         </ModuleCard>
 
-        <ModuleCard title="Movimientos recientes" description="Historial de loyalty_transactions.">
+        <ModuleCard title="Movimientos recientes" description="Historial de puntos y canjes.">
           {transactions.length ? (
             <DataTable
               columns={["Cliente", "Tipo", "Puntos", "Descripcion"]}

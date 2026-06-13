@@ -17,7 +17,7 @@ import {
 } from "@/app/app/actions";
 import { getCustomerDetail } from "@/lib/data";
 import { createQrDataUrl } from "@/lib/qr";
-import { DataTable, EmptyState, ModuleCard, StatusBadge } from "@/components/ui";
+import { DataPanel, DataTable, EmptyState, ModuleCard, StatusBadge } from "@/components/ui";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { PublicLinkActions } from "@/components/public-link-actions";
 import { formatCurrency } from "@/lib/wallet";
@@ -65,15 +65,23 @@ export default async function CustomerDetailPage({
         <Link href="/app/clientes" className="text-sm font-medium text-stone-500 hover:text-stone-950">
           Volver a clientes
         </Link>
-        <h1 className="mt-3 text-3xl font-semibold text-stone-950">
-          {customer.full_name}
+        <h1 className="mt-3 text-4xl font-semibold text-stone-950">
+          Perfil 360: {customer.full_name}
         </h1>
-        <p className="mt-2 text-sm text-stone-500">
+        <p className="mt-2 text-base text-stone-500">
           {customer.phone ?? "Sin telefono"} / {customer.email ?? "Sin email"}
         </p>
       </div>
       {messages.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formatEventType(messages.error)}</p> : null}
       {messages.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{formatEventType(messages.success)}</p> : null}
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <DataPanel title="Nivel" value={loyaltyAccount?.tier ?? "Bronze"} detail="Fidelizacion" />
+        <DataPanel title="Puntos" value={String(loyaltyAccount?.points_balance ?? 0)} detail="Disponibles" />
+        <DataPanel title="Monedero" value={walletAccount ? formatCurrency(Number(walletAccount.balance), walletAccount.currency) : "$0"} detail="Saldo interno" />
+        <DataPanel title="Visitas" value={String(customer.total_visits)} detail="Historial" />
+        <DataPanel title="Ultima visita" value={customer.last_visit_at ? new Date(customer.last_visit_at).toLocaleDateString("es-MX") : "Sin visita"} detail="Actividad reciente" />
+      </section>
 
       <ModuleCard title="Acceso al Club" description="Cliente ya puede acceder al Club con su telefono y codigo.">
         <div className="grid gap-4 lg:grid-cols-[1fr_auto]">

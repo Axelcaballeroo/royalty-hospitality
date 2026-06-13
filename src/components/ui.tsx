@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Inbox } from "lucide-react";
+import { ArrowRight, Inbox } from "lucide-react";
 import { formatAnyLabel } from "@/lib/formatters";
 
 const focusRing =
@@ -16,7 +16,7 @@ export function PrimaryButton({ children, className = "", type = "submit" }: But
     <button
       type={type}
       className={[
-        "inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300",
+        "inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-stone-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300",
         focusRing,
         className,
       ].join(" ")}
@@ -31,7 +31,7 @@ export function SecondaryButton({ children, className = "", type = "submit" }: B
     <button
       type={type}
       className={[
-        "inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50 disabled:cursor-not-allowed disabled:text-stone-400",
+        "inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50 disabled:cursor-not-allowed disabled:text-stone-400",
         focusRing,
         className,
       ].join(" ")}
@@ -46,7 +46,7 @@ export function DangerButton({ children, className = "", type = "submit" }: Butt
     <button
       type={type}
       className={[
-        "inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-5 text-sm font-semibold text-red-700 shadow-sm transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60",
         focusRing,
         className,
       ].join(" ")}
@@ -75,11 +75,11 @@ export function SectionHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="mt-3 text-3xl font-semibold tracking-normal text-stone-950">
+        <h1 className="mt-3 text-4xl font-semibold tracking-normal text-stone-950">
           {title}
         </h1>
         {description ? (
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
+          <p className="mt-3 max-w-3xl text-base leading-7 text-stone-600">
             {description}
           </p>
         ) : null}
@@ -102,7 +102,7 @@ export function StatCard({ title, value, detail, tone = "light" }: StatCardProps
   return (
     <div
       className={[
-        "rounded-lg border p-5 shadow-sm transition hover:shadow-md",
+        "rounded-2xl border p-6 shadow-[0_12px_40px_rgba(28,25,23,0.04)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_55px_rgba(28,25,23,0.08)]",
         dark
           ? "border-stone-900 bg-stone-950 text-white"
           : "border-stone-200 bg-white text-stone-950",
@@ -111,7 +111,7 @@ export function StatCard({ title, value, detail, tone = "light" }: StatCardProps
       <p className={dark ? "text-sm text-stone-400" : "text-sm text-stone-500"}>
         {title}
       </p>
-      <p className="mt-4 text-3xl font-semibold tracking-normal">{value}</p>
+      <p className="mt-4 text-4xl font-semibold tracking-normal">{value}</p>
       <p className={dark ? "mt-2 text-xs text-stone-400" : "mt-2 text-xs text-stone-500"}>
         {detail}
       </p>
@@ -129,10 +129,10 @@ export function ModuleCard({
   children?: ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="rounded-2xl border border-stone-200/80 bg-white p-6 shadow-[0_12px_40px_rgba(28,25,23,0.04)]">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-stone-950">{title}</h2>
+          <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
           <p className="mt-2 text-sm leading-6 text-stone-500">{description}</p>
         </div>
       </div>
@@ -196,7 +196,7 @@ export function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={[
-        "inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium capitalize",
+        "inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-semibold capitalize",
         statusClasses[status] ?? "border-stone-200 bg-stone-50 text-stone-600",
       ].join(" ")}
     >
@@ -215,7 +215,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-8 text-center">
+    <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-8 text-center">
       <Inbox className="mx-auto text-stone-400" size={28} />
       <p className="mt-4 text-sm font-semibold text-stone-950">{title}</p>
       <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-stone-500">
@@ -256,6 +256,114 @@ export function PageSkeleton() {
   );
 }
 
+export function SectionTitle({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div>
+      {eyebrow ? (
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">{eyebrow}</p>
+      ) : null}
+      <h2 className="mt-2 text-2xl font-semibold text-stone-950">{title}</h2>
+      {description ? <p className="mt-2 text-sm leading-6 text-stone-500">{description}</p> : null}
+    </div>
+  );
+}
+
+export function ActionCard({
+  title,
+  description,
+  href,
+  action = "Abrir",
+}: {
+  title: string;
+  description: string;
+  href: string;
+  action?: string;
+}) {
+  return (
+    <a
+      href={href}
+      className="group block rounded-2xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgba(28,25,23,0.04)] transition hover:-translate-y-0.5 hover:border-stone-300 hover:shadow-[0_18px_55px_rgba(28,25,23,0.08)]"
+    >
+      <p className="text-sm font-semibold text-stone-950">{title}</p>
+      <p className="mt-2 min-h-12 text-sm leading-6 text-stone-500">{description}</p>
+      <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-stone-950">
+        {action}
+        <ArrowRight size={15} className="transition group-hover:translate-x-0.5" />
+      </span>
+    </a>
+  );
+}
+
+export function AlertCard({
+  title,
+  description,
+  tone = "neutral",
+  children,
+}: {
+  title: string;
+  description: string;
+  tone?: "neutral" | "success" | "warning" | "danger";
+  children?: ReactNode;
+}) {
+  const classes = {
+    neutral: "border-stone-200 bg-white",
+    success: "border-emerald-200 bg-emerald-50",
+    warning: "border-amber-200 bg-amber-50",
+    danger: "border-red-200 bg-red-50",
+  };
+
+  return (
+    <div className={["rounded-2xl border p-4", classes[tone]].join(" ")}>
+      <p className="text-sm font-semibold text-stone-950">{title}</p>
+      <p className="mt-1 text-sm leading-6 text-stone-600">{description}</p>
+      {children ? <div className="mt-3 flex flex-wrap gap-2">{children}</div> : null}
+    </div>
+  );
+}
+
+export function QuickAction({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      className="inline-flex h-11 items-center justify-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800"
+    >
+      {children}
+    </a>
+  );
+}
+
+export function DataPanel({
+  title,
+  value,
+  detail,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-5">
+      <p className="text-sm text-stone-500">{title}</p>
+      <p className="mt-3 text-2xl font-semibold text-stone-950">{value}</p>
+      <p className="mt-1 text-xs text-stone-500">{detail}</p>
+    </div>
+  );
+}
+
 export function DataTable({
   columns,
   rows,
@@ -268,11 +376,11 @@ export function DataTable({
   const visibleRows = rows.slice(0, 25);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-stone-200 bg-white">
+    <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-stone-200 text-sm">
           {caption ? <caption className="sr-only">{caption}</caption> : null}
-          <thead className="bg-stone-50">
+          <thead className="bg-stone-50/80">
             <tr>
               {columns.map((column) => (
                 <th

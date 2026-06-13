@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createCustomerAction } from "@/app/app/actions";
 import { getCustomersData } from "@/lib/data";
-import { DataTable, EmptyState, ModuleCard, PrimaryButton, SectionHeader, StatusBadge } from "@/components/ui";
+import { ActionCard, DataTable, EmptyState, ModuleCard, PrimaryButton, SectionHeader, StatCard, StatusBadge } from "@/components/ui";
 import { formatEventType, formatStatus } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export default async function CustomersPage({
   }>;
 }) {
   const params = await searchParams;
-  const { customers } = await getCustomersData({
+  const { customers, stats } = await getCustomersData({
     q: params.q,
     status: params.status,
     tag: params.tag,
@@ -47,7 +47,7 @@ export default async function CustomersPage({
       <SectionHeader
         eyebrow="Clientes"
         title="Clientes"
-        description="Administra tus clientes, su historial, puntos, reservas y beneficios."
+        description="Perfil vivo de tus clientes: visitas, puntos, reservas, club, wallet y acciones comerciales."
         actions={
           <a
             href="#nuevo-cliente"
@@ -60,7 +60,23 @@ export default async function CustomersPage({
       {params.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formatEventType(params.error)}</p> : null}
       {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{formatEventType(params.success)}</p> : null}
 
-      <ModuleCard title="Buscar y filtrar" description="Filtra por nombre, telefono, email, estado o etiqueta.">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total clientes" value={String(stats.totalCustomers)} detail="Clientes registrados" tone="dark" />
+        <StatCard title="Clientes VIP" value={String(stats.vipCustomers)} detail="Alta recurrencia o consumo" />
+        <StatCard title="Clientes inactivos" value={String(stats.inactiveCustomers)} detail="Sin visita reciente" />
+        <StatCard title="Puntos emitidos" value={String(stats.pointsIssued)} detail="Historial de fidelizacion" />
+      </section>
+
+      <ModuleCard title="Acciones rapidas" description="Conecta clientes con club, ventas y marketing sin salir del flujo.">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <ActionCard title="Nuevo cliente" description="Crea perfil, codigo de club y cuenta de puntos." href="#nuevo-cliente" action="Crear" />
+          <ActionCard title="Registrar consumo" description="Suma puntos desde check-in." href="/app/checkin" action="Abrir" />
+          <ActionCard title="Abrir club" description="Comparte el acceso publico del club." href="/app/configuracion" action="Ver links" />
+          <ActionCard title="Campana para clientes" description="Recupera inactivos o activa VIP." href="/app/marketing" action="Crear" />
+        </div>
+      </ModuleCard>
+
+      <ModuleCard title="Buscar y filtrar" description="Encuentra clientes por nombre, telefono, email, estado o etiqueta.">
         <form className="grid gap-3 lg:grid-cols-[2fr_1fr_1fr_auto]">
           <input
             name="q"
@@ -96,7 +112,7 @@ export default async function CustomersPage({
       </ModuleCard>
 
       <section className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-        <ModuleCard title="Crear cliente" description="Nombre requerido y telefono o email obligatorio.">
+        <ModuleCard title="Crear cliente" description="Al crear cliente tambien queda listo para Club y puntos.">
           <form id="nuevo-cliente" action={createCustomerAction} className="grid gap-3">
             <input required name="full_name" placeholder="Nombre completo" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <div className="grid gap-3 sm:grid-cols-2">
@@ -109,7 +125,7 @@ export default async function CustomersPage({
             <PrimaryButton>Crear cliente</PrimaryButton>
           </form>
         </ModuleCard>
-        <ModuleCard title="Lista de clientes" description="Clientes registrados en este negocio.">
+        <ModuleCard title="Lista de clientes" description="Vista simple para abrir el Perfil 360 de cada cliente.">
           {customers.length ? (
             <DataTable caption="Lista de clientes" columns={["Nombre", "Telefono", "Email", "Etiquetas", "Visitas", "Ultima visita", "Estado", "Acciones"]} rows={rows} />
           ) : (

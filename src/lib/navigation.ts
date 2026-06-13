@@ -21,23 +21,26 @@ import {
 
 export const privateNavigation = [
   { name: "Operacion de hoy", href: "/app/operacion", icon: ClipboardList, moduleKey: "dashboard" },
-  { name: "Dashboard", href: "/app/dashboard", icon: Home, moduleKey: "dashboard" },
-  { name: "Cierre del dia", href: "/app/cierre", icon: ClipboardCheck, moduleKey: "dashboard" },
-  { name: "Demo", href: "/app/demo", icon: Route, moduleKey: "dashboard", adminOnly: true },
   { name: "Reservas", href: "/app/reservas", icon: Clock3, moduleKey: "reservations" },
   { name: "Clientes", href: "/app/clientes", icon: Users, moduleKey: "crm" },
-  { name: "CRM Interno", href: "/app/crm-interno", icon: MessageSquareText, moduleKey: "crm" },
-  { name: "Calendario", href: "/app/calendario", icon: CalendarDays, moduleKey: "reservations" },
-  { name: "Marketing", href: "/app/marketing", icon: Megaphone, moduleKey: "marketing" },
-  { name: "Fidelizacion", href: "/app/fidelizacion", icon: Gift, moduleKey: "loyalty" },
-  { name: "Check-in", href: "/app/checkin", icon: QrCode, moduleKey: "loyalty" },
-  { name: "Wallet", href: "/app/wallet", icon: HandCoins, moduleKey: "wallet_placeholder" },
+  { name: "Ventas / Check-in", href: "/app/checkin", icon: QrCode, moduleKey: "loyalty" },
   { name: "Inventario", href: "/app/inventario", icon: Package, moduleKey: "inventory" },
-  { name: "RRHH", href: "/app/rrhh", icon: Utensils, moduleKey: "hr" },
-  { name: "Automatizaciones", href: "/app/automatizaciones", icon: Workflow, moduleKey: "automation" },
+  { name: "Marketing", href: "/app/marketing", icon: Megaphone, moduleKey: "marketing" },
+  { name: "Equipo", href: "/app/rrhh", icon: Utensils, moduleKey: "hr" },
   { name: "Reportes", href: "/app/reportes", icon: BarChart3, moduleKey: "reports_basic" },
+  { name: "Cierre del dia", href: "/app/cierre", icon: ClipboardCheck, moduleKey: "dashboard" },
   { name: "Ayuda", href: "/app/ayuda", icon: HelpCircle, moduleKey: "dashboard" },
   { name: "Configuracion", href: "/app/configuracion", icon: Settings, moduleKey: "dashboard" },
+];
+
+export const secondaryNavigation = [
+  { name: "Dashboard ejecutivo", href: "/app/dashboard", icon: Home, moduleKey: "dashboard" },
+  { name: "Calendario", href: "/app/calendario", icon: CalendarDays, moduleKey: "reservations" },
+  { name: "Fidelizacion", href: "/app/fidelizacion", icon: Gift, moduleKey: "loyalty" },
+  { name: "Monedero", href: "/app/wallet", icon: HandCoins, moduleKey: "wallet_placeholder" },
+  { name: "CRM interno", href: "/app/crm-interno", icon: MessageSquareText, moduleKey: "crm" },
+  { name: "Automatizaciones", href: "/app/automatizaciones", icon: Workflow, moduleKey: "automation" },
+  { name: "Demo", href: "/app/demo", icon: Route, moduleKey: "dashboard", adminOnly: true },
 ];
 
 export function canSeeAdminGuidance(role: string) {
@@ -48,7 +51,7 @@ export const moduleHighlights = [
   "Reservas conectadas al perfil del cliente",
   "Historial centralizado de visitas, eventos y preferencias",
   "Modulos activables por negocio",
-  "Base multi-tenant preparada para crecimiento",
+  "Base multi-negocio preparada para crecimiento",
   "Analitica operacional para equipos de hospitalidad",
 ];
 

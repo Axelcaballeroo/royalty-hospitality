@@ -63,12 +63,12 @@ export default async function SettingsPage({
       {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p> : null}
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <ModuleCard title="Perfil del negocio" description="Datos internos principales del tenant.">
+        <ModuleCard title="Perfil del negocio" description="Datos internos principales del negocio.">
           <form action={updateBusinessProfileAction} className="grid gap-3">
             <input required name="name" defaultValue={business.name} placeholder="Nombre" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <div className="grid gap-3 sm:grid-cols-2">
               <input name="type" defaultValue={business.type ?? ""} placeholder="Tipo" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-              <input name="timezone" defaultValue={business.timezone} placeholder="Timezone" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="timezone" defaultValue={business.timezone} placeholder="Zona horaria" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
               <input name="phone" defaultValue={business.phone ?? ""} placeholder="Telefono" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
               <input name="email" type="email" defaultValue={business.email ?? ""} placeholder="Email" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
               <input name="address" defaultValue={business.address ?? ""} placeholder="Direccion" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
@@ -79,11 +79,11 @@ export default async function SettingsPage({
           </form>
         </ModuleCard>
 
-        <ModuleCard title="Preferencias" description="Reglas operativas V1 en business_settings.">
+        <ModuleCard title="Preferencias" description="Reglas operativas principales del negocio.">
           <form action={updateBusinessSettingsAction} className="grid gap-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <input name="currency" defaultValue={settings?.currency ?? "MXN"} placeholder="Moneda" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-              <input name="timezone" defaultValue={settings?.timezone ?? business.timezone} placeholder="Timezone" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="timezone" defaultValue={settings?.timezone ?? business.timezone} placeholder="Zona horaria" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
               <input name="points_per_currency" type="number" step="0.01" defaultValue={settings?.points_per_currency ?? 1} placeholder="Puntos por consumo" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
               <input name="reservation_interval_minutes" type="number" min="5" defaultValue={settings?.reservation_interval_minutes ?? 30} placeholder="Intervalo reservas" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             </div>
@@ -152,7 +152,7 @@ export default async function SettingsPage({
               ))}
             </div>
           </ModuleCard>
-          <ModuleCard title="Plan contratado" description="Informacion actual del tenant.">
+          <ModuleCard title="Plan contratado" description="Informacion actual del negocio.">
             <div className="space-y-4 text-sm text-stone-600">
               <p><span className="font-medium text-stone-950">Slug:</span> {business.slug}</p>
               <p className="flex items-center justify-between gap-3">
@@ -211,15 +211,15 @@ export default async function SettingsPage({
                       ))}
                     </select>
                     <select name="status" defaultValue={user.status} className="h-10 rounded-lg border border-stone-200 bg-white px-2 text-xs outline-none">
-                      <option value="active">active</option>
-                      <option value="inactive">inactive</option>
+                      <option value="active">activo</option>
+                      <option value="inactive">inactivo</option>
                     </select>
                     <button className="h-10 rounded-lg border border-stone-200 bg-white text-xs font-medium text-stone-800">Guardar</button>
                   </div>
                 </form>
               ))}
               <button className="h-10 rounded-lg bg-stone-950 text-sm font-medium text-white">
-                Invitar usuario (placeholder)
+                Invitar usuario
               </button>
             </div>
           </ModuleCard>

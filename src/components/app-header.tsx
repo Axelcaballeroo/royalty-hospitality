@@ -10,19 +10,25 @@ export async function AppHeader() {
   ]);
 
   return (
-    <header className="hidden border-b border-stone-200 bg-white/85 px-8 py-4 backdrop-blur lg:block">
+    <header className="hidden border-b border-stone-200/80 bg-white/85 px-8 py-4 backdrop-blur lg:block">
       <div className="flex items-center justify-between gap-6">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
-            Workspace
+            Centro operativo
           </p>
           <p className="mt-1 text-sm font-semibold text-stone-950">
             {current.business.name}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex h-10 w-80 items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 text-sm text-stone-500">
-            <span className="sr-only">Buscar en el workspace</span>
+          <Link
+            href="/app/dashboard"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-700 transition hover:border-stone-300"
+          >
+            Dashboard ejecutivo
+          </Link>
+          <label className="flex h-10 w-80 items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 text-sm text-stone-500">
+            <span className="sr-only">Buscar en el negocio</span>
             <Search size={16} />
             <input
               className="w-full bg-transparent text-sm outline-none placeholder:text-stone-400"
@@ -30,7 +36,7 @@ export async function AppHeader() {
             />
           </label>
           <button
-            className="flex size-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+            className="flex size-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
             aria-label="Alertas"
             title="Alertas"
           >
@@ -39,7 +45,7 @@ export async function AppHeader() {
           {superadmin ? (
             <Link
               href="/superadmin"
-              className="flex size-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+              className="flex size-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
               aria-label="Superadmin"
               title="Superadmin"
             >
@@ -48,13 +54,13 @@ export async function AppHeader() {
           ) : null}
           <Link
             href="/logout"
-            className="flex size-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+            className="flex size-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
             aria-label="Cerrar sesion"
             title="Cerrar sesion"
           >
             <LogOut size={17} />
           </Link>
-          <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-600">
+          <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-600">
             Plan {current.business.plan}
           </div>
         </div>

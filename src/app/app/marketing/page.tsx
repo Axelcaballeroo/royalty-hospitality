@@ -99,13 +99,13 @@ export default async function MarketingPage({
     <div className="space-y-6">
       <div>
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-700">
-          Marketing
+          Acciones comerciales
         </p>
         <h1 className="mt-3 text-3xl font-semibold text-stone-950">
-          Marketing Engine V1
+          Acciones comerciales
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-          Segmentos, plantillas y campanas simuladas. WhatsApp, email, SMS y push quedan preparados para futuras integraciones.
+          Convierte datos del restaurante en acciones simples para recuperar clientes, activar VIP y reducir merma.
         </p>
       </div>
 
@@ -113,9 +113,9 @@ export default async function MarketingPage({
       {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{formatEventType(params.success)}</p> : null}
 
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard title="Campanas creadas" value={String(metrics.campaignsCreated)} detail="Recientes" tone="dark" />
-        <StatCard title="Campanas enviadas" value={String(metrics.campaignsSent)} detail="Simuladas" />
-        <StatCard title="Clientes alcanzados" value={String(metrics.customersReached)} detail="Recipients" />
+        <StatCard title="Acciones creadas" value={String(metrics.campaignsCreated)} detail="Recientes" tone="dark" />
+        <StatCard title="Enviadas" value={String(metrics.campaignsSent)} detail="Comunicaciones" />
+        <StatCard title="Clientes alcanzados" value={String(metrics.customersReached)} detail="Contactos" />
         <StatCard title="Inactivos" value={String(metrics.inactiveCustomers)} detail="60 dias" />
         <StatCard title="Cumpleanos" value={String(metrics.birthdayCustomers)} detail="Este mes" />
         <StatCard title="Clientes VIP" value={String(metrics.vipCustomers)} detail="Visitas o gasto" />
@@ -139,7 +139,7 @@ export default async function MarketingPage({
       </ModuleCard>
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <ModuleCard title="Crear campana" description="Guarda borrador, agenda o envia una campana simulada.">
+        <ModuleCard title="Crear campana" description="Prepara una accion comercial lista para revisar y enviar.">
           <form action={createCampaignAction} className="grid gap-3">
             <input required name="name" defaultValue={params.name ?? ""} placeholder="Nombre de campana" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
             <div className="grid gap-3 sm:grid-cols-3">
@@ -192,7 +192,7 @@ export default async function MarketingPage({
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <ModuleCard title="Campanas recientes" description="Detalle y reportes manuales disponibles.">
+        <ModuleCard title="Campanas recientes" description="Acciones comerciales creadas para este negocio.">
           {campaigns.length ? (
             <DataTable
               columns={["Nombre", "Segmento", "Canal", "Estado", "Detalle"]}

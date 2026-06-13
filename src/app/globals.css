@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafaf9;
+  --background: #f7f7f5;
   --foreground: #1c1917;
 }
 
@@ -16,6 +16,13 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  text-rendering: geometricPrecision;
+}
+
+.premium-surface {
+  background:
+    radial-gradient(circle at top left, rgba(16, 185, 129, 0.08), transparent 28rem),
+    linear-gradient(180deg, #fbfbfa 0%, #f4f4f2 100%);
 }
 
 button,

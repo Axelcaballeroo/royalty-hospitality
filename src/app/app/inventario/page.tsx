@@ -45,13 +45,13 @@ export default async function InventoryPage({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-700">
-            Inventario
+            Control de perdidas
           </p>
           <h1 className="mt-3 text-3xl font-semibold text-stone-950">
-            Inventario V1 y merma basica
+            Inventario y control de perdidas
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            Control operativo de productos, lotes, movimientos FEFO y alertas para convertir riesgo de merma en accion comercial.
+            Vigila stock, vencimientos y merma para convertir perdida potencial en accion comercial.
           </p>
         </div>
         <form action={refreshWasteAlertsAction}>
@@ -76,9 +76,9 @@ export default async function InventoryPage({
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard title="Productos activos" value={String(metrics.activeItems)} detail="Catalogo operativo" tone="dark" />
         <StatCard title="Bajo stock" value={String(metrics.lowStock)} detail="Stock igual o menor al minimo" />
-        <StatCard title="Lotes por vencer" value={String(metrics.expiringBatches)} detail="Near, urgent o expired" />
+        <StatCard title="Productos por vencer" value={String(metrics.expiringBatches)} detail="Requieren accion" />
         <StatCard title="Alertas abiertas" value={String(metrics.openAlerts)} detail="Riesgo de merma" />
-        <StatCard title="Perdida estimada" value={currency.format(metrics.estimatedLoss)} detail="Alertas abiertas" />
+        <StatCard title="Perdida estimada" value={currency.format(metrics.estimatedLoss)} detail="Valor en riesgo" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
@@ -208,7 +208,7 @@ export default async function InventoryPage({
                         <input type="hidden" name="return_to" value="/app/inventario" />
                         <button className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 font-medium text-stone-800 transition hover:border-stone-300">
                         <AlertTriangle size={14} />
-                        Crear campana anti-merma
+                        Crear promocion
                         </button>
                       </form>
                     </div>

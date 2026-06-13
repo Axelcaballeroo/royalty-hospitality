@@ -61,15 +61,15 @@ export default async function WalletPage({
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard title="Saldo total" value={formatCurrency(metrics.totalBalance)} detail="Wallets del tenant" tone="dark" />
-        <StatCard title="Wallets activas" value={String(metrics.activeWallets)} detail="Clientes con monedero" />
-        <StatCard title="Recargas mes" value={formatCurrency(metrics.topups)} detail="Topups manuales" />
+        <StatCard title="Saldo total" value={formatCurrency(metrics.totalBalance)} detail="Monederos del negocio" tone="dark" />
+        <StatCard title="Monederos activos" value={String(metrics.activeWallets)} detail="Clientes con saldo" />
+        <StatCard title="Recargas mes" value={formatCurrency(metrics.topups)} detail="Recargas manuales" />
         <StatCard title="Consumos mes" value={formatCurrency(metrics.purchases)} detail="Consumos registrados" />
         <StatCard title="Bonos mes" value={formatCurrency(metrics.bonuses)} detail="Bonos otorgados" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <ModuleCard title="Crear wallet" description="Crea cuenta sin saldo para un cliente.">
+        <ModuleCard title="Crear monedero" description="Crea una cuenta sin saldo para un cliente.">
           <form action={createWalletAccountAction} className="grid gap-3">
             <select required name="customer_id" className={fieldClass}>
               <option value="">Seleccionar cliente</option>
@@ -81,7 +81,7 @@ export default async function WalletPage({
             </select>
             <button className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">
               <Plus size={16} />
-              Crear wallet
+              Crear monedero
             </button>
           </form>
         </ModuleCard>
@@ -127,7 +127,7 @@ export default async function WalletPage({
             <input name="comment" placeholder="Comentario" className={fieldClass} />
             <ConfirmSubmitButton
               className="h-11 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800"
-              message="Registrar consumo con wallet?"
+              message="Registrar consumo con monedero?"
             >
               Registrar consumo
             </ConfirmSubmitButton>
@@ -137,7 +137,7 @@ export default async function WalletPage({
         <ModuleCard title="Ajuste manual" description="Suma o resta saldo con motivo obligatorio.">
           <form action={walletAdjustmentAction} className="grid gap-3">
             <select required name="customer_id" className={fieldClass}>
-              <option value="">Seleccionar wallet</option>
+              <option value="">Seleccionar monedero</option>
               {accounts.map((account) => (
                 <option key={account.customer_id} value={account.customer_id}>
                   {account.customers?.full_name ?? "Cliente"} - {formatCurrency(Number(account.balance), account.currency)}
@@ -151,15 +151,15 @@ export default async function WalletPage({
             <input required name="reason" placeholder="Motivo obligatorio" className={fieldClass} />
             <ConfirmSubmitButton
               className="h-11 rounded-lg border border-stone-200 bg-white text-sm font-medium text-stone-800 transition hover:border-stone-300"
-              message="Aplicar ajuste manual de wallet?"
+              message="Aplicar ajuste manual de monedero?"
             >
-              Ajustar wallet
+              Ajustar monedero
             </ConfirmSubmitButton>
           </form>
         </ModuleCard>
       </section>
 
-      <ModuleCard title="Wallets de clientes" description="Saldo, estado, ultima transaccion y acciones.">
+      <ModuleCard title="Monederos de clientes" description="Saldo, estado, ultima transaccion y acciones.">
         {accounts.length ? (
           <DataTable
             columns={["Cliente", "Saldo", "Estado", "Ultima transaccion", "Acciones"]}
@@ -193,11 +193,11 @@ export default async function WalletPage({
             })}
           />
         ) : (
-          <EmptyState title="Sin wallets" description="Crea la primera wallet para operar recargas y consumos internos." />
+          <EmptyState title="Sin monederos" description="Crea el primer monedero para operar recargas y consumos internos." />
         )}
       </ModuleCard>
 
-      <ModuleCard title="Movimientos recientes" description="Ledger interno de wallet_transactions.">
+      <ModuleCard title="Movimientos recientes" description="Historial interno de recargas, consumos y ajustes.">
         {transactions.length ? (
           <DataTable
             columns={["Cliente", "Tipo", "Monto", "Referencia", "Descripcion"]}

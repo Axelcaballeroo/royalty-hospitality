@@ -106,8 +106,8 @@ export default async function InventoryItemPage({
               <input name="min_stock" type="number" min="0" step="0.01" defaultValue={item.min_stock} className={fieldClass} />
             </div>
             <select name="status" defaultValue={item.status} className={fieldClass}>
-              <option value="active">active</option>
-              <option value="inactive">inactive</option>
+              <option value="active">activo</option>
+              <option value="inactive">inactivo</option>
             </select>
             <button className="h-11 rounded-lg bg-stone-950 text-sm font-medium text-white transition hover:bg-stone-800">
               Guardar cambios

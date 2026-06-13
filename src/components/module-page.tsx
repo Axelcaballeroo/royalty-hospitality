@@ -48,7 +48,7 @@ function DashboardPage() {
       <PageTitle
         eyebrow="Sistema operativo"
         title="Dashboard"
-        description="Pulso diario del negocio con clientes, reservas, actividad interna y alertas importantes por tenant."
+        description="Pulso diario del negocio con clientes, reservas, actividad interna y alertas importantes."
       />
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat, index) => (
@@ -97,7 +97,7 @@ function ReservationsPage() {
         <PageTitle
           eyebrow="Reservas"
           title="Reservas conectadas al cliente"
-          description="Cada reserva mantiene relacion directa con customer_id, historial, notas y tareas internas."
+          description="Cada reserva mantiene relacion directa con el cliente, historial, notas y tareas internas."
         />
         <button className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800">
           <Plus size={17} />
@@ -133,7 +133,7 @@ function CustomersPage() {
         description="Lista, ficha, timeline, notas internas, tareas y comentarios de equipo preparados para operar alrededor del cliente."
       />
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <ModuleCard title="Lista de clientes" description="Mock funcional para iniciar el CRUD visual.">
+        <ModuleCard title="Lista de clientes" description="Vista inicial para operar la cartera de clientes.">
           <DataTable
             columns={["Cliente", "Email", "Tags", "Visitas", "Gasto", "Estado"]}
             rows={rows}
@@ -206,13 +206,13 @@ function PlaceholderModule({ module }: { module: keyof typeof routeMeta }) {
               <div key={item} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
                 <p className="text-sm font-semibold text-stone-950">{item}</p>
                 <p className="mt-2 text-xs leading-5 text-stone-500">
-                  Preparado por business_id y listo para activar el modulo.
+                  Preparado para conectarse al flujo diario del negocio.
                 </p>
               </div>
             ))}
           </div>
         </ModuleCard>
-        <ModuleCard title="Estado de etapa 1" description="Estructura preparada, integraciones reales pendientes.">
+        <ModuleCard title="Estado del modulo" description="Estructura preparada para evolucionar con la operacion.">
           <EmptyState
             title="Modulo en preparacion"
             description="No se implementan pagos, WhatsApp real, inventario avanzado, nomina, geolocalizacion ni push notifications."

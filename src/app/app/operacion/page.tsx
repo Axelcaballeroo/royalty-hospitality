@@ -5,7 +5,7 @@ import {
   createWasteReductionCampaignAction,
   updateReservationStatusAction,
 } from "@/app/app/actions";
-import { EmptyState, ModuleCard, SectionHeader, StatCard, StatusBadge } from "@/components/ui";
+import { ActionCard, EmptyState, ModuleCard, SectionHeader, StatCard, StatusBadge } from "@/components/ui";
 import { getOperationData } from "@/lib/data";
 import { formatEventType } from "@/lib/formatters";
 
@@ -33,13 +33,17 @@ export default async function OperationPage({
     data.recentNoShows.length +
     data.openClockEntries.length +
     data.overdueTasks.length;
+  const estimatedSales = Number(data.closure?.estimated_sales ?? 0);
+  const averageTicket = data.stats.expectedCustomers
+    ? estimatedSales / data.stats.expectedCustomers
+    : 0;
 
   return (
     <div className="space-y-6">
       <SectionHeader
         eyebrow={data.current.business.name}
         title="Operacion de hoy"
-        description="Centro operativo para reservas, equipo, inventario, marketing, cortesias y cierre del dia."
+        description="Resumen rapido de tu restaurante para tomar accion."
         actions={
           <>
             <Link
@@ -47,13 +51,13 @@ export default async function OperationPage({
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
             >
               <ClipboardList size={16} />
-              Abrir cierre
+              Abrir cierre del dia
             </Link>
             <Link
               href="/app/reservas"
               className="inline-flex h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300"
             >
-              Crear reserva
+              Nueva reserva
             </Link>
           </>
         }
@@ -70,16 +74,30 @@ export default async function OperationPage({
         </p>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
-        <StatCard title="Reservas de hoy" value={String(data.stats.reservationsToday)} detail="Mesas en agenda" tone="dark" />
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Reservas hoy" value={String(data.stats.reservationsToday)} detail="Mesas en agenda" tone="dark" />
         <StatCard title="Clientes esperados" value={String(data.stats.expectedCustomers)} detail="Covers estimados" />
-        <StatCard title="Clientes VIP hoy" value={String(data.stats.vipToday)} detail="Con codigo o tier alto" />
-        <StatCard title="Tareas pendientes" value={String(data.stats.pendingTasks)} detail="CRM interno" />
-        <StatCard title="Empleados trabajando" value={String(data.stats.employeesWorking)} detail="Salidas abiertas" />
-        <StatCard title="Alertas de merma" value={String(data.stats.wasteAlerts)} detail="Abiertas" />
-        <StatCard title="Cortesias del dia" value={String(data.stats.courtesiesToday)} detail={currency.format(data.courtesyTotal)} />
-        <StatCard title="Campanas sugeridas" value={String(data.stats.suggestedCampaigns)} detail="Drafts y merma" />
-        <StatCard title="Cierre pendiente" value={data.stats.closurePending ? "Si" : "No"} detail={data.closure?.status ?? "Sin cierre"} />
+        <StatCard title="Ventas estimadas" value={currency.format(estimatedSales)} detail="Desde cierre del dia" />
+        <StatCard title="Ticket promedio" value={currency.format(averageTicket)} detail="Estimado por cliente" />
+      </section>
+
+      <ModuleCard title="Acciones rapidas" description="Atajos para resolver la operacion sin navegar entre modulos.">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <ActionCard title="Nueva reserva" description="Agrega una mesa y conecta al cliente." href="/app/reservas" action="Crear" />
+          <ActionCard title="Registrar consumo" description="Suma puntos o registra check-in." href="/app/checkin" action="Abrir" />
+          <ActionCard title="Crear campana" description="Activa una accion comercial." href="/app/marketing" action="Crear" />
+          <ActionCard title="Agregar merma" description="Registra perdida o salida FEFO." href="/app/inventario" action="Registrar" />
+          <ActionCard title="Registrar cortesia" description="Carga una cortesia al cierre." href="/app/cierre" action="Agregar" />
+          <ActionCard title="Abrir cierre del dia" description="Guarda resumen e incidencias." href="/app/cierre" action="Abrir" />
+        </div>
+      </ModuleCard>
+
+      <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
+        <StatCard title="Confirmadas" value={String(data.reservations.filter((reservation) => reservation.status === "confirmed").length)} detail="Reservas listas" />
+        <StatCard title="En sala ahora" value={String(data.stats.employeesWorking)} detail="Equipo con entrada" />
+        <StatCard title="No-shows" value={String(data.recentNoShows.length)} detail="Ultimos 7 dias" />
+        <StatCard title="Cortesias hoy" value={String(data.stats.courtesiesToday)} detail={currency.format(data.courtesyTotal)} />
+        <StatCard title="Merma registrada" value={String(data.stats.wasteAlerts)} detail="Alertas abiertas" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">

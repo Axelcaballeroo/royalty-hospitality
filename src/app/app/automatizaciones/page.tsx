@@ -52,10 +52,10 @@ export default async function AutomationsPage({
             Automatizaciones
           </p>
           <h1 className="mt-3 text-3xl font-semibold text-stone-950">
-            Automation Engine V1
+            Automatizaciones operativas
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            Reglas internas para conectar CRM, reservas, fidelizacion, wallet, marketing y merma. Las acciones son simuladas y quedan listas para revision del equipo.
+            Reglas internas para conectar clientes, reservas, fidelizacion, monedero, marketing y merma. Las acciones quedan listas para revision del equipo.
           </p>
         </div>
         <form action={ensureAutomationDefaultsAction}>
@@ -77,12 +77,12 @@ export default async function AutomationsPage({
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard title="Reglas activas" value={String(metrics.activeRules)} detail={current.business.name} tone="dark" />
         <StatCard title="Reglas inactivas" value={String(metrics.inactiveRules)} detail="Pausadas" />
-        <StatCard title="Ejecutadas hoy" value={String(metrics.runsToday)} detail="Success" />
-        <StatCard title="Errores hoy" value={String(metrics.errorsToday)} detail="Failed" />
-        <StatCard title="Historial reciente" value={String(metrics.recentRuns)} detail="Ultimos logs" />
+        <StatCard title="Ejecutadas hoy" value={String(metrics.runsToday)} detail="Completadas" />
+        <StatCard title="Errores hoy" value={String(metrics.errorsToday)} detail="Revisar" />
+        <StatCard title="Historial reciente" value={String(metrics.recentRuns)} detail="Ultimos eventos" />
       </section>
 
-      <ModuleCard title="Filtros" description="Revisa reglas por estado y logs por resultado.">
+      <ModuleCard title="Filtros" description="Revisa reglas por estado y resultado.">
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <select name="enabled" defaultValue={enabled} className={fieldClass}>
             <option value="all">Todas las reglas</option>
@@ -108,7 +108,7 @@ export default async function AutomationsPage({
               <div key="name">
                 <p className="font-medium text-stone-950">{rule.name}</p>
                 <p className="mt-1 text-xs text-stone-500">
-                  Config JSON preparada para ajustes futuros.
+                  Configuracion preparada para ajustes futuros.
                 </p>
               </div>,
               triggerLabels[rule.trigger_type],
@@ -163,7 +163,7 @@ export default async function AutomationsPage({
           ) : (
             <EmptyState
               title="Sin ejecuciones"
-              description="Ejecuta una regla para crear el primer log de automatizacion."
+            description="Ejecuta una regla para crear el primer evento de automatizacion."
             />
           )}
         </ModuleCard>

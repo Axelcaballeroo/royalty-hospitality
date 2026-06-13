@@ -952,8 +952,32 @@ export async function getCustomersData(filters: CustomerFilters = {}) {
   }
 
   const { data } = await query.order("created_at", { ascending: false });
+  const customers = (data ?? []) as Customer[];
+  const { data: pointsIssued } = await supabase
+    .from("loyalty_transactions")
+    .select("points")
+    .eq("business_id", current.businessId)
+    .eq("type", "earn");
 
-  return { current, customers: (data ?? []) as Customer[] };
+  return {
+    current,
+    customers,
+    stats: {
+      totalCustomers: customers.length,
+      vipCustomers: customers.filter((customer) => customer.total_visits >= 5 || Number(customer.total_spent) >= 5000).length,
+      inactiveCustomers: customers.filter((customer) => {
+        if (!customer.last_visit_at) {
+          return true;
+        }
+        const lastVisit = new Date(customer.last_visit_at);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 60);
+        return lastVisit < cutoff;
+      }).length,
+      pointsIssued:
+        pointsIssued?.reduce((sum, transaction) => sum + Math.max(0, Number(transaction.points)), 0) ?? 0,
+    },
+  };
 }
 
 export async function getCustomerDetail(customerId: string) {
