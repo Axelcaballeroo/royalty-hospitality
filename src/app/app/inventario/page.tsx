@@ -81,6 +81,22 @@ export default async function InventoryPage({
         <StatCard title="Perdida estimada" value={currency.format(metrics.estimatedLoss)} detail="Valor en riesgo" />
       </section>
 
+      <ModuleCard title="Inventario conectado a marketing" description={`${metrics.expiringBatches} productos estan proximos a vencer y pueden convertirse en promocion.`}>
+        <div className="flex flex-col gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-stone-950">
+              {metrics.expiringBatches} productos estan proximos a vencer
+            </p>
+            <p className="mt-1 text-sm leading-6 text-stone-700">
+              Revisa lotes urgentes y crea una promocion para mover producto antes del cierre.
+            </p>
+          </div>
+          <Link href="/app/marketing?type=waste_reduction&segment=customers_with_points" className="inline-flex h-10 items-center justify-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">
+            Crear promocion
+          </Link>
+        </div>
+      </ModuleCard>
+
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <ModuleCard title="Nuevo producto" description="Crea el SKU operativo con unidad y stock minimo.">
           <form action={createInventoryItemAction} className="grid gap-3">

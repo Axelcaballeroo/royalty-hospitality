@@ -25,7 +25,7 @@ const roleGuides = [
   },
   {
     title: "Cliente",
-    does: "Usa el club oficial del restaurante para ver puntos, recompensas, wallet e historial.",
+    does: "Usa el club oficial del restaurante para ver puntos, recompensas e historial.",
     can: "Puede registrarse, iniciar sesion con telefono y codigo de socio, y mostrar su QR al staff.",
     cannot: "No entra al panel administrativo ni ve informacion interna del negocio.",
   },
@@ -33,10 +33,9 @@ const roleGuides = [
 
 const ownerManual = [
   ["Reservas", "Crea y confirma reservas, conecta cada visita con un cliente y conserva notas utiles para el servicio."],
-  ["Clientes", "Guarda datos, historial, puntos, wallet, reservas y beneficios de cada persona."],
+  ["Clientes", "Guarda datos, historial, puntos, reservas y beneficios de cada persona."],
   ["CRM Interno", "Coordina tareas, notas y comentarios del equipo sin mezclarlo con la ficha comercial del cliente."],
   ["Fidelizacion", "Define recompensas, revisa niveles y ayuda a que los clientes vuelvan."],
-  ["Wallet", "Consulta y registra saldos internos, recargas, consumos y ajustes manuales."],
   ["Marketing", "Envia promociones a clientes frecuentes, VIP, inactivos o segmentos especiales."],
   ["Inventario", "Controla productos, lotes, vencimientos y alertas para reducir perdidas."],
   ["RRHH", "Gestiona empleados, turnos, asistencia y actividad diaria del equipo."],
@@ -48,7 +47,6 @@ const customerManual = [
   ["Ver puntos", "Desde Mi cuenta puede consultar su nivel y puntos actuales."],
   ["Usar recompensas", "El cliente revisa beneficios disponibles y el staff realiza el canje cuando corresponda."],
   ["Mostrar QR", "El cliente toca Mostrar QR para que el staff identifique su cuenta rapidamente."],
-  ["Consultar wallet", "El cliente ve el saldo disponible y sus ultimos movimientos de monedero."],
 ];
 
 export default function HelpPage() {

@@ -652,6 +652,7 @@ export async function getOperationData() {
     wasteAlerts,
     urgentBatches,
     inventoryItems,
+    customerSignals,
     courtesies,
     campaigns,
     closure,
@@ -720,6 +721,12 @@ export async function getOperationData() {
       .eq("business_id", current.businessId)
       .eq("status", "active"),
     supabase
+      .from("customers")
+      .select("id, full_name, phone, email, birthday, loyalty_code, loyalty_enabled, tags, notes, total_visits, total_spent, last_visit_at, status, created_at")
+      .eq("business_id", current.businessId)
+      .eq("status", "active")
+      .limit(100),
+    supabase
       .from("courtesies")
       .select("id, closure_id, customer_id, employee_id, date, item_name, quantity, estimated_value, reason, authorized_by, notes, created_at, customers(full_name), employees(full_name)")
       .eq("business_id", current.businessId)
@@ -757,6 +764,15 @@ export async function getOperationData() {
     })
     .filter((item) => item.stock <= Number(item.min_stock));
   const courtesyRows = (courtesies.data ?? []) as unknown as Courtesy[];
+  const customerSignalRows = (customerSignals.data ?? []) as Customer[];
+  const todayMonth = today.slice(5, 7);
+  const inactiveCutoff = new Date();
+  inactiveCutoff.setDate(inactiveCutoff.getDate() - 30);
+  const birthdayCustomers = customerSignalRows.filter((customer) => customer.birthday?.slice(5, 7) === todayMonth);
+  const inactiveCustomers = customerSignalRows.filter((customer) => {
+    if (!customer.last_visit_at) return true;
+    return new Date(customer.last_visit_at) < inactiveCutoff;
+  });
   const courtesyTotal = courtesyRows.reduce(
     (sum, courtesy) => sum + Number(courtesy.estimated_value) * Number(courtesy.quantity),
     0,
@@ -776,6 +792,8 @@ export async function getOperationData() {
     wasteAlerts: (wasteAlerts.data ?? []) as unknown as WasteAlert[],
     urgentBatches: (urgentBatches.data ?? []) as unknown as InventoryBatch[],
     lowStockItems,
+    birthdayCustomers,
+    inactiveCustomers,
     courtesies: courtesyRows,
     courtesyTotal,
     campaigns: (campaigns.data ?? []) as Campaign[],
@@ -788,6 +806,8 @@ export async function getOperationData() {
       ),
       vipToday: vipReservations.length,
       pendingTasks: tasks.data?.length ?? 0,
+      birthdays: birthdayCustomers.length,
+      inactiveCustomers: inactiveCustomers.length,
       employeesWorking: openClockEntries.data?.length ?? 0,
       wasteAlerts: wasteAlerts.data?.length ?? 0,
       courtesiesToday: courtesyRows.length,

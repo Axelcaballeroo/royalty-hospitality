@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Crown, LockKeyhole, Menu, ShieldCheck, X } from "lucide-react";
 import { useState } from "react";
-import { privateNavigation } from "@/lib/navigation";
+import { canSeeAdminGuidance, navigationGroups, secondaryNavigation } from "@/lib/navigation";
 
 export function MobileNavClient({
   access,
+  role,
   superadmin,
 }: {
   access: Record<string, boolean>;
@@ -51,28 +52,65 @@ export function MobileNavClient({
         </div>
       </div>
       {open ? (
-        <nav className="mt-4 grid gap-2">
-          {privateNavigation.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            const unlocked = access[item.moduleKey] ?? true;
+        <nav className="mt-4 grid max-h-[75vh] gap-4 overflow-y-auto pb-2">
+          {navigationGroups.map((group) => (
+            <div key={group.label}>
+              <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400">
+                {group.label}
+              </p>
+              <div className="grid gap-2">
+                {group.items.map((item) => {
+                  const href = item.href.split("?")[0];
+                  const active = pathname === href || pathname.startsWith(`${href}/`);
+                  const unlocked = access[item.moduleKey] ?? true;
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className={[
-                  "inline-flex h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold",
-                  active
-                    ? "border-stone-950 bg-stone-950 text-white"
-                    : "border-stone-200 bg-white text-stone-700",
-                ].join(" ")}
-              >
-                {item.name}
-                {!unlocked ? <LockKeyhole size={12} /> : null}
-              </Link>
-            );
-          })}
+                  return (
+                    <Link
+                      key={`${group.label}-${item.href}-${item.name}`}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className={[
+                        "inline-flex h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold",
+                        active
+                          ? "border-stone-950 bg-stone-950 text-white"
+                          : "border-stone-200 bg-white text-stone-700",
+                      ].join(" ")}
+                    >
+                      {item.name}
+                      {!unlocked ? <LockKeyhole size={12} /> : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          <div>
+            <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400">
+              Sistema
+            </p>
+            <div className="grid gap-2">
+              {secondaryNavigation.filter((item) => !item.adminOnly || canSeeAdminGuidance(role)).map((item) => {
+                const href = item.href.split("?")[0];
+                const active = pathname === href || pathname.startsWith(`${href}/`);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setOpen(false)}
+                    className={[
+                      "inline-flex h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold",
+                      active
+                        ? "border-stone-950 bg-stone-950 text-white"
+                        : "border-stone-200 bg-white text-stone-700",
+                    ].join(" ")}
+                  >
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         </nav>
       ) : null}
     </div>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Crown, LockKeyhole, PanelLeftClose, ShieldCheck } from "lucide-react";
-import { canSeeAdminGuidance, privateNavigation, secondaryNavigation } from "@/lib/navigation";
+import { canSeeAdminGuidance, navigationGroups, secondaryNavigation } from "@/lib/navigation";
 
 export function AppSidebarClient({
   businessName,
@@ -43,43 +43,66 @@ export function AppSidebarClient({
         </button>
       </div>
 
-      <nav className="mt-8 flex flex-1 flex-col gap-1">
-        <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400">
-          Operacion diaria
-        </p>
-        {privateNavigation.map((item) => {
-          const Icon = item.icon;
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const unlocked = access[item.moduleKey] ?? true;
+      <nav className="mt-8 flex flex-1 flex-col gap-5 overflow-y-auto pr-1">
+        {navigationGroups.map((group) => {
+          const GroupIcon = group.icon;
+          const groupActive = group.items.some((item) => {
+            const href = item.href.split("?")[0];
+            return pathname === href || pathname.startsWith(`${href}/`);
+          });
 
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={[
-                "flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition",
-                active
-                  ? "bg-stone-950 text-white shadow-sm"
-                  : "text-stone-600 hover:bg-stone-100 hover:text-stone-950",
-              ].join(" ")}
-            >
-              <Icon size={18} />
-              <span className="min-w-0 flex-1 truncate">{item.name}</span>
-              {!unlocked ? (
-                <span className={active ? "text-white" : "text-stone-400"} title="Upgrade">
-                  <LockKeyhole size={14} />
-                </span>
-              ) : null}
-            </Link>
+            <div key={group.label}>
+              <div
+                className={[
+                  "mb-2 flex items-center gap-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em]",
+                  groupActive ? "text-stone-950" : "text-stone-400",
+                ].join(" ")}
+              >
+                <GroupIcon size={13} />
+                {group.label}
+              </div>
+              <div className="grid gap-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const href = item.href.split("?")[0];
+                  const active = pathname === href || pathname.startsWith(`${href}/`);
+                  const unlocked = access[item.moduleKey] ?? true;
+
+                  return (
+                    <Link
+                      key={`${group.label}-${item.href}-${item.name}`}
+                      href={item.href}
+                      className={[
+                        "flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium transition",
+                        active
+                          ? "bg-stone-950 text-white shadow-sm"
+                          : "text-stone-600 hover:bg-stone-100 hover:text-stone-950",
+                      ].join(" ")}
+                    >
+                      <Icon size={16} />
+                      <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                      {!unlocked ? (
+                        <span className={active ? "text-white" : "text-stone-400"} title="Upgrade">
+                          <LockKeyhole size={13} />
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
-        <div className="mt-6 border-t border-stone-200 pt-5">
+
+        <div className="border-t border-stone-200 pt-5">
           <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400">
-            Avanzado
+            Sistema
           </p>
           {secondaryNavigation.filter((item) => !item.adminOnly || canSeeAdminGuidance(role)).map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const href = item.href.split("?")[0];
+            const active = pathname === href || pathname.startsWith(`${href}/`);
             const unlocked = access[item.moduleKey] ?? true;
 
             return (

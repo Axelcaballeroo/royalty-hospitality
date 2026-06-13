@@ -6,7 +6,6 @@ import {
 } from "@/app/app/actions";
 import { EmptyState, ModuleCard, SectionHeader, StatusBadge } from "@/components/ui";
 import { getCheckInData } from "@/lib/data";
-import { formatCurrency } from "@/lib/wallet";
 import { createQrDataUrl } from "@/lib/qr";
 import { hasModule } from "@/lib/plans";
 import { UpgradeModuleScreen } from "@/components/upgrade-module-screen";
@@ -44,12 +43,10 @@ export default async function StaffCheckInPage({
   const results = await Promise.all(
     (customers as CheckInCustomer[]).map(async (customer) => {
       const account = firstRelation(customer.loyalty_accounts, { points_balance: 0, tier: "bronze" });
-      const wallet = firstRelation(customer.wallet_accounts, { balance: 0, currency: "MXN", status: "active" });
 
       return {
         customer,
         account,
-        wallet,
         qrDataUrl: await createQrDataUrl(`${current.business.slug}:${customer.loyalty_code ?? customer.id}`),
       };
     }),
@@ -93,7 +90,7 @@ export default async function StaffCheckInPage({
 
       {results.length ? (
         <div className="grid gap-4">
-          {results.map(({ customer, account, wallet, qrDataUrl }) => (
+          {results.map(({ customer, account, qrDataUrl }) => (
             <section key={customer.id} className="grid gap-4 rounded-lg border border-stone-200 bg-white p-5 shadow-sm xl:grid-cols-[0.8fr_0.6fr_1.3fr]">
               <div>
                 <p className="text-xl font-semibold text-stone-950">{customer.full_name}</p>
@@ -103,9 +100,6 @@ export default async function StaffCheckInPage({
                   <StatusBadge status={account.tier} />
                   <span className="rounded-md border border-stone-200 bg-stone-50 px-2 py-1 text-xs font-medium text-stone-700">
                     {account.points_balance} puntos
-                  </span>
-                  <span className="rounded-md border border-stone-200 bg-stone-50 px-2 py-1 text-xs font-medium text-stone-700">
-                    Wallet {formatCurrency(Number(wallet.balance), wallet.currency)}
                   </span>
                 </div>
                 <Link href={`/app/clientes/${customer.id}`} className="mt-4 inline-flex text-sm font-medium text-stone-950 hover:underline">

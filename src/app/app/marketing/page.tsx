@@ -36,10 +36,10 @@ const marketingPlays = [
     description: "Convierte riesgo de merma en visita hoy.",
     type: "waste_reduction",
     segment: "customers_with_points",
-    message: "Hoy tenemos una promoción especial en productos seleccionados. Reserva o visítanos antes de que termine el día.",
+    message: "Hoy tenemos una promocion especial en productos seleccionados. Reserva o visitanos antes de que termine el dia.",
   },
   {
-    title: "Cumpleaños del mes",
+    title: "Cumpleanos del mes",
     description: "Activa un beneficio para clientes que cumplen este mes.",
     type: "birthday",
     segment: "birthday_month",
@@ -120,6 +120,32 @@ export default async function MarketingPage({
         <StatCard title="Cumpleanos" value={String(metrics.birthdayCustomers)} detail="Este mes" />
         <StatCard title="Clientes VIP" value={String(metrics.vipCustomers)} detail="Visitas o gasto" />
       </section>
+
+      <ModuleCard title="Oportunidades comerciales" description="El sistema traduce clientes e inventario en acciones listas para revisar.">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+            <p className="text-sm font-semibold text-stone-950">{metrics.inactiveCustomers} clientes pueden recuperarse</p>
+            <p className="mt-2 text-sm leading-6 text-stone-700">Crea una campana para quienes no visitan hace mas de 60 dias.</p>
+            <Link href="/app/marketing?segment=inactive_60d&type=inactive_customers" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
+              Crear campana
+            </Link>
+          </div>
+          <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+            <p className="text-sm font-semibold text-stone-950">{metrics.birthdayCustomers} cumpleanos del mes</p>
+            <p className="mt-2 text-sm leading-6 text-stone-700">Invita a celebrar y aumenta visitas con un beneficio simple.</p>
+            <Link href="/app/marketing?segment=birthday_month&type=birthday" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
+              Crear campana
+            </Link>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-sm font-semibold text-stone-950">{metrics.vipCustomers} clientes VIP</p>
+            <p className="mt-2 text-sm leading-6 text-stone-700">Comunica experiencias especiales a clientes frecuentes.</p>
+            <Link href="/app/marketing?segment=vip_customers&type=vip" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
+              Crear campana
+            </Link>
+          </div>
+        </div>
+      </ModuleCard>
 
       <ModuleCard title="Acciones de marketing" description="Elige el objetivo de negocio y crea una campana lista para editar.">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">

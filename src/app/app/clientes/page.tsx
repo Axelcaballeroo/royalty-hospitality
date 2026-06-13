@@ -37,7 +37,6 @@ export default async function CustomersPage({
     <StatusBadge key="status" status={customer.status} />,
     <div key="actions" className="flex flex-wrap gap-2">
       <Link href={`/app/clientes/${customer.id}`} className="font-medium text-stone-950 hover:underline">Ver detalle</Link>
-      <Link href={`/app/clientes/${customer.id}#wallet`} className="font-medium text-stone-950 hover:underline">Wallet</Link>
       <Link href={`/app/clientes/${customer.id}#fidelizacion`} className="font-medium text-stone-950 hover:underline">Puntos</Link>
     </div>,
   ]);
@@ -47,7 +46,7 @@ export default async function CustomersPage({
       <SectionHeader
         eyebrow="Clientes"
         title="Clientes"
-        description="Perfil vivo de tus clientes: visitas, puntos, reservas, club, wallet y acciones comerciales."
+        description="Perfil vivo de tus clientes: visitas, puntos, reservas, club y acciones comerciales."
         actions={
           <a
             href="#nuevo-cliente"
@@ -68,10 +67,12 @@ export default async function CustomersPage({
       </section>
 
       <ModuleCard title="Acciones rapidas" description="Conecta clientes con club, ventas y marketing sin salir del flujo.">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <ActionCard title="Nuevo cliente" description="Crea perfil, codigo de club y cuenta de puntos." href="#nuevo-cliente" action="Crear" />
           <ActionCard title="Registrar consumo" description="Suma puntos desde check-in." href="/app/checkin" action="Abrir" />
-          <ActionCard title="Abrir club" description="Comparte el acceso publico del club." href="/app/configuracion" action="Ver links" />
+          <ActionCard title="Programa de puntos" description="Configura pesos por punto y niveles." href="/app/programa-puntos" action="Configurar" />
+          <ActionCard title="Recompensas" description="Crea beneficios para canjear." href="/app/recompensas" action="Gestionar" />
+          <ActionCard title="Registro QR" description="Comparte el alta del club en sala." href="/app/registro-qr" action="Ver QR" />
           <ActionCard title="Campana para clientes" description="Recupera inactivos o activa VIP." href="/app/marketing" action="Crear" />
         </div>
       </ModuleCard>

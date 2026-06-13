@@ -594,6 +594,7 @@ export async function updateReservationAction(formData: FormData) {
 export async function updatePublicWebsiteSettingsAction(formData: FormData) {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
+  const returnTo = requiredString(formData, "return_to") || "/app/configuracion";
 
   const { error } = await supabase
     .from("businesses")
@@ -618,12 +619,13 @@ export async function updatePublicWebsiteSettingsAction(formData: FormData) {
     .eq("id", current.businessId);
 
   if (error) {
-    redirect(`/app/configuracion?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/app/configuracion");
+  revalidatePath("/app/club-clientes");
   revalidatePath(`/site/${current.business.slug}`);
-  redirect("/app/configuracion?success=public_settings_updated");
+  redirect(`${returnTo}?success=public_settings_updated`);
 }
 
 export async function updateBusinessProfileAction(formData: FormData) {
@@ -661,9 +663,10 @@ export async function updateBusinessProfileAction(formData: FormData) {
 export async function updateBusinessSettingsAction(formData: FormData) {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
+  const returnTo = requiredString(formData, "return_to") || "/app/configuracion";
 
   if (!["superadmin", "owner", "manager"].includes(current.role)) {
-    redirect("/app/configuracion?error=forbidden");
+    redirect(`${returnTo}?error=forbidden`);
   }
 
   const { error } = await supabase.from("business_settings").upsert(
@@ -681,11 +684,12 @@ export async function updateBusinessSettingsAction(formData: FormData) {
   );
 
   if (error) {
-    redirect(`/app/configuracion?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/app/configuracion");
-  redirect("/app/configuracion?success=business_settings_updated");
+  revalidatePath(returnTo);
+  redirect(`${returnTo}?success=business_settings_updated`);
 }
 
 export async function updateBusinessUserAction(formData: FormData) {
@@ -742,9 +746,10 @@ export async function createRewardAction(formData: FormData) {
   const supabase = await createClient();
   const name = requiredString(formData, "name");
   const pointsRequired = Number(requiredString(formData, "points_required"));
+  const returnTo = requiredString(formData, "return_to") || "/app/fidelizacion";
 
   if (!name || !pointsRequired || pointsRequired <= 0) {
-    redirect("/app/fidelizacion?error=reward_validation");
+    redirect(`${returnTo}?error=reward_validation`);
   }
 
   const { error } = await supabase.from("rewards").insert({
@@ -756,11 +761,12 @@ export async function createRewardAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/app/fidelizacion?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/app/fidelizacion");
-  redirect("/app/fidelizacion?success=reward_created");
+  revalidatePath("/app/recompensas");
+  redirect(`${returnTo}?success=reward_created`);
 }
 
 export async function adjustLoyaltyPointsAction(formData: FormData) {
@@ -2044,9 +2050,10 @@ export async function createCourtesyAction(formData: FormData) {
   const itemName = requiredString(formData, "item_name");
   const reason = requiredString(formData, "reason") || "otro";
   const returnTo = requiredString(formData, "return_to") || `/app/cierre?date=${date}`;
+  const separator = returnTo.includes("?") ? "&" : "?";
 
   if (!itemName) {
-    redirect(`${returnTo}&error=courtesy_validation`);
+    redirect(`${returnTo}${separator}error=courtesy_validation`);
   }
 
   const { data: closure } = await supabase
@@ -2071,12 +2078,13 @@ export async function createCourtesyAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}${separator}error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/app/cierre");
   revalidatePath("/app/operacion");
-  redirect(`${returnTo}&success=courtesy_created`);
+  revalidatePath("/app/cortesias");
+  redirect(`${returnTo}${separator}success=courtesy_created`);
 }
 
 export async function updateCampaignRecipientStatusAction(formData: FormData) {

@@ -58,6 +58,7 @@ export default async function CustomerDetailPage({
 
   const qrDataUrl = await createQrDataUrl(customer.loyalty_code ?? customer.id);
   const clubLink = `/club/${current.business.slug}`;
+  const showWalletMvp = false;
 
   return (
     <div className="space-y-6">
@@ -78,7 +79,9 @@ export default async function CustomerDetailPage({
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <DataPanel title="Nivel" value={loyaltyAccount?.tier ?? "Bronze"} detail="Fidelizacion" />
         <DataPanel title="Puntos" value={String(loyaltyAccount?.points_balance ?? 0)} detail="Disponibles" />
-        <DataPanel title="Monedero" value={walletAccount ? formatCurrency(Number(walletAccount.balance), walletAccount.currency) : "$0"} detail="Saldo interno" />
+        {showWalletMvp ? (
+          <DataPanel title="Monedero" value={walletAccount ? formatCurrency(Number(walletAccount.balance), walletAccount.currency) : "$0"} detail="Saldo interno" />
+        ) : null}
         <DataPanel title="Visitas" value={String(customer.total_visits)} detail="Historial" />
         <DataPanel title="Ultima visita" value={customer.last_visit_at ? new Date(customer.last_visit_at).toLocaleDateString("es-MX") : "Sin visita"} detail="Actividad reciente" />
       </section>
@@ -211,6 +214,7 @@ export default async function CustomerDetailPage({
         )}
       </ModuleCard>
 
+      {showWalletMvp ? (
       <section id="wallet" className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
         <ModuleCard title="Wallet" description="Monedero interno del cliente, sin pagos reales.">
           {walletAccount ? (
@@ -296,7 +300,9 @@ export default async function CustomerDetailPage({
           </div>
         </ModuleCard>
       </section>
+      ) : null}
 
+      {showWalletMvp ? (
       <ModuleCard title="Historial wallet" description="Movimientos recientes del monedero.">
         {walletTransactions.length ? (
           <DataTable
@@ -313,6 +319,7 @@ export default async function CustomerDetailPage({
           <EmptyState title="Sin movimientos wallet" description="Las recargas, bonos, consumos y ajustes apareceran aqui." />
         )}
       </ModuleCard>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
         <ModuleCard title="Datos principales" description="Editar ficha del cliente.">

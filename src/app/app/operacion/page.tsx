@@ -32,7 +32,9 @@ export default async function OperationPage({
     data.vipReservations.length +
     data.recentNoShows.length +
     data.openClockEntries.length +
-    data.overdueTasks.length;
+    data.overdueTasks.length +
+    data.birthdayCustomers.length +
+    data.inactiveCustomers.length;
   const estimatedSales = Number(data.closure?.estimated_sales ?? 0);
   const averageTicket = data.stats.expectedCustomers
     ? estimatedSales / data.stats.expectedCustomers
@@ -95,9 +97,9 @@ export default async function OperationPage({
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
         <StatCard title="Confirmadas" value={String(data.reservations.filter((reservation) => reservation.status === "confirmed").length)} detail="Reservas listas" />
         <StatCard title="En sala ahora" value={String(data.stats.employeesWorking)} detail="Equipo con entrada" />
-        <StatCard title="No-shows" value={String(data.recentNoShows.length)} detail="Ultimos 7 dias" />
+        <StatCard title="Clientes inactivos" value={String(data.stats.inactiveCustomers)} detail="Recuperables a 30 dias" />
+        <StatCard title="Cumpleanos" value={String(data.stats.birthdays)} detail="Este mes" />
         <StatCard title="Cortesias hoy" value={String(data.stats.courtesiesToday)} detail={currency.format(data.courtesyTotal)} />
-        <StatCard title="Merma registrada" value={String(data.stats.wasteAlerts)} detail="Alertas abiertas" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -138,6 +140,25 @@ export default async function OperationPage({
                   </p>
                   <Link href="/app/inventario" className="mt-3 inline-flex h-10 items-center rounded-lg bg-white px-3 text-sm font-medium text-stone-800">
                     Revisar inventario
+                  </Link>
+                </div>
+              ))}
+
+              {data.urgentBatches.map((batch) => (
+                <div key={batch.id} className="rounded-lg border border-orange-200 bg-orange-50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-stone-950">
+                        Producto por vencer: {batch.inventory_items?.name ?? "Producto"}
+                      </p>
+                      <p className="mt-1 text-sm text-stone-700">
+                        {batch.quantity} {batch.inventory_items?.unit ?? ""} / vence {batch.expiration_date ?? "sin fecha"}.
+                      </p>
+                    </div>
+                    <StatusBadge status={batch.status} />
+                  </div>
+                  <Link href="/app/inventario?view=vencimientos" className="mt-3 inline-flex h-10 items-center rounded-lg bg-white px-3 text-sm font-medium text-stone-800">
+                    Ver productos por vencer
                   </Link>
                 </div>
               ))}
@@ -190,6 +211,30 @@ export default async function OperationPage({
                   </form>
                 </div>
               ))}
+
+              {data.birthdayCustomers.slice(0, 4).map((customer) => (
+                <div key={`birthday-${customer.id}`} className="rounded-lg border border-violet-200 bg-violet-50 p-4">
+                  <p className="text-sm font-semibold text-stone-950">Cumpleanos del mes: {customer.full_name}</p>
+                  <p className="mt-1 text-sm text-stone-700">{customer.phone ?? customer.email ?? "Sin contacto"}</p>
+                  <Link href="/app/marketing?segment=birthday_month&type=birthday" className="mt-3 inline-flex h-10 items-center rounded-lg bg-white px-3 text-sm font-medium text-stone-800">
+                    Crear campana
+                  </Link>
+                </div>
+              ))}
+
+              {data.inactiveCustomers.length ? (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 p-4">
+                  <p className="text-sm font-semibold text-stone-950">
+                    {data.inactiveCustomers.length} clientes pueden recuperarse
+                  </p>
+                  <p className="mt-1 text-sm text-stone-700">
+                    No han vuelto en mas de 30 dias. Puedes activar una campana de regreso.
+                  </p>
+                  <Link href="/app/marketing?segment=inactive_60d&type=inactive_customers" className="mt-3 inline-flex h-10 items-center rounded-lg bg-white px-3 text-sm font-medium text-stone-800">
+                    Crear campana
+                  </Link>
+                </div>
+              ) : null}
 
               {data.openClockEntries.map((entry) => (
                 <div key={entry.id} className="rounded-lg border border-sky-200 bg-sky-50 p-4">
