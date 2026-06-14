@@ -595,6 +595,7 @@ export async function updatePublicWebsiteSettingsAction(formData: FormData) {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const returnTo = requiredString(formData, "return_to") || "/app/configuracion";
+  const separator = returnTo.includes("?") ? "&" : "?";
 
   const { error } = await supabase
     .from("businesses")
@@ -619,13 +620,13 @@ export async function updatePublicWebsiteSettingsAction(formData: FormData) {
     .eq("id", current.businessId);
 
   if (error) {
-    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}${separator}error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/app/configuracion");
   revalidatePath("/app/club-clientes");
   revalidatePath(`/site/${current.business.slug}`);
-  redirect(`${returnTo}?success=public_settings_updated`);
+  redirect(`${returnTo}${separator}success=public_settings_updated`);
 }
 
 export async function updateBusinessProfileAction(formData: FormData) {
@@ -664,9 +665,10 @@ export async function updateBusinessSettingsAction(formData: FormData) {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
   const returnTo = requiredString(formData, "return_to") || "/app/configuracion";
+  const separator = returnTo.includes("?") ? "&" : "?";
 
   if (!["superadmin", "owner", "manager"].includes(current.role)) {
-    redirect(`${returnTo}?error=forbidden`);
+    redirect(`${returnTo}${separator}error=forbidden`);
   }
 
   const { error } = await supabase.from("business_settings").upsert(
@@ -684,12 +686,12 @@ export async function updateBusinessSettingsAction(formData: FormData) {
   );
 
   if (error) {
-    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}${separator}error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/app/configuracion");
   revalidatePath(returnTo);
-  redirect(`${returnTo}?success=business_settings_updated`);
+  redirect(`${returnTo}${separator}success=business_settings_updated`);
 }
 
 export async function updateBusinessUserAction(formData: FormData) {
@@ -747,9 +749,10 @@ export async function createRewardAction(formData: FormData) {
   const name = requiredString(formData, "name");
   const pointsRequired = Number(requiredString(formData, "points_required"));
   const returnTo = requiredString(formData, "return_to") || "/app/fidelizacion";
+  const separator = returnTo.includes("?") ? "&" : "?";
 
   if (!name || !pointsRequired || pointsRequired <= 0) {
-    redirect(`${returnTo}?error=reward_validation`);
+    redirect(`${returnTo}${separator}error=reward_validation`);
   }
 
   const { error } = await supabase.from("rewards").insert({
@@ -761,12 +764,12 @@ export async function createRewardAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}${separator}error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/app/fidelizacion");
   revalidatePath("/app/recompensas");
-  redirect(`${returnTo}?success=reward_created`);
+  redirect(`${returnTo}${separator}success=reward_created`);
 }
 
 export async function adjustLoyaltyPointsAction(formData: FormData) {

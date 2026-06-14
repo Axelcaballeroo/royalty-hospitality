@@ -37,11 +37,7 @@ export const navigationGroups = [
     label: "Clientes",
     icon: Users,
     items: [
-      { name: "CRM Clientes", href: "/app/clientes", icon: Users, moduleKey: "crm" },
-      { name: "Programa de puntos", href: "/app/programa-puntos", icon: Gift, moduleKey: "loyalty" },
-      { name: "Recompensas", href: "/app/recompensas", icon: Gift, moduleKey: "loyalty" },
-      { name: "Club de clientes", href: "/app/club-clientes", icon: Crown, moduleKey: "loyalty" },
-      { name: "Registro QR", href: "/app/registro-qr", icon: QrCode, moduleKey: "loyalty" },
+      { name: "Centro de Clientes", href: "/app/clientes", icon: Users, moduleKey: "crm" },
     ],
   },
   {

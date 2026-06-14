@@ -973,11 +973,22 @@ export async function getCustomersData(filters: CustomerFilters = {}) {
 
   const { data } = await query.order("created_at", { ascending: false });
   const customers = (data ?? []) as Customer[];
-  const { data: pointsIssued } = await supabase
-    .from("loyalty_transactions")
-    .select("points")
-    .eq("business_id", current.businessId)
-    .eq("type", "earn");
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  const monthStartDate = monthStart.toISOString().slice(0, 10);
+  const [{ data: pointsIssued }, { count: visitsThisMonth }] = await Promise.all([
+    supabase
+      .from("loyalty_transactions")
+      .select("points")
+      .eq("business_id", current.businessId)
+      .eq("type", "earn"),
+    supabase
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "completed")
+      .gte("date", monthStartDate),
+  ]);
 
   return {
     current,
@@ -996,6 +1007,7 @@ export async function getCustomersData(filters: CustomerFilters = {}) {
       }).length,
       pointsIssued:
         pointsIssued?.reduce((sum, transaction) => sum + Math.max(0, Number(transaction.points)), 0) ?? 0,
+      visitsThisMonth: visitsThisMonth ?? 0,
     },
   };
 }
