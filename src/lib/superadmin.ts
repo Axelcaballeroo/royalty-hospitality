@@ -1,15 +1,12 @@
 import { redirect } from "next/navigation";
+import { getAuthUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSuperadminEmailsEnv } from "@/lib/supabase/env";
 import { moduleCatalog, normalizePlan, planModules, type PlanKey } from "@/lib/plans";
 
 export async function isSuperadmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getAuthUser();
   if (!user) {
     return false;
   }
@@ -21,6 +18,7 @@ export async function isSuperadmin() {
     return true;
   }
 
+  const supabase = await createClient();
   const { data } = await supabase
     .from("business_users")
     .select("id")
@@ -34,11 +32,7 @@ export async function isSuperadmin() {
 }
 
 export async function requireSuperadmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getAuthUser();
   if (!user) {
     redirect("/login");
   }
@@ -46,6 +40,7 @@ export async function requireSuperadmin() {
   const allowed = await isSuperadmin();
   if (!allowed) {
     if (process.env.NODE_ENV === "development") {
+      const supabase = await createClient();
       const { data: roles } = await supabase
         .from("business_users")
         .select("business_id, role, status")

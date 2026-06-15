@@ -33,7 +33,9 @@ export default async function AuthDebugPage() {
   const supabase = await createClient();
   const {
     data: { user: supabaseUser },
+    error: authError,
   } = await supabase.auth.getUser();
+  const authErrorCode = authError && "code" in authError ? String(authError.code) : null;
 
   const { data: businessUser } = supabaseUser
     ? await supabase
@@ -51,6 +53,8 @@ export default async function AuthDebugPage() {
 
   const rows = [
     ["Server user found", supabaseUser ? "yes" : "no"],
+    ["Auth error", authError?.message ?? "none"],
+    ["Auth error code", authErrorCode ?? "none"],
     ["User email", supabaseUser?.email ?? "No authenticated user"],
     ["User id", supabaseUser?.id ?? "No authenticated user"],
     ["Current business", business ? `${business.name} (${business.id})` : "Not found"],

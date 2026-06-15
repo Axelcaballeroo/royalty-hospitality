@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Crown } from "lucide-react";
 import { requireSuperadmin } from "@/lib/superadmin";
+import { getAuthSession, isAuthRateLimited } from "@/lib/auth/session";
 
 const nav = [
   ["Dashboard", "/superadmin"],
@@ -13,6 +14,20 @@ const nav = [
 export default async function SuperadminLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const session = await getAuthSession();
+  if (isAuthRateLimited(session)) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-stone-950 px-6 text-white">
+        <section className="max-w-md rounded-2xl border border-white/10 bg-white p-6 text-center text-stone-950">
+          <p className="text-lg font-semibold">Estamos validando tu sesion.</p>
+          <p className="mt-3 text-sm leading-6 text-stone-500">
+            Supabase limito temporalmente la validacion de Auth. Intenta recargar en unos segundos.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   await requireSuperadmin();
 
   return (

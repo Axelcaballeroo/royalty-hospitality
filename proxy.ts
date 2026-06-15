@@ -2,6 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
+  const isPrivateRoute =
+    request.nextUrl.pathname.startsWith("/app") ||
+    request.nextUrl.pathname.startsWith("/superadmin");
+
+  if (!isPrivateRoute) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   });
@@ -33,13 +41,19 @@ export async function proxy(request: NextRequest) {
 
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser();
 
-  const isPrivateRoute =
-    request.nextUrl.pathname.startsWith("/app") ||
-    request.nextUrl.pathname.startsWith("/superadmin");
+  if (error) {
+    const code = "code" in error ? String(error.code) : null;
+    console.error("proxy auth.getUser error:", error.message, code);
 
-  if (isPrivateRoute && !user) {
+    if (code === "over_request_rate_limit") {
+      return supabaseResponse;
+    }
+  }
+
+  if (!user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.search = "";

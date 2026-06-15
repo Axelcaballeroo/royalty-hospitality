@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { cache } from "react";
+import { getAuthUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 export type CurrentBusiness = {
@@ -95,16 +97,13 @@ type BusinessUserRow = {
       }[];
 };
 
-export async function getCurrentBusiness(): Promise<CurrentBusiness | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+export const getCurrentBusiness = cache(async (): Promise<CurrentBusiness | null> => {
+  const user = await getAuthUser();
   if (!user) {
     return null;
   }
 
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("business_users")
     .select(
@@ -134,7 +133,7 @@ export async function getCurrentBusiness(): Promise<CurrentBusiness | null> {
     role: data.role,
     business,
   };
-}
+});
 
 export async function requireCurrentBusiness(): Promise<CurrentBusiness> {
   const current = await getCurrentBusiness();
