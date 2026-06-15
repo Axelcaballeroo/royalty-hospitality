@@ -370,9 +370,11 @@ export async function createReservationAction(formData: FormData) {
   const date = requiredString(formData, "date");
   const time = requiredString(formData, "time");
   const partySize = Number(requiredString(formData, "party_size"));
+  const returnTo = requiredString(formData, "return_to") || "/app/reservas";
+  const separator = returnTo.includes("?") ? "&" : "?";
 
   if (!date || !time || !partySize || partySize <= 0) {
-    redirect("/app/reservas?error=reservation_validation");
+    redirect(`${returnTo}${separator}error=reservation_validation`);
   }
 
   if (!customerId) {
@@ -381,7 +383,7 @@ export async function createReservationAction(formData: FormData) {
     const quickEmail = requiredString(formData, "quick_customer_email");
 
     if (!quickName || (!quickPhone && !quickEmail)) {
-      redirect("/app/reservas?error=customer_required");
+      redirect(`${returnTo}${separator}error=customer_required`);
     }
 
     const { data: customer, error: customerError } = await supabase
@@ -402,7 +404,7 @@ export async function createReservationAction(formData: FormData) {
       .single<{ id: string }>();
 
     if (customerError || !customer) {
-      redirect(`/app/reservas?error=${encodeURIComponent(customerError?.message ?? "quick_customer_failed")}`);
+      redirect(`${returnTo}${separator}error=${encodeURIComponent(customerError?.message ?? "quick_customer_failed")}`);
     }
 
     customerId = customer.id;
@@ -422,7 +424,7 @@ export async function createReservationAction(formData: FormData) {
       prefixSource: current.business.slug,
     });
   } catch (error) {
-    redirect(`/app/reservas?error=${encodeURIComponent(error instanceof Error ? error.message : "club_access_failed")}`);
+    redirect(`${returnTo}${separator}error=${encodeURIComponent(error instanceof Error ? error.message : "club_access_failed")}`);
   }
 
   const { data, error } = await supabase
@@ -443,7 +445,7 @@ export async function createReservationAction(formData: FormData) {
     .single<{ id: string }>();
 
   if (error || !data) {
-    redirect(`/app/reservas?error=${encodeURIComponent(error?.message ?? "reservation_failed")}`);
+    redirect(`${returnTo}${separator}error=${encodeURIComponent(error?.message ?? "reservation_failed")}`);
   }
 
   await addCustomerEvent({
@@ -457,7 +459,7 @@ export async function createReservationAction(formData: FormData) {
 
   revalidatePath("/app/reservas");
   revalidatePath("/app/operacion");
-  redirect("/app/reservas?success=reservation_created");
+  redirect(`${returnTo}${separator}success=reservation_created`);
 }
 
 export async function updateReservationStatusAction(formData: FormData) {
@@ -467,9 +469,10 @@ export async function updateReservationStatusAction(formData: FormData) {
   const customerId = requiredString(formData, "customer_id");
   const status = requiredString(formData, "status");
   const returnTo = requiredString(formData, "return_to") || "/app/reservas";
+  const separator = returnTo.includes("?") ? "&" : "?";
 
   if (!validReservationStatuses.includes(status)) {
-    redirect(`${returnTo}?error=invalid_status`);
+    redirect(`${returnTo}${separator}error=invalid_status`);
   }
 
   const { data: existingReservation } = await supabase
@@ -491,7 +494,7 @@ export async function updateReservationStatusAction(formData: FormData) {
     .eq("id", id);
 
   if (error) {
-    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}${separator}error=${encodeURIComponent(error.message)}`);
   }
 
   if (status === "completed" && existingReservation?.status !== "completed") {
@@ -531,7 +534,7 @@ export async function updateReservationStatusAction(formData: FormData) {
         reservationId: id,
       });
     } catch (loyaltyError) {
-      redirect(`${returnTo}?error=${encodeURIComponent(loyaltyError instanceof Error ? loyaltyError.message : "loyalty_points_failed")}`);
+      redirect(`${returnTo}${separator}error=${encodeURIComponent(loyaltyError instanceof Error ? loyaltyError.message : "loyalty_points_failed")}`);
     }
   }
 
@@ -557,7 +560,7 @@ export async function updateReservationStatusAction(formData: FormData) {
 
   revalidatePath("/app/reservas");
   revalidatePath("/app/operacion");
-  redirect(`${returnTo}?success=status_updated`);
+  redirect(`${returnTo}${separator}success=status_updated`);
 }
 
 export async function updateReservationAction(formData: FormData) {
@@ -814,9 +817,10 @@ export async function redeemRewardAction(formData: FormData) {
   const customerId = requiredString(formData, "customer_id");
   const rewardId = requiredString(formData, "reward_id");
   const returnTo = requiredString(formData, "return_to") || `/app/clientes/${customerId}`;
+  const separator = returnTo.includes("?") ? "&" : "?";
 
   if (!customerId || !rewardId) {
-    redirect(`${returnTo}?error=reward_validation`);
+    redirect(`${returnTo}${separator}error=reward_validation`);
   }
 
   const [accountResult, rewardResult] = await Promise.all([
@@ -839,11 +843,11 @@ export async function redeemRewardAction(formData: FormData) {
   const reward = rewardResult.data;
 
   if (!reward) {
-    redirect(`${returnTo}?error=reward_not_found`);
+    redirect(`${returnTo}${separator}error=reward_not_found`);
   }
 
   if (pointsBalance < reward.points_required) {
-    redirect(`${returnTo}?error=insufficient_points`);
+    redirect(`${returnTo}${separator}error=insufficient_points`);
   }
 
   try {
@@ -864,12 +868,12 @@ export async function redeemRewardAction(formData: FormData) {
       description: `${reward.name} por ${reward.points_required} puntos`,
     });
   } catch (error) {
-    redirect(`${returnTo}?error=${encodeURIComponent(error instanceof Error ? error.message : "reward_redeem_failed")}`);
+    redirect(`${returnTo}${separator}error=${encodeURIComponent(error instanceof Error ? error.message : "reward_redeem_failed")}`);
   }
 
   revalidatePath(returnTo);
   revalidatePath("/app/fidelizacion");
-  redirect(`${returnTo}?success=reward_redeemed`);
+  redirect(`${returnTo}${separator}success=reward_redeemed`);
 }
 
 export async function registerConsumptionAction(formData: FormData) {
@@ -878,9 +882,10 @@ export async function registerConsumptionAction(formData: FormData) {
   const amount = Number(requiredString(formData, "amount"));
   const comment = requiredString(formData, "comment");
   const returnTo = requiredString(formData, "return_to") || "/app/fidelizacion/check-in";
+  const separator = returnTo.includes("?") ? "&" : "?";
 
   if (!customerId || !amount || amount <= 0) {
-    redirect(`${returnTo}?error=consumption_validation`);
+    redirect(`${returnTo}${separator}error=consumption_validation`);
   }
 
   const points = Math.floor(amount);
@@ -903,12 +908,12 @@ export async function registerConsumptionAction(formData: FormData) {
       description: `Cliente acumulo ${points} puntos por consumo.`,
     });
   } catch (error) {
-    redirect(`${returnTo}?error=${encodeURIComponent(error instanceof Error ? error.message : "consumption_failed")}`);
+    redirect(`${returnTo}${separator}error=${encodeURIComponent(error instanceof Error ? error.message : "consumption_failed")}`);
   }
 
   revalidatePath(returnTo);
   revalidatePath("/app/fidelizacion");
-  redirect(`${returnTo}?success=consumption_registered`);
+  redirect(`${returnTo}${separator}success=consumption_registered`);
 }
 
 async function upsertWasteAlert(input: {
@@ -2007,6 +2012,8 @@ export async function upsertDailyClosureAction(formData: FormData) {
   const supabase = await createClient();
   const date = requiredString(formData, "date") || new Date().toISOString().slice(0, 10);
   const status = requiredString(formData, "status") === "closed" ? "closed" : "draft";
+  const returnTo = requiredString(formData, "return_to") || `/app/cierre?date=${date}`;
+  const separator = returnTo.includes("?") ? "&" : "?";
 
   const payload = {
     business_id: current.businessId,
@@ -2031,7 +2038,7 @@ export async function upsertDailyClosureAction(formData: FormData) {
     .single<{ id: string }>();
 
   if (error || !data) {
-    redirect(`/app/cierre?date=${date}&error=${encodeURIComponent(error?.message ?? "closure_failed")}`);
+    redirect(`${returnTo}${separator}error=${encodeURIComponent(error?.message ?? "closure_failed")}`);
   }
 
   await supabase
@@ -2043,7 +2050,7 @@ export async function upsertDailyClosureAction(formData: FormData) {
 
   revalidatePath("/app/cierre");
   revalidatePath("/app/operacion");
-  redirect(`/app/cierre?date=${date}&success=${status === "closed" ? "closure_closed" : "closure_saved"}`);
+  redirect(`${returnTo}${separator}success=${status === "closed" ? "closure_closed" : "closure_saved"}`);
 }
 
 export async function createCourtesyAction(formData: FormData) {

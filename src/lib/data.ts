@@ -656,6 +656,7 @@ export async function getOperationData() {
     courtesies,
     campaigns,
     closure,
+    rewards,
   ] = await Promise.all([
     supabase
       .from("reservations")
@@ -745,6 +746,12 @@ export async function getOperationData() {
       .eq("business_id", current.businessId)
       .eq("date", today)
       .maybeSingle<DailyClosure>(),
+    supabase
+      .from("rewards")
+      .select("id, name, description, points_required, status")
+      .eq("business_id", current.businessId)
+      .eq("status", "active")
+      .order("points_required", { ascending: true }),
   ]);
 
   const reservationRows = (reservations.data ?? []) as unknown as OperationReservation[];
@@ -798,6 +805,7 @@ export async function getOperationData() {
     courtesyTotal,
     campaigns: (campaigns.data ?? []) as Campaign[],
     closure: closureRow,
+    rewards: (rewards.data ?? []) as Reward[],
     stats: {
       reservationsToday: reservationRows.length,
       expectedCustomers: reservationRows.reduce(

@@ -4,7 +4,6 @@ import {
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
-  Clock3,
   Crown,
   FileWarning,
   Gift,
@@ -25,12 +24,7 @@ export const navigationGroups = [
     label: "Operacion",
     icon: ClipboardList,
     items: [
-      { name: "Operacion de hoy", href: "/app/operacion", icon: ClipboardList, moduleKey: "dashboard" },
-      { name: "Reservas", href: "/app/reservas", icon: Clock3, moduleKey: "reservations" },
-      { name: "Check-in", href: "/app/checkin", icon: QrCode, moduleKey: "loyalty" },
-      { name: "Cierre del dia", href: "/app/cierre", icon: ClipboardCheck, moduleKey: "dashboard" },
-      { name: "Incidencias", href: "/app/incidencias", icon: FileWarning, moduleKey: "dashboard" },
-      { name: "Cortesias", href: "/app/cortesias", icon: Gift, moduleKey: "dashboard" },
+      { name: "Centro Operativo", href: "/app/operacion", icon: ClipboardList, moduleKey: "dashboard" },
     ],
   },
   {
