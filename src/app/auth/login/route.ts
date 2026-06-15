@@ -9,7 +9,7 @@ function safeNextPath(nextPath: FormDataEntryValue | null) {
     return value;
   }
 
-  return "/app/dashboard";
+  return "/app/operacion";
 }
 
 function buildLoginRedirect(request: NextRequest, input: { error: string; nextPath: string }) {
@@ -20,10 +20,13 @@ function buildLoginRedirect(request: NextRequest, input: { error: string; nextPa
 }
 
 export async function POST(request: NextRequest) {
+  console.log("AUTH LOGIN ROUTE HIT");
+
   const formData = await request.formData();
   const email = normalizeEmail(String(formData.get("email") ?? ""));
   const password = String(formData.get("password") ?? "");
   const nextPath = safeNextPath(formData.get("next"));
+  const origin = request.nextUrl.origin;
 
   if (!email || !password || !isValidEmail(email)) {
     return buildLoginRedirect(request, {
@@ -32,8 +35,8 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const successUrl = new URL(nextPath, request.url);
-  let response = NextResponse.redirect(successUrl, { status: 303 });
+  const successUrl = new URL(nextPath, origin);
+  const response = NextResponse.redirect(successUrl, { status: 303 });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,24 +48,34 @@ export async function POST(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
+            response.cookies.set(name, value, {
+              ...options,
+              path: "/",
+              sameSite: "lax",
+              secure: process.env.NODE_ENV === "production",
+            });
           });
         },
       },
     },
   );
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
-  if (error) {
-    response = buildLoginRedirect(request, {
-      error: error.message,
+  console.log("AUTH LOGIN SESSION", Boolean(data.session));
+
+  if (error || !data.session) {
+    return buildLoginRedirect(request, {
+      error: error?.message || "No se pudo iniciar sesion",
       nextPath,
     });
   }
+
+  response.headers.set("x-auth-login", "ok");
+  response.headers.set("x-auth-session", "yes");
 
   return response;
 }
