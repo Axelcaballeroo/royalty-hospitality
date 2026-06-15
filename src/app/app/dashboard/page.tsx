@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight, BarChart3, Megaphone, Package, Users } from "lucide-react";
 import { AssistantQuickActions } from "@/components/assistant-quick-actions";
+import { RoyaltyAssistantPanel } from "@/components/royalty-assistant-panel";
 import { getDashboardData } from "@/lib/data";
 import { ModuleCard, SectionHeader, StatCard, StatusBadge } from "@/components/ui";
 
@@ -126,6 +127,17 @@ export default async function DashboardPage() {
     },
     { text: salesSignal, tone: stats.estimatedSales > 0 ? "success" : "neutral" },
   ] as const;
+  const assistantInsights = [
+    stats.inactiveCustomers
+      ? `Tienes ${stats.inactiveCustomers} clientes que no visitan el restaurante hace mas de 30 dias.`
+      : "Tus clientes recientes no muestran una senal fuerte de abandono.",
+    stats.openWasteAlerts || stats.urgentBatches
+      ? "Hay productos proximos a vencer que podrian convertirse en promocion hoy."
+      : "Inventario no muestra productos urgentes por convertir en promocion.",
+    stats.birthdayCustomers
+      ? `${stats.birthdayCustomers} clientes cumplen anos este mes y pueden recibir una cortesia.`
+      : "No hay cumpleanos detectados este mes en la base actual.",
+  ];
 
   return (
     <div className="space-y-6">
@@ -152,6 +164,22 @@ export default async function DashboardPage() {
         </Link>
       ) : null}
 
+      <RoyaltyAssistantPanel
+        metrics={[
+          { label: "reservas hoy", value: stats.reservationsToday },
+          { label: "clientes VIP hoy", value: stats.vipReservationsToday },
+          { label: "productos por vencer", value: stats.urgentBatches },
+          { label: "clientes inactivos", value: stats.inactiveCustomers },
+        ]}
+        insights={assistantInsights}
+        actions={[
+          { label: "Revisar reservas", href: "/app/operacion?tab=reservas" },
+          { label: "Crear promocion", href: "/app/marketing?type=waste_reduction" },
+          { label: "Recuperar clientes", href: "/app/marketing?segment=inactive_60d&type=inactive_customers" },
+          { label: "Ver inventario", href: "/app/inventario?view=vencimientos" },
+        ]}
+      />
+
       <AssistantQuickActions compact />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -174,10 +202,10 @@ export default async function DashboardPage() {
       <ModuleCard title="Acciones recomendadas" description="Siguientes pasos claros, sin entrar al detalle operativo diario.">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <RecommendedAction
-            title="Crear campaña para clientes inactivos"
+            title="Crear campana para clientes inactivos"
             description={`${stats.inactiveCustomers} clientes pueden volver con una accion puntual.`}
             href="/app/marketing?segment=inactive_60d"
-            action="Crear campaña"
+            action="Crear campana"
           />
           <RecommendedAction
             title="Revisar productos por vencer"
@@ -192,7 +220,7 @@ export default async function DashboardPage() {
             action="Abrir cierre"
           />
           <RecommendedAction
-            title="Ver desempeño de clientes"
+            title="Ver desempeno de clientes"
             description="Analiza nuevos, inactivos, puntos y actividad."
             href="/app/clientes"
             action="Ver clientes"
@@ -245,7 +273,7 @@ export default async function DashboardPage() {
           title="Marketing"
           href="/app/marketing"
           rows={[
-            { label: "Campañas enviadas", value: String(stats.campaignsSent) },
+            { label: "Campanas enviadas", value: String(stats.campaignsSent) },
             { label: "Oportunidades", value: String(opportunities) },
             { label: "Clientes recuperables", value: String(stats.inactiveCustomers) },
             { label: "Clientes alcanzados", value: String(stats.customersReached) },

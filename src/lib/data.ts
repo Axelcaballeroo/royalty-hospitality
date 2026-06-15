@@ -436,6 +436,7 @@ export async function getDashboardData() {
 
   const [
     reservationsToday,
+    vipReservationsToday,
     completedReservations,
     estimatedSales,
     customersTotal,
@@ -467,6 +468,12 @@ export async function getDashboardData() {
       .select("id", { count: "exact", head: true })
       .eq("business_id", current.businessId)
       .eq("date", today),
+    supabase
+      .from("reservations")
+      .select("id, customers(loyalty_code, loyalty_accounts(tier))")
+      .eq("business_id", current.businessId)
+      .eq("date", today)
+      .neq("status", "cancelled"),
     supabase
       .from("reservations")
       .select("id", { count: "exact", head: true })
@@ -608,6 +615,18 @@ export async function getDashboardData() {
     current,
     stats: {
       reservationsToday: reservationsToday.count ?? 0,
+      vipReservationsToday:
+        ((vipReservationsToday.data ?? []) as unknown as {
+          customers?: {
+            loyalty_code: string | null;
+            loyalty_accounts?: { tier: string }[] | { tier: string } | null;
+          } | null;
+        }[]).filter((reservation) => {
+          const account = Array.isArray(reservation.customers?.loyalty_accounts)
+            ? reservation.customers?.loyalty_accounts[0]
+            : reservation.customers?.loyalty_accounts;
+          return Boolean(reservation.customers?.loyalty_code) || ["gold", "black"].includes(account?.tier ?? "");
+        }).length,
       completedReservations: completedReservations.count ?? 0,
       estimatedSales:
         estimatedSales.data?.reduce(
@@ -1633,7 +1652,7 @@ export async function getBusinessSettingsData() {
 export async function getOnboardingChecklistData() {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
-  const [settings, rewards, customers, employees, inventoryItems, loyaltyAccounts] = await Promise.all([
+  const [settings, rewards, customers, employees, loyaltyAccounts] = await Promise.all([
     supabase
       .from("business_settings")
       .select("points_per_currency")
@@ -1650,11 +1669,6 @@ export async function getOnboardingChecklistData() {
       .eq("business_id", current.businessId),
     supabase
       .from("employees")
-      .select("id", { count: "exact", head: true })
-      .eq("business_id", current.businessId)
-      .eq("status", "active"),
-    supabase
-      .from("inventory_items")
       .select("id", { count: "exact", head: true })
       .eq("business_id", current.businessId)
       .eq("status", "active"),
@@ -1697,8 +1711,8 @@ export async function getOnboardingChecklistData() {
     },
     {
       label: "Menu cargado",
-      done: (inventoryItems.count ?? 0) > 0,
-      href: "/app/inventario?action=new",
+      done: Boolean(current.business.menu_pdf_url),
+      href: "/app/configuracion",
     },
   ];
 

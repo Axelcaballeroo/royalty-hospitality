@@ -24,6 +24,8 @@ begin
     country,
     plan,
     status,
+    logo_url,
+    cover_url,
     public_description,
     menu_pdf_url,
     brand_primary_color,
@@ -44,6 +46,8 @@ begin
     'Mexico',
     'business',
     'active',
+    'https://ui-avatars.com/api/?name=Royalty+Demo+Bistro&background=1c1917&color=ffffff&size=256',
+    'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=1600&q=80',
     'Reserva mesa, unete al club y acumula puntos en cada visita. Una experiencia demo conectada de web, reservas, clientes y beneficios.',
     'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
     '#1c1917',
@@ -56,6 +60,8 @@ begin
   on conflict (slug) do update
     set plan = excluded.plan,
         status = excluded.status,
+        logo_url = excluded.logo_url,
+        cover_url = excluded.cover_url,
         public_description = excluded.public_description,
         menu_pdf_url = excluded.menu_pdf_url,
         website_enabled = excluded.website_enabled,
@@ -121,6 +127,8 @@ begin
   insert into public.rewards (business_id, name, description, points_required, status)
   values
     (demo_business_id, 'Postre de cortesia', 'Canje por un postre de la casa.', 400, 'active'),
+    (demo_business_id, 'Bebida de bienvenida', 'Bebida gratis en tu proxima visita.', 700, 'active'),
+    (demo_business_id, 'Descuento 10%', 'Descuento especial para miembros activos del club.', 1000, 'active'),
     (demo_business_id, 'Cena privada upgrade', 'Beneficio demo para clientes gold.', 1500, 'active');
 
   insert into public.wallet_accounts (business_id, customer_id, balance, currency, status)

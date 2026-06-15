@@ -113,6 +113,9 @@ export default async function ClubAccountPage({
   const tierProgress = nextTierInfo(account.tier, points);
   const nextReward = data.rewards.find((reward) => reward.points_required > points) ?? data.rewards[0];
   const availableRewards = data.rewards.filter((reward) => points >= reward.points_required);
+  const rewardProgress = nextReward
+    ? Math.min(100, Math.round((points / Math.max(1, nextReward.points_required)) * 100))
+    : 0;
   const qrDataUrl = await createQrDataUrl(`${business.slug}:${data.customer.loyalty_code ?? data.customer.id}`);
   const history = [
     ...data.reservations.map((reservation) => ({
@@ -184,6 +187,22 @@ export default async function ClubAccountPage({
                 <div className="h-full rounded-full bg-white" style={{ width: `${tierProgress.progress}%` }} />
               </div>
             </div>
+            {nextReward ? (
+              <div className="mt-4 rounded-3xl bg-white p-4 text-stone-950">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">Proximo beneficio</p>
+                    <p className="mt-2 text-lg font-semibold">{nextReward.name}</p>
+                  </div>
+                  <span className="rounded-full bg-stone-950 px-3 py-1 text-xs font-semibold text-white">
+                    {nextReward.points_required} pts
+                  </span>
+                </div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-stone-100">
+                  <div className="h-full rounded-full" style={{ width: `${rewardProgress}%`, backgroundColor: secondary }} />
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-[2rem] border border-white/10 bg-white p-6 text-stone-950 shadow-[0_30px_100px_rgba(0,0,0,0.25)]">
@@ -236,11 +255,19 @@ export default async function ClubAccountPage({
                 const unlocked = points >= reward.points_required;
                 return (
                   <div key={reward.id} className={["rounded-3xl border p-4", unlocked ? "border-emerald-200 bg-emerald-50" : "border-stone-200 bg-stone-50"].join(" ")}>
-                    <p className="text-sm font-semibold text-stone-950">{reward.name}</p>
-                    <p className="mt-1 text-xs font-semibold text-stone-500">{reward.points_required} puntos</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-semibold text-stone-950">{reward.name}</p>
+                      <span className={["rounded-full px-3 py-1 text-xs font-semibold", unlocked ? "bg-emerald-700 text-white" : "bg-white text-stone-500"].join(" ")}>
+                        {unlocked ? "Disponible" : `${reward.points_required} pts`}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs font-semibold text-stone-500">{reward.points_required} puntos</p>
                     <p className="mt-3 text-sm leading-6 text-stone-600">
                       {unlocked ? "Disponible para canjear." : `Te faltan ${reward.points_required - points} puntos.`}
                     </p>
+                    {reward.description ? (
+                      <p className="mt-3 text-sm leading-6 text-stone-500">{reward.description}</p>
+                    ) : null}
                   </div>
                 );
               }) : (

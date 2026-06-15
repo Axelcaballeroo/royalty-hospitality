@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CheckCircle2, ClipboardList, Megaphone, Plus } from "lucide-react";
 import { AssistantQuickActions } from "@/components/assistant-quick-actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { RoyaltyAssistantPanel } from "@/components/royalty-assistant-panel";
 import {
   createCourtesyAction,
   createInternalTaskAction,
@@ -146,6 +147,20 @@ export default async function OperationPage({
   const inRoomReservations = data.reservations.filter((reservation) => reservation.status === "completed");
   const activeReservations = data.reservations.filter((reservation) => reservation.status !== "cancelled");
   const customersInRoom = inRoomReservations.reduce((sum, reservation) => sum + Number(reservation.party_size), 0);
+  const assistantInsights = [
+    data.pendingReservations.length
+      ? `Hay ${data.pendingReservations.length} reservas pendientes por confirmar antes del servicio.`
+      : "Las reservas de hoy no tienen confirmaciones urgentes.",
+    data.vipReservations.length
+      ? `${data.vipReservations.length} clientes VIP visitaran hoy tu restaurante.`
+      : "No hay clientes VIP detectados en las reservas de hoy.",
+    data.urgentBatches.length || data.wasteAlerts.length
+      ? "Hay productos proximos a vencer que pueden convertirse en promocion."
+      : "Inventario no marca productos urgentes para hoy.",
+    data.inactiveCustomers.length
+      ? `${data.inactiveCustomers.length} clientes llevan mas de 30 dias sin regresar.`
+      : "La base de clientes no muestra una alerta fuerte de inactividad.",
+  ];
 
   const pendingItems = [
     ...data.urgentBatches.slice(0, 2).map((batch) => ({
@@ -265,6 +280,22 @@ export default async function OperationPage({
           {formatEventType(params.success)}
         </p>
       ) : null}
+
+      <RoyaltyAssistantPanel
+        metrics={[
+          { label: "reservas hoy", value: data.stats.reservationsToday },
+          { label: "clientes VIP hoy", value: data.vipReservations.length },
+          { label: "productos por vencer", value: data.urgentBatches.length },
+          { label: "clientes inactivos", value: data.inactiveCustomers.length },
+        ]}
+        insights={assistantInsights}
+        actions={[
+          { label: "Revisar reservas", href: "/app/operacion?tab=reservas" },
+          { label: "Crear promocion", href: "/app/marketing?type=waste_reduction" },
+          { label: "Recuperar clientes", href: "/app/marketing?segment=inactive_60d&type=inactive_customers" },
+          { label: "Ver inventario", href: "/app/inventario?view=vencimientos" },
+        ]}
+      />
 
       <AssistantQuickActions compact />
 
