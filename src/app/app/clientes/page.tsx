@@ -68,40 +68,94 @@ export default async function CustomersPage({
     ? params.tab ?? "perfiles"
     : "perfiles";
   const activeAction = params.action;
-  const [{ customers, stats }, loyalty, settingsData] = await Promise.all([
-    getCustomersData({
-      q: params.q,
-      status: params.status,
-      tag: params.tag,
-    }),
-    getLoyaltyData(),
-    getBusinessSettingsData(),
+  const needsCustomers = activeTab === "perfiles" || activeTab === "journey";
+  const needsLoyalty = activeTab === "journey" || activeTab === "fidelizacion" || activeTab === "beneficios";
+  const needsSettings = activeTab === "fidelizacion" || activeTab === "registro";
+  const [customersData, loyalty, settingsData] = await Promise.all([
+    needsCustomers
+      ? getCustomersData({
+          q: params.q,
+          status: params.status,
+          tag: params.tag,
+        })
+      : null,
+    needsLoyalty ? getLoyaltyData() : null,
+    needsSettings ? getBusinessSettingsData() : null,
   ]);
-  const { current, settings } = settingsData;
-  const business = current.business;
+  const customers = customersData?.customers ?? [];
+  const stats = customersData?.stats ?? {
+    activeCustomers: 0,
+    inactiveCustomers: 0,
+    pointsIssued: 0,
+    totalCustomers: 0,
+    vipCustomers: 0,
+    visitsThisMonth: 0,
+  };
+  const current = settingsData?.current ?? customersData?.current ?? loyalty?.current;
+  const settings = settingsData?.settings;
+  const business = current?.business ?? {
+    brand_primary_color: "#1c1917",
+    brand_secondary_color: "#10b981",
+    city: null,
+    country: null,
+    cover_url: null,
+    email: null,
+    id: "",
+    instagram_url: null,
+    facebook_url: null,
+    logo_url: null,
+    menu_pdf_url: null,
+    name: "",
+    phone: null,
+    plan: "business",
+    public_description: null,
+    reservation_enabled: true,
+    slug: "",
+    status: "active",
+    timezone: "America/Cancun",
+    type: null,
+    website_enabled: true,
+    whatsapp_url: null,
+    address: null,
+  };
+  const loyaltyData = loyalty ?? {
+    accounts: [],
+    rewards: [],
+    transactions: [],
+    summary: {
+      bronze: 0,
+      gold: 0,
+      black: 0,
+      pointsIssued: 0,
+      pointsRedeemed: 0,
+      registeredCustomers: 0,
+      silver: 0,
+      tierCounts: {
+        black: 0,
+        bronze: 0,
+        gold: 0,
+        silver: 0,
+      },
+    },
+  };
   const tags = Array.from(new Set(customers.flatMap((customer) => customer.tags))).sort();
   const pointsPerCurrency = settings?.points_per_currency ?? 1;
   const pesosPerPoint = pointsPerCurrency > 0 ? Math.round(1 / pointsPerCurrency) : 100;
   const averageTier =
-    Object.entries(loyalty.summary.tierCounts)
+    Object.entries(loyaltyData.summary.tierCounts)
       .sort(([, a], [, b]) => b - a)[0]?.[0] ?? "bronze";
-  const minRewardPoints = loyalty.rewards
+  const minRewardPoints = loyaltyData.rewards
     .filter((reward) => reward.status === "active")
     .sort((a, b) => a.points_required - b.points_required)[0]?.points_required ?? 500;
-  const customersWithReward = loyalty.accounts.filter((account) => account.points_balance >= minRewardPoints).length;
-  const activeCustomers = customers.filter((customer) => {
-    if (!customer.last_visit_at) return false;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
-    return new Date(customer.last_visit_at) >= cutoff;
-  }).length;
+  const customersWithReward = loyaltyData.accounts.filter((account) => account.points_balance >= minRewardPoints).length;
+  const activeCustomers = stats.activeCustomers;
   const headerStore = await headers();
   const protocol = headerStore.get("x-forwarded-proto") ?? "https";
   const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "";
   const origin = host ? `${protocol}://${host}` : "";
-  const registerLink = `${origin}/club/${business.slug}/registro`;
-  const clubLink = `${origin}/site/${business.slug}/club`;
-  const qrDataUrl = await createQrDataUrl(registerLink);
+  const registerLink = business ? `${origin}/club/${business.slug}/registro` : "";
+  const clubLink = business ? `${origin}/site/${business.slug}/club` : "";
+  const qrDataUrl = activeTab === "registro" && registerLink ? await createQrDataUrl(registerLink) : "";
 
   const rows = customers.map((customer) => [
     <Link key="name" href={`/app/clientes/${customer.id}`} className="font-medium text-stone-950 hover:underline">
@@ -235,7 +289,7 @@ export default async function CustomersPage({
       {activeTab === "journey" ? (
         <div className="space-y-6">
           <section className="grid gap-4 md:grid-cols-5">
-            <StatCard title="Registrados" value={String(loyalty.summary.registeredCustomers)} detail="Con cuenta de club" tone="dark" />
+            <StatCard title="Registrados" value={String(loyaltyData.summary.registeredCustomers)} detail="Con cuenta de club" tone="dark" />
             <StatCard title="Activos" value={String(activeCustomers)} detail="Visitaron en 30 dias" />
             <StatCard title="Con recompensa" value={String(customersWithReward)} detail="Pueden canjear" />
             <StatCard title="VIP" value={String(stats.vipCustomers)} detail="Frecuentes o alto gasto" />
@@ -285,9 +339,9 @@ export default async function CustomersPage({
       {activeTab === "fidelizacion" ? (
         <div className="space-y-6">
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard title="Clientes activos" value={String(loyalty.summary.registeredCustomers)} detail="Con cuenta de puntos" tone="dark" />
-            <StatCard title="Puntos emitidos" value={String(loyalty.summary.pointsIssued)} detail="Historico acumulado" />
-            <StatCard title="Puntos canjeados" value={String(loyalty.summary.pointsRedeemed)} detail="Beneficios usados" />
+            <StatCard title="Clientes activos" value={String(loyaltyData.summary.registeredCustomers)} detail="Con cuenta de puntos" tone="dark" />
+            <StatCard title="Puntos emitidos" value={String(loyaltyData.summary.pointsIssued)} detail="Historico acumulado" />
+            <StatCard title="Puntos canjeados" value={String(loyaltyData.summary.pointsRedeemed)} detail="Beneficios usados" />
             <StatCard title="Nivel promedio" value={formatStatus(averageTier)} detail="Nivel dominante" />
           </section>
 
@@ -371,9 +425,9 @@ export default async function CustomersPage({
       {activeTab === "beneficios" ? (
         <div className="space-y-6">
           <section className="grid gap-4 md:grid-cols-3">
-            <StatCard title="Beneficios activos" value={String(loyalty.rewards.filter((reward) => reward.status === "active").length)} detail="Disponibles para canje" tone="dark" />
-            <StatCard title="Canjes del mes" value={String(loyalty.summary.pointsRedeemed)} detail="Puntos canjeados" />
-            <StatCard title="Clientes que canjearon" value={String(loyalty.transactions.filter((transaction) => transaction.type === "redeem").length)} detail="Movimientos recientes" />
+            <StatCard title="Beneficios activos" value={String(loyaltyData.rewards.filter((reward) => reward.status === "active").length)} detail="Disponibles para canje" tone="dark" />
+            <StatCard title="Canjes del mes" value={String(loyaltyData.summary.pointsRedeemed)} detail="Puntos canjeados" />
+            <StatCard title="Clientes que canjearon" value={String(loyaltyData.transactions.filter((transaction) => transaction.type === "redeem").length)} detail="Movimientos recientes" />
           </section>
 
           {activeAction === "benefit" ? (
@@ -403,10 +457,10 @@ export default async function CustomersPage({
           )}
 
           <ModuleCard title="Lista de beneficios" description="Beneficios claros: descuento, postre, bebida o experiencia VIP.">
-            {loyalty.rewards.length ? (
+            {loyaltyData.rewards.length ? (
               <DataTable
                 columns={["Beneficio", "Puntos", "Estado", "Descripcion"]}
-                rows={loyalty.rewards.map((reward) => [
+                rows={loyaltyData.rewards.map((reward) => [
                   reward.name,
                   String(reward.points_required),
                   <StatusBadge key="status" status={reward.status} />,
@@ -482,3 +536,4 @@ export default async function CustomersPage({
     </div>
   );
 }
+

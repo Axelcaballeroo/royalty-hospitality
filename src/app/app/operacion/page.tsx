@@ -128,13 +128,32 @@ export default async function OperationPage({
     ? (params.tab as OperationTab)
     : "hoy";
   const activeAction = params.action as OperationAction;
+  const needsClosureData = activeTab === "cierre" || activeAction === "nueva-reserva";
+  const needsCheckInData = activeTab === "sala";
   const [data, closureData, checkInData] = await Promise.all([
     getOperationData(),
-    getDailyClosureData(params.date),
-    getCheckInData(params.q),
+    needsClosureData ? getDailyClosureData(params.date) : null,
+    needsCheckInData ? getCheckInData(params.q) : null,
   ]);
 
-  const closure = closureData.closure;
+  const closureContext = closureData ?? {
+    closure: null,
+    courtesies: [],
+    customers: [],
+    date: data.today,
+    defaults: {
+      completedReservations: 0,
+      courtesyTotal: 0,
+      noShows: 0,
+      wasteTotal: 0,
+    },
+    employees: [],
+  };
+  const checkInContext = checkInData ?? {
+    customers: [],
+    rewards: [],
+  };
+  const closure = closureContext.closure ?? data.closure;
   const estimatedSales = Number(closure?.estimated_sales ?? data.closure?.estimated_sales ?? 0);
   const activeAlerts =
     data.wasteAlerts.length +
@@ -237,7 +256,7 @@ export default async function OperationPage({
     </div>,
   ]);
 
-  const courtesyRows = closureData.courtesies.map((courtesy) => [
+  const courtesyRows = closureContext.courtesies.map((courtesy) => [
     courtesy.item_name,
     String(courtesy.quantity),
     currency.format(Number(courtesy.estimated_value)),
@@ -358,7 +377,7 @@ export default async function OperationPage({
                 <input type="hidden" name="return_to" value={tabHref("reservas")} />
                 <select name="customer_id" className={fieldClass}>
                   <option value="">Cliente existente o cliente rapido</option>
-                  {closureData.customers.map((customer) => (
+                  {closureContext.customers.map((customer) => (
                     <option key={customer.id} value={customer.id}>
                       {customer.full_name}
                     </option>
@@ -430,9 +449,9 @@ export default async function OperationPage({
                 Buscar cliente
               </button>
             </form>
-            {params.q && (checkInData.customers as CheckInCustomer[]).length ? (
+            {params.q && (checkInContext.customers as CheckInCustomer[]).length ? (
               <div className="mb-5 grid gap-3">
-                {(checkInData.customers as CheckInCustomer[]).map((customer) => {
+                {(checkInContext.customers as CheckInCustomer[]).map((customer) => {
                   const account = getAccount(customer);
                   return (
                     <div key={customer.id} className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
@@ -460,7 +479,7 @@ export default async function OperationPage({
                           <input type="hidden" name="return_to" value={`${tabHref("sala")}&q=${encodeURIComponent(params.q ?? "")}`} />
                           <select required name="reward_id" className={fieldClass}>
                             <option value="">Beneficio disponible</option>
-                            {checkInData.rewards.map((reward) => (
+                            {checkInContext.rewards.map((reward) => (
                               <option key={reward.id} value={reward.id}>
                                 {reward.name} - {reward.points_required} puntos
                               </option>
@@ -680,19 +699,19 @@ export default async function OperationPage({
             <StatCard title="Reservas" value={String(activeReservations.length)} detail="Agenda no cancelada" tone="dark" />
             <StatCard title="Clientes" value={String(data.stats.expectedCustomers)} detail="Esperados hoy" />
             <StatCard title="Ventas" value={currency.format(estimatedSales)} detail="Estimadas" />
-            <StatCard title="No-shows" value={String(closure?.no_shows ?? closureData.defaults.noShows)} detail="Del dia" />
+            <StatCard title="No-shows" value={String(closure?.no_shows ?? closureContext.defaults.noShows)} detail="Del dia" />
           </section>
 
           <ModuleCard title="Resumen del dia" description="Guarda el borrador operativo o cierra el dia cuando el gerente termine.">
             <form action={upsertDailyClosureAction} className="grid gap-5">
-              <input type="hidden" name="return_to" value={`${tabHref("cierre")}&date=${closureData.date}`} />
-              <input type="hidden" name="date" value={closureData.date} />
+              <input type="hidden" name="return_to" value={`${tabHref("cierre")}&date=${closureContext.date}`} />
+              <input type="hidden" name="date" value={closureContext.date} />
               <div className="grid gap-3 md:grid-cols-5">
                 <input name="estimated_sales" type="number" min="0" step="0.01" defaultValue={closure?.estimated_sales ?? 0} placeholder="Ventas estimadas" className={fieldClass} />
-                <input name="completed_reservations" type="number" min="0" defaultValue={closure?.completed_reservations ?? closureData.defaults.completedReservations} placeholder="Reservas completadas" className={fieldClass} />
-                <input name="no_shows" type="number" min="0" defaultValue={closure?.no_shows ?? closureData.defaults.noShows} placeholder="No-shows" className={fieldClass} />
-                <input name="courtesy_total" type="number" min="0" step="0.01" defaultValue={closure?.courtesy_total ?? closureData.defaults.courtesyTotal} placeholder="Cortesias" className={fieldClass} />
-                <input name="waste_total" type="number" min="0" step="0.01" defaultValue={closure?.waste_total ?? closureData.defaults.wasteTotal} placeholder="Perdida registrada" className={fieldClass} />
+                <input name="completed_reservations" type="number" min="0" defaultValue={closure?.completed_reservations ?? closureContext.defaults.completedReservations} placeholder="Reservas completadas" className={fieldClass} />
+                <input name="no_shows" type="number" min="0" defaultValue={closure?.no_shows ?? closureContext.defaults.noShows} placeholder="No-shows" className={fieldClass} />
+                <input name="courtesy_total" type="number" min="0" step="0.01" defaultValue={closure?.courtesy_total ?? closureContext.defaults.courtesyTotal} placeholder="Cortesias" className={fieldClass} />
+                <input name="waste_total" type="number" min="0" step="0.01" defaultValue={closure?.waste_total ?? closureContext.defaults.wasteTotal} placeholder="Perdida registrada" className={fieldClass} />
               </div>
               <textarea
                 name="summary"
@@ -742,12 +761,12 @@ export default async function OperationPage({
 
           <ModuleCard
             title="Cortesias"
-            description={`${closureData.courtesies.length} registros / ${currency.format(closureData.defaults.courtesyTotal)} estimados.`}
+            description={`${closureContext.courtesies.length} registros / ${currency.format(closureContext.defaults.courtesyTotal)} estimados.`}
           >
             {activeAction === "cortesia" ? (
               <form action={createCourtesyAction} className="mb-5 grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                <input type="hidden" name="return_to" value={`${tabHref("cierre")}&date=${closureData.date}`} />
-                <input type="hidden" name="date" value={closureData.date} />
+                <input type="hidden" name="return_to" value={`${tabHref("cierre")}&date=${closureContext.date}`} />
+                <input type="hidden" name="date" value={closureContext.date} />
                 <input required name="item_name" placeholder="Producto o cortesia" className={fieldClass} />
                 <div className="grid gap-3 sm:grid-cols-3">
                   <input name="quantity" type="number" min="1" defaultValue={1} placeholder="Cantidad" className={fieldClass} />
@@ -763,7 +782,7 @@ export default async function OperationPage({
                 <div className="grid gap-3 sm:grid-cols-3">
                   <select name="customer_id" className={fieldClass}>
                     <option value="">Cliente opcional</option>
-                    {closureData.customers.map((customer) => (
+                    {closureContext.customers.map((customer) => (
                       <option key={customer.id} value={customer.id}>
                         {customer.full_name}
                       </option>
@@ -771,7 +790,7 @@ export default async function OperationPage({
                   </select>
                   <select name="employee_id" className={fieldClass}>
                     <option value="">Empleado opcional</option>
-                    {closureData.employees.map((employee) => (
+                    {closureContext.employees.map((employee) => (
                       <option key={employee.id} value={employee.id}>
                         {employee.full_name}
                       </option>
@@ -782,18 +801,18 @@ export default async function OperationPage({
                 <textarea name="notes" placeholder="Notas" className="min-h-20 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
                 <div className="flex flex-wrap gap-2">
                   <PrimaryButton>Agregar cortesia</PrimaryButton>
-                  <Link href={`${tabHref("cierre")}&date=${closureData.date}`} className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800">
+                  <Link href={`${tabHref("cierre")}&date=${closureContext.date}`} className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800">
                     Cancelar
                   </Link>
                 </div>
               </form>
             ) : (
-              <Link href={`${tabHref("cierre")}&action=cortesia&date=${closureData.date}`} className="mb-5 inline-flex h-11 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">
+              <Link href={`${tabHref("cierre")}&action=cortesia&date=${closureContext.date}`} className="mb-5 inline-flex h-11 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">
                 Agregar cortesia
               </Link>
             )}
 
-            {closureData.courtesies.length ? (
+            {closureContext.courtesies.length ? (
               <DataTable columns={["Producto", "Cantidad", "Valor", "Motivo", "Cliente"]} rows={courtesyRows} />
             ) : (
               <EmptyState title="Sin cortesias registradas" description="Agrega cortesias para que aparezcan en el cierre del dia." />
@@ -804,3 +823,4 @@ export default async function OperationPage({
     </div>
   );
 }
+

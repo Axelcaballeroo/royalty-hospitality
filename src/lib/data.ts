@@ -1318,9 +1318,15 @@ export async function getAutomationData(filters: { status?: string; enabled?: st
 export async function getCustomersData(filters: CustomerFilters = {}) {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
+  const inactiveCutoff = new Date();
+  inactiveCutoff.setDate(inactiveCutoff.getDate() - 60);
+  const inactiveCutoffIso = inactiveCutoff.toISOString();
+  const activeCutoff = new Date();
+  activeCutoff.setDate(activeCutoff.getDate() - 30);
+  const activeCutoffIso = activeCutoff.toISOString();
   let query = supabase
     .from("customers")
-    .select("*")
+    .select("id, full_name, phone, email, birthday, loyalty_code, loyalty_enabled, tags, notes, total_visits, total_spent, last_visit_at, status, created_at")
     .eq("business_id", current.businessId);
 
   if (filters.q) {
@@ -1336,12 +1342,19 @@ export async function getCustomersData(filters: CustomerFilters = {}) {
     query = query.contains("tags", [filters.tag]);
   }
 
-  const { data } = await query.order("created_at", { ascending: false });
+  const { data } = await query.order("created_at", { ascending: false }).limit(25);
   const customers = (data ?? []) as Customer[];
   const monthStart = new Date();
   monthStart.setDate(1);
   const monthStartDate = monthStart.toISOString().slice(0, 10);
-  const [{ data: pointsIssued }, { count: visitsThisMonth }] = await Promise.all([
+  const [
+    { data: pointsIssued },
+    { count: visitsThisMonth },
+    { count: totalCustomers },
+    { count: vipCustomers },
+    { count: inactiveCustomers },
+    { count: activeCustomers },
+  ] = await Promise.all([
     supabase
       .from("loyalty_transactions")
       .select("points")
@@ -1353,23 +1366,35 @@ export async function getCustomersData(filters: CustomerFilters = {}) {
       .eq("business_id", current.businessId)
       .eq("status", "completed")
       .gte("date", monthStartDate),
+    supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId),
+    supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .or("total_visits.gte.5,total_spent.gte.5000"),
+    supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .or(`last_visit_at.is.null,last_visit_at.lt.${inactiveCutoffIso}`),
+    supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .gte("last_visit_at", activeCutoffIso),
   ]);
 
   return {
     current,
     customers,
     stats: {
-      totalCustomers: customers.length,
-      vipCustomers: customers.filter((customer) => customer.total_visits >= 5 || Number(customer.total_spent) >= 5000).length,
-      inactiveCustomers: customers.filter((customer) => {
-        if (!customer.last_visit_at) {
-          return true;
-        }
-        const lastVisit = new Date(customer.last_visit_at);
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - 60);
-        return lastVisit < cutoff;
-      }).length,
+      totalCustomers: totalCustomers ?? 0,
+      vipCustomers: vipCustomers ?? 0,
+      inactiveCustomers: inactiveCustomers ?? 0,
+      activeCustomers: activeCustomers ?? 0,
       pointsIssued:
         pointsIssued?.reduce((sum, transaction) => sum + Math.max(0, Number(transaction.points)), 0) ?? 0,
       visitsThisMonth: visitsThisMonth ?? 0,
