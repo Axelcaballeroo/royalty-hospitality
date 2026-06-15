@@ -29,7 +29,7 @@ import { createQrDataUrl } from "@/lib/qr";
 
 export const dynamic = "force-dynamic";
 
-type CustomerTab = "perfiles" | "fidelizacion" | "beneficios" | "registro";
+type CustomerTab = "perfiles" | "journey" | "fidelizacion" | "beneficios" | "registro";
 type CustomerAction = "new" | "benefit" | undefined;
 
 const fieldClass =
@@ -37,6 +37,7 @@ const fieldClass =
 
 const tabs: { key: CustomerTab; label: string }[] = [
   { key: "perfiles", label: "Perfiles" },
+  { key: "journey", label: "Journey" },
   { key: "fidelizacion", label: "Fidelizacion" },
   { key: "beneficios", label: "Beneficios" },
   { key: "registro", label: "Registro" },
@@ -84,6 +85,16 @@ export default async function CustomersPage({
   const averageTier =
     Object.entries(loyalty.summary.tierCounts)
       .sort(([, a], [, b]) => b - a)[0]?.[0] ?? "bronze";
+  const minRewardPoints = loyalty.rewards
+    .filter((reward) => reward.status === "active")
+    .sort((a, b) => a.points_required - b.points_required)[0]?.points_required ?? 500;
+  const customersWithReward = loyalty.accounts.filter((account) => account.points_balance >= minRewardPoints).length;
+  const activeCustomers = customers.filter((customer) => {
+    if (!customer.last_visit_at) return false;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    return new Date(customer.last_visit_at) >= cutoff;
+  }).length;
   const headerStore = await headers();
   const protocol = headerStore.get("x-forwarded-proto") ?? "https";
   const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "";
@@ -217,6 +228,56 @@ export default async function CustomersPage({
             ) : (
               <EmptyState title="Sin clientes" description="Crea el primer cliente para iniciar historial, puntos y beneficios." />
             )}
+          </ModuleCard>
+        </div>
+      ) : null}
+
+      {activeTab === "journey" ? (
+        <div className="space-y-6">
+          <section className="grid gap-4 md:grid-cols-5">
+            <StatCard title="Registrados" value={String(loyalty.summary.registeredCustomers)} detail="Con cuenta de club" tone="dark" />
+            <StatCard title="Activos" value={String(activeCustomers)} detail="Visitaron en 30 dias" />
+            <StatCard title="Con recompensa" value={String(customersWithReward)} detail="Pueden canjear" />
+            <StatCard title="VIP" value={String(stats.vipCustomers)} detail="Frecuentes o alto gasto" />
+            <StatCard title="Inactivos" value={String(stats.inactiveCustomers)} detail="Para recuperar" />
+          </section>
+
+          <ModuleCard title="Customer Journey" description="El recorrido completo del cliente, desde registro hasta nueva visita.">
+            <div className="grid gap-3 md:grid-cols-6">
+              {[
+                ["1", "Registro", "Cliente entra al club por QR o link."],
+                ["2", "Reserva", "La reserva queda conectada a su perfil."],
+                ["3", "Check-in", "Staff busca por QR, telefono, nombre o codigo."],
+                ["4", "Consumo", "Se registra consumo y se suman puntos."],
+                ["5", "Beneficio", "Puede canjear cuando alcanza puntos."],
+                ["6", "Regreso", "Marketing lo reactiva si se aleja."],
+              ].map(([step, title, description]) => (
+                <div key={title} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                  <span className="flex size-8 items-center justify-center rounded-xl bg-stone-950 text-xs font-semibold text-white">
+                    {step}
+                  </span>
+                  <p className="mt-4 text-sm font-semibold text-stone-950">{title}</p>
+                  <p className="mt-2 text-sm leading-6 text-stone-500">{description}</p>
+                </div>
+              ))}
+            </div>
+          </ModuleCard>
+
+          <ModuleCard title="Acciones del journey" description="Mueve clientes de un paso al siguiente sin pensar en modulos.">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <Link href="/app/clientes?tab=registro" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800">
+                Compartir QR del club
+              </Link>
+              <Link href="/app/operacion?tab=reservas&action=nueva-reserva" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800">
+                Crear reserva
+              </Link>
+              <Link href="/app/operacion?tab=sala" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800">
+                Check-in / consumo
+              </Link>
+              <Link href="/app/marketing?segment=customers_near_reward&type=reward" className="inline-flex h-11 items-center justify-center rounded-2xl bg-stone-950 px-4 text-sm font-semibold text-white">
+                Activar regreso
+              </Link>
+            </div>
           </ModuleCard>
         </div>
       ) : null}

@@ -23,13 +23,22 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/ui";
-import { getDailyClosureData, getOperationData } from "@/lib/data";
+import { getCheckInData, getDailyClosureData, getOperationData } from "@/lib/data";
 import { formatEventType } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
 
 type OperationTab = "hoy" | "reservas" | "sala" | "alertas" | "cierre";
 type OperationAction = "nueva-reserva" | "cortesia" | undefined;
+
+type CheckInCustomer = {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+  loyalty_code: string | null;
+  loyalty_accounts?: { points_balance: number; tier: string }[] | { points_balance: number; tier: string } | null;
+};
 
 const tabs: { key: OperationTab; label: string }[] = [
   { key: "hoy", label: "Hoy" },
@@ -109,6 +118,7 @@ export default async function OperationPage({
     action?: string;
     date?: string;
     error?: string;
+    q?: string;
     success?: string;
   }>;
 }) {
@@ -117,9 +127,10 @@ export default async function OperationPage({
     ? (params.tab as OperationTab)
     : "hoy";
   const activeAction = params.action as OperationAction;
-  const [data, closureData] = await Promise.all([
+  const [data, closureData, checkInData] = await Promise.all([
     getOperationData(),
     getDailyClosureData(params.date),
+    getCheckInData(params.q),
   ]);
 
   const closure = closureData.closure;
@@ -376,6 +387,62 @@ export default async function OperationPage({
           </section>
 
           <ModuleCard title="Clientes en sala" description="Vista ligera para registrar consumo y canjear beneficios sin mostrar QR ni formularios largos.">
+            <form className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto]">
+              <input type="hidden" name="tab" value="sala" />
+              <input
+                name="q"
+                defaultValue={params.q ?? ""}
+                placeholder="Buscar por QR, telefono, nombre o codigo"
+                className={fieldClass}
+              />
+              <button className="h-11 rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">
+                Buscar cliente
+              </button>
+            </form>
+            {params.q && (checkInData.customers as CheckInCustomer[]).length ? (
+              <div className="mb-5 grid gap-3">
+                {(checkInData.customers as CheckInCustomer[]).map((customer) => {
+                  const account = getAccount(customer);
+                  return (
+                    <div key={customer.id} className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-stone-950">{customer.full_name}</p>
+                          <p className="mt-1 text-sm text-stone-600">
+                            {customer.phone ?? "Sin telefono"} / {account.points_balance} puntos / {customer.loyalty_code ?? "Sin codigo"}
+                          </p>
+                        </div>
+                        <Link href={`/app/clientes/${customer.id}`} className="text-sm font-semibold text-stone-950 hover:underline">
+                          Ver perfil
+                        </Link>
+                      </div>
+                      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                        <form action={registerConsumptionAction} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                          <input type="hidden" name="customer_id" value={customer.id} />
+                          <input type="hidden" name="return_to" value={`${tabHref("sala")}&q=${encodeURIComponent(params.q ?? "")}`} />
+                          <input required min={1} type="number" name="amount" placeholder="Consumo" className={fieldClass} />
+                          <input name="comment" placeholder="Nota" className={fieldClass} />
+                          <SecondaryButton>Registrar consumo</SecondaryButton>
+                        </form>
+                        <form action={redeemRewardAction} className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                          <input type="hidden" name="customer_id" value={customer.id} />
+                          <input type="hidden" name="return_to" value={`${tabHref("sala")}&q=${encodeURIComponent(params.q ?? "")}`} />
+                          <select required name="reward_id" className={fieldClass}>
+                            <option value="">Beneficio disponible</option>
+                            {checkInData.rewards.map((reward) => (
+                              <option key={reward.id} value={reward.id}>
+                                {reward.name} - {reward.points_required} puntos
+                              </option>
+                            ))}
+                          </select>
+                          <SecondaryButton>Canjear recompensa</SecondaryButton>
+                        </form>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
             {inRoomReservations.length ? (
               <div className="space-y-3">
                 {inRoomReservations.map((reservation) => {

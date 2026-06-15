@@ -11,6 +11,7 @@ export const segmentDefinitions = [
   { key: "gold_customers", name: "Gold" },
   { key: "black_customers", name: "Black" },
   { key: "customers_with_points", name: "Con puntos" },
+  { key: "customers_near_reward", name: "Cerca de recompensa" },
   { key: "customers_without_recent_visit", name: "Sin visita reciente" },
 ] as const;
 
@@ -81,6 +82,14 @@ export async function getSegmentCustomers(input: {
     .order("created_at", { ascending: false });
 
   const customers = (data ?? []) as unknown as SegmentCustomer[];
+  const { data: rewards } = await supabase
+    .from("rewards")
+    .select("points_required")
+    .eq("business_id", input.businessId)
+    .eq("status", "active")
+    .order("points_required", { ascending: true })
+    .limit(1);
+  const nextRewardPoints = rewards?.[0]?.points_required ?? 500;
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const thirtyDaysAgo = daysAgo(30);
@@ -110,6 +119,10 @@ export async function getSegmentCustomers(input: {
         return account?.tier === "black";
       case "customers_with_points":
         return (account?.points_balance ?? 0) > 0;
+      case "customers_near_reward": {
+        const points = account?.points_balance ?? 0;
+        return points > 0 && points < nextRewardPoints && nextRewardPoints - points <= 150;
+      }
       case "customers_without_recent_visit":
         return !customer.last_visit_at || customer.last_visit_at < thirtyDaysAgo;
       case "all_customers":

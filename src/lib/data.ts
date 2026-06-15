@@ -1861,6 +1861,7 @@ export async function getMarketingData(selectedSegment = "all_customers") {
     inactiveCustomers,
     birthdayCustomers,
     vipCustomers,
+    nearRewardCustomers,
     urgentBatches,
     templates,
   ] = await Promise.all([
@@ -1882,6 +1883,7 @@ export async function getMarketingData(selectedSegment = "all_customers") {
     getSegmentCustomers({ businessId: current.businessId, segmentKey: "inactive_60d" }),
     getSegmentCustomers({ businessId: current.businessId, segmentKey: "birthday_month" }),
     getSegmentCustomers({ businessId: current.businessId, segmentKey: "vip_customers" }),
+    getSegmentCustomers({ businessId: current.businessId, segmentKey: "customers_near_reward" }),
     supabase
       .from("inventory_batches")
       .select("id", { count: "exact", head: true })
@@ -1920,6 +1922,7 @@ export async function getMarketingData(selectedSegment = "all_customers") {
       inactiveCustomers: inactiveCustomers.length,
       birthdayCustomers: birthdayCustomers.length,
       vipCustomers: vipCustomers.length,
+      nearRewardCustomers: nearRewardCustomers.length,
       expiringProducts: urgentBatches.count ?? 0,
     },
   };
@@ -2572,7 +2575,7 @@ export async function getClubAccountByPhoneAndCode(input: {
     return { business, customer: null };
   }
 
-  const [account, transactions, rewards, walletAccount, walletTransactions, events] = await Promise.all([
+  const [account, transactions, rewards, walletAccount, walletTransactions, events, reservations] = await Promise.all([
     admin
       .from("loyalty_accounts")
       .select("id, points_balance, tier")
@@ -2612,6 +2615,13 @@ export async function getClubAccountByPhoneAndCode(input: {
       .eq("customer_id", customer.id)
       .order("created_at", { ascending: false })
       .limit(20),
+    admin
+      .from("reservations")
+      .select("id, date, time, party_size, status, source, notes, special_request")
+      .eq("business_id", business.id)
+      .eq("customer_id", customer.id)
+      .order("date", { ascending: false })
+      .limit(12),
   ]);
 
   return {
@@ -2623,6 +2633,7 @@ export async function getClubAccountByPhoneAndCode(input: {
     walletAccount: walletAccount.data,
     walletTransactions: (walletTransactions.data ?? []) as WalletTransaction[],
     events: (events.data ?? []) as ClubEvent[],
+    reservations: reservations.data ?? [],
   };
 }
 

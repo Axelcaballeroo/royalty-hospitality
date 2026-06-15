@@ -60,6 +60,13 @@ const marketingPlays = [
     segment: "customers_with_points",
     message: "Hola {{nombre}}, tienes {{puntos}} puntos disponibles. Puedes usarlos en tu proxima visita.",
   },
+  {
+    title: "Clientes cerca de recompensa",
+    description: "Invita a quienes estan a pocos puntos de canjear.",
+    type: "reward",
+    segment: "customers_near_reward",
+    message: "Hola {{nombre}}, estas muy cerca de desbloquear un beneficio en {{negocio}}. Vuelve pronto y suma puntos.",
+  },
 ];
 
 export default async function MarketingPage({
@@ -89,7 +96,8 @@ export default async function MarketingPage({
     metrics.inactiveCustomers +
     metrics.birthdayCustomers +
     metrics.expiringProducts +
-    metrics.vipCustomers;
+    metrics.vipCustomers +
+    metrics.nearRewardCustomers;
   const previewCustomer = segmentCustomers[0];
   const previewMessage = previewCustomer
     ? renderMarketingMessage({
@@ -124,7 +132,7 @@ export default async function MarketingPage({
         <StatCard title="Oportunidades" value={String(opportunityCount)} detail="Detectadas" tone="dark" />
         <StatCard title="Clientes recuperables" value={String(metrics.inactiveCustomers)} detail="Inactivos" />
         <StatCard title="Productos por vencer" value={String(metrics.expiringProducts)} detail="Promocion posible" />
-        <StatCard title="Inactivos" value={String(metrics.inactiveCustomers)} detail="60 dias" />
+        <StatCard title="Cerca de recompensa" value={String(metrics.nearRewardCustomers)} detail="Listos para volver" />
         <StatCard title="Cumpleanos" value={String(metrics.birthdayCustomers)} detail="Este mes" />
         <StatCard title="Clientes VIP" value={String(metrics.vipCustomers)} detail="Visitas o gasto" />
       </section>
@@ -141,7 +149,7 @@ export default async function MarketingPage({
             Tus clientes VIP pueden recibir experiencias especiales para aumentar recurrencia.
           </div>
           <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm leading-6 text-violet-900">
-            Los cumpleanos del mes son una excusa clara para traer clientes de vuelta.
+            {metrics.nearRewardCustomers} clientes estan cerca de una recompensa; una visita mas puede cerrar el ciclo.
           </div>
         </div>
       </ModuleCard>
@@ -173,6 +181,13 @@ export default async function MarketingPage({
             <p className="text-sm font-semibold text-stone-950">{metrics.vipCustomers} clientes VIP</p>
             <p className="mt-2 text-sm leading-6 text-stone-700">Comunica experiencias especiales a clientes frecuentes.</p>
             <Link href="/app/marketing?segment=vip_customers&type=vip" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
+              Crear campana
+            </Link>
+          </div>
+          <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4">
+            <p className="text-sm font-semibold text-stone-950">{metrics.nearRewardCustomers} cerca de recompensa</p>
+            <p className="mt-2 text-sm leading-6 text-stone-700">Invitalos a volver para completar puntos y canjear.</p>
+            <Link href="/app/marketing?segment=customers_near_reward&type=reward" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
               Crear campana
             </Link>
           </div>
