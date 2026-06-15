@@ -422,9 +422,12 @@ export async function getDashboardData() {
 
   const [
     reservationsToday,
+    completedReservations,
+    estimatedSales,
     customersTotal,
     customersNew,
     pendingReservations,
+    inRoomReservations,
     noShows,
     pendingTasks,
     pointsIssued,
@@ -451,6 +454,17 @@ export async function getDashboardData() {
       .eq("business_id", current.businessId)
       .eq("date", today),
     supabase
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "completed")
+      .gte("date", monthStartIso),
+    supabase
+      .from("daily_closures")
+      .select("estimated_sales")
+      .eq("business_id", current.businessId)
+      .gte("date", monthStartIso),
+    supabase
       .from("customers")
       .select("id", { count: "exact", head: true })
       .eq("business_id", current.businessId),
@@ -464,6 +478,12 @@ export async function getDashboardData() {
       .select("id", { count: "exact", head: true })
       .eq("business_id", current.businessId)
       .eq("status", "pending"),
+    supabase
+      .from("reservations")
+      .select("party_size")
+      .eq("business_id", current.businessId)
+      .eq("date", today)
+      .eq("status", "completed"),
     supabase
       .from("reservations")
       .select("id", { count: "exact", head: true })
@@ -574,9 +594,20 @@ export async function getDashboardData() {
     current,
     stats: {
       reservationsToday: reservationsToday.count ?? 0,
+      completedReservations: completedReservations.count ?? 0,
+      estimatedSales:
+        estimatedSales.data?.reduce(
+          (sum, closure) => sum + Number(closure.estimated_sales),
+          0,
+        ) ?? 0,
       customersTotal: customersTotal.count ?? 0,
       customersNew: customersNew.count ?? 0,
       pendingReservations: pendingReservations.count ?? 0,
+      customersInRoom:
+        inRoomReservations.data?.reduce(
+          (sum, reservation) => sum + Number(reservation.party_size),
+          0,
+        ) ?? 0,
       noShows: noShows.count ?? 0,
       pendingTasks: pendingTasks.count ?? 0,
       pointsIssued:
@@ -598,6 +629,7 @@ export async function getDashboardData() {
           );
           return stock <= Number(item.min_stock);
         }).length ?? 0,
+      activeInventoryProducts: inventoryItems.data?.length ?? 0,
       openWasteAlerts: openWasteAlerts.count ?? 0,
       urgentBatches: urgentBatches.count ?? 0,
       estimatedWasteLoss:
