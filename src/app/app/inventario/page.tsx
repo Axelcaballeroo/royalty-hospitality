@@ -7,6 +7,7 @@ import {
   RefreshCw,
   TrendingDown,
 } from "lucide-react";
+import { AssistantQuickActions } from "@/components/assistant-quick-actions";
 import {
   createInventoryEntryAction,
   createInventoryItemAction,
@@ -126,6 +127,8 @@ export default async function InventoryPage({
           {formatEventType(params.success)}
         </p>
       ) : null}
+
+      <AssistantQuickActions compact />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Productos activos" value={String(metrics.activeItems)} detail="Catalogo listo" tone="dark" />

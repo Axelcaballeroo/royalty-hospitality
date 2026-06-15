@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { CheckCircle2, ClipboardList, Megaphone, Plus } from "lucide-react";
+import { AssistantQuickActions } from "@/components/assistant-quick-actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import {
   createCourtesyAction,
@@ -253,6 +254,8 @@ export default async function OperationPage({
           {formatEventType(params.success)}
         </p>
       ) : null}
+
+      <AssistantQuickActions compact />
 
       <nav className="flex gap-2 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-2">
         {tabs.map((tab) => (

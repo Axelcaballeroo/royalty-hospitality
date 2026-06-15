@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Crown, LockKeyhole, Menu, X } from "lucide-react";
+import { Bell, ChevronDown, Crown, LockKeyhole, Menu, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { footerNavigation, navigationGroups } from "@/lib/navigation";
 
 export function MobileNavClient({
   access,
+  alertCount,
 }: {
   access: Record<string, boolean>;
+  alertCount: number;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -34,6 +36,25 @@ export function MobileNavClient({
           </span>
         </Link>
         <div className="flex items-center gap-2">
+          <Link
+            href="/app/operacion?tab=reservas&action=nueva-reserva"
+            className="inline-flex size-10 items-center justify-center rounded-xl bg-stone-950 text-white"
+            aria-label="Crear"
+          >
+            <Plus size={18} />
+          </Link>
+          <Link
+            href="/app/alertas"
+            className="relative inline-flex size-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700"
+            aria-label="Alertas"
+          >
+            <Bell size={18} />
+            {alertCount ? (
+              <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-stone-950 px-1.5 text-[10px] font-bold text-white">
+                {alertCount > 99 ? "99+" : alertCount}
+              </span>
+            ) : null}
+          </Link>
           <button
             type="button"
             onClick={() => setOpen((value) => !value)}

@@ -299,6 +299,19 @@ export type TimeClockEntry = {
   shifts?: { date: string; start_time: string; end_time: string; role: string | null } | null;
 };
 
+export type AssistantAlertPriority = "CRITICA" | "ALTA" | "MEDIA" | "BAJA";
+
+export type AssistantAlert = {
+  id: string;
+  area: "Inventario" | "Clientes" | "Marketing" | "Operacion" | "Equipo";
+  title: string;
+  description: string;
+  priority: AssistantAlertPriority;
+  date: string;
+  href: string;
+  resolveLabel: string;
+};
+
 export type WalletAccount = {
   id: string;
   customer_id: string;
@@ -645,6 +658,298 @@ export async function getDashboardData() {
     },
     automationActivity: normalizeAutomationLogs(automationActivity.data ?? []),
     activity: activity.data ?? [],
+  };
+}
+
+function priorityRank(priority: AssistantAlertPriority) {
+  return { CRITICA: 0, ALTA: 1, MEDIA: 2, BAJA: 3 }[priority];
+}
+
+export async function getAssistantData() {
+  const current = await requireCurrentBusiness();
+  const supabase = await createClient();
+  const today = getTodayDate();
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sevenDaysAgoDate = sevenDaysAgo.toISOString().slice(0, 10);
+
+  const [
+    wasteAlerts,
+    urgentBatches,
+    inventoryItems,
+    pendingReservations,
+    noShows,
+    closure,
+    overdueTasks,
+    openClockEntries,
+    shiftsToday,
+    birthdayCustomers,
+    inactiveCustomers,
+    vipCustomers,
+  ] = await Promise.all([
+    supabase
+      .from("waste_alerts")
+      .select("id, risk_level, message, estimated_loss, created_at, inventory_items(name, unit)")
+      .eq("business_id", current.businessId)
+      .eq("status", "open")
+      .order("created_at", { ascending: false })
+      .limit(8),
+    supabase
+      .from("inventory_batches")
+      .select("id, quantity, expiration_date, status, inventory_items(name, unit)")
+      .eq("business_id", current.businessId)
+      .in("status", ["near_expiration", "urgent", "expired"])
+      .gt("quantity", 0)
+      .order("expiration_date", { ascending: true })
+      .limit(8),
+    supabase
+      .from("inventory_items")
+      .select("id, name, unit, min_stock, inventory_batches(quantity)")
+      .eq("business_id", current.businessId)
+      .eq("status", "active"),
+    supabase
+      .from("reservations")
+      .select("id, date, time, party_size, customer_id, customers(full_name)")
+      .eq("business_id", current.businessId)
+      .eq("status", "pending")
+      .gte("date", today)
+      .order("date", { ascending: true })
+      .limit(8),
+    supabase
+      .from("reservations")
+      .select("id, date, time, customer_id, customers(full_name)")
+      .eq("business_id", current.businessId)
+      .eq("status", "no_show")
+      .gte("date", sevenDaysAgoDate)
+      .order("date", { ascending: false })
+      .limit(5),
+    supabase
+      .from("daily_closures")
+      .select("id, date, status, incidents, updated_at")
+      .eq("business_id", current.businessId)
+      .eq("date", today)
+      .maybeSingle<{ id: string; date: string; status: string; incidents: string | null; updated_at: string }>(),
+    supabase
+      .from("internal_tasks")
+      .select("id, title, due_date, priority")
+      .eq("business_id", current.businessId)
+      .in("status", ["pending", "in_progress"])
+      .lt("due_date", `${today}T00:00:00.000Z`)
+      .order("due_date", { ascending: true })
+      .limit(8),
+    supabase
+      .from("time_clock_entries")
+      .select("id, clock_in, employees(full_name)")
+      .eq("business_id", current.businessId)
+      .is("clock_out", null)
+      .order("clock_in", { ascending: true })
+      .limit(8),
+    supabase
+      .from("shifts")
+      .select("id, date, start_time, role, status, employees(full_name)")
+      .eq("business_id", current.businessId)
+      .eq("date", today)
+      .in("status", ["scheduled", "missed"])
+      .order("start_time", { ascending: true })
+      .limit(8),
+    getSegmentCustomers({ businessId: current.businessId, segmentKey: "birthday_month" }),
+    getSegmentCustomers({ businessId: current.businessId, segmentKey: "inactive_60d" }),
+    getSegmentCustomers({ businessId: current.businessId, segmentKey: "vip_customers" }),
+  ]);
+
+  const lowStockAlerts = ((inventoryItems.data ?? []) as (InventoryItem & {
+    inventory_batches?: { quantity: number }[];
+  })[])
+    .map((item) => ({
+      item,
+      stock: (item.inventory_batches ?? []).reduce((sum, batch) => sum + Number(batch.quantity), 0),
+    }))
+    .filter(({ item, stock }) => stock <= Number(item.min_stock))
+    .slice(0, 6);
+  const pendingReservationRows = (pendingReservations.data ?? []) as unknown as {
+    id: string;
+    date: string;
+    time: string;
+    party_size: number;
+    customer_id: string;
+    customers?: { full_name: string } | null;
+  }[];
+  const noShowRows = (noShows.data ?? []) as unknown as {
+    id: string;
+    date: string;
+    time: string;
+    customer_id: string;
+    customers?: { full_name: string } | null;
+  }[];
+  const overdueTaskRows = (overdueTasks.data ?? []) as {
+    id: string;
+    title: string;
+    due_date: string | null;
+    priority: string;
+  }[];
+  const openClockRows = (openClockEntries.data ?? []) as unknown as {
+    id: string;
+    clock_in: string;
+    employees?: { full_name: string } | null;
+  }[];
+  const shiftRows = (shiftsToday.data ?? []) as unknown as {
+    id: string;
+    date: string;
+    start_time: string;
+    role: string | null;
+    status: string;
+    employees?: { full_name: string } | null;
+  }[];
+
+  const alerts: AssistantAlert[] = [
+    ...((wasteAlerts.data ?? []) as unknown as WasteAlert[]).map((alert) => ({
+      id: `waste-${alert.id}`,
+      area: "Inventario" as const,
+      title: `Merma en riesgo: ${alert.inventory_items?.name ?? "Producto"}`,
+      description: alert.message,
+      priority: alert.risk_level === "urgent" || alert.risk_level === "high" ? "CRITICA" as const : "ALTA" as const,
+      date: alert.created_at,
+      href: "/app/inventario?view=alertas",
+      resolveLabel: "Resolver",
+    })),
+    ...((urgentBatches.data ?? []) as unknown as InventoryBatch[]).map((batch) => ({
+      id: `batch-${batch.id}`,
+      area: "Inventario" as const,
+      title: `Producto por vencer: ${batch.inventory_items?.name ?? "Producto"}`,
+      description: `${batch.quantity} ${batch.inventory_items?.unit ?? ""} con vencimiento ${batch.expiration_date ?? "sin fecha"}.`,
+      priority: batch.status === "expired" || batch.status === "urgent" ? "ALTA" as const : "MEDIA" as const,
+      date: batch.expiration_date ?? today,
+      href: "/app/inventario?view=vencimientos",
+      resolveLabel: "Resolver",
+    })),
+    ...lowStockAlerts.map(({ item, stock }) => ({
+      id: `stock-${item.id}`,
+      area: "Inventario" as const,
+      title: `Stock bajo: ${item.name}`,
+      description: `Quedan ${stock} ${item.unit}; el minimo recomendado es ${item.min_stock}.`,
+      priority: "MEDIA" as const,
+      date: today,
+      href: "/app/inventario",
+      resolveLabel: "Resolver",
+    })),
+    ...pendingReservationRows.map((reservation) => ({
+      id: `reservation-${reservation.id}`,
+      area: "Operacion" as const,
+      title: `Reserva pendiente: ${reservation.customers?.full_name ?? "Cliente"}`,
+      description: `${reservation.date} ${reservation.time.slice(0, 5)} / ${reservation.party_size} personas.`,
+      priority: "ALTA" as const,
+      date: reservation.date,
+      href: "/app/operacion?tab=reservas",
+      resolveLabel: "Resolver",
+    })),
+    ...noShowRows.map((reservation) => ({
+      id: `noshow-${reservation.id}`,
+      area: "Operacion" as const,
+      title: `No-show: ${reservation.customers?.full_name ?? "Cliente"}`,
+      description: `No asistio el ${reservation.date}. Conviene dar seguimiento.`,
+      priority: "MEDIA" as const,
+      date: reservation.date,
+      href: "/app/operacion?tab=alertas",
+      resolveLabel: "Resolver",
+    })),
+    ...(closure.data?.status === "closed"
+      ? []
+      : [{
+          id: `closure-${today}`,
+          area: "Operacion" as const,
+          title: "Cierre pendiente",
+          description: "Aun no se ha cerrado el dia operativo.",
+          priority: "ALTA" as const,
+          date: today,
+          href: "/app/operacion?tab=cierre",
+          resolveLabel: "Resolver",
+        }]),
+    ...(closure.data?.incidents?.trim()
+      ? [{
+          id: `incident-${closure.data.id}`,
+          area: "Operacion" as const,
+          title: "Incidencia sin resolver",
+          description: closure.data.incidents,
+          priority: "MEDIA" as const,
+          date: closure.data.updated_at,
+          href: "/app/operacion?tab=cierre",
+          resolveLabel: "Resolver",
+        }]
+      : []),
+    ...overdueTaskRows.map((task) => ({
+      id: `task-${task.id}`,
+      area: "Equipo" as const,
+      title: `Tarea vencida: ${task.title}`,
+      description: task.due_date ? new Date(task.due_date).toLocaleString("es-MX") : "Sin fecha limite.",
+      priority: task.priority === "high" ? "ALTA" as const : "MEDIA" as const,
+      date: task.due_date ?? today,
+      href: "/app/crm-interno",
+      resolveLabel: "Resolver",
+    })),
+    ...openClockRows.map((entry) => ({
+      id: `clock-${entry.id}`,
+      area: "Equipo" as const,
+      title: `Empleado sin salida: ${entry.employees?.full_name ?? "Empleado"}`,
+      description: `Entrada registrada ${new Date(entry.clock_in).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}.`,
+      priority: "MEDIA" as const,
+      date: entry.clock_in,
+      href: "/app/rrhh/checador",
+      resolveLabel: "Resolver",
+    })),
+    ...shiftRows.map((shift) => ({
+      id: `shift-${shift.id}`,
+      area: "Equipo" as const,
+      title: `Turno pendiente: ${shift.employees?.full_name ?? "Empleado"}`,
+      description: `${shift.start_time.slice(0, 5)} / ${shift.role ?? "turno operativo"}.`,
+      priority: shift.status === "missed" ? "ALTA" as const : "BAJA" as const,
+      date: shift.date,
+      href: "/app/rrhh",
+      resolveLabel: "Resolver",
+    })),
+    ...vipCustomers.slice(0, 4).map((customer) => ({
+      id: `vip-${customer.id}`,
+      area: "Clientes" as const,
+      title: `Cliente VIP para revisar: ${customer.full_name}`,
+      description: customer.phone ?? customer.email ?? "Cliente frecuente sin contacto visible.",
+      priority: "BAJA" as const,
+      date: customer.last_visit_at ?? today,
+      href: `/app/clientes/${customer.id}`,
+      resolveLabel: "Resolver",
+    })),
+    ...birthdayCustomers.slice(0, 4).map((customer) => ({
+      id: `birthday-${customer.id}`,
+      area: "Clientes" as const,
+      title: `Cumpleanos del mes: ${customer.full_name}`,
+      description: "Puedes activar una cortesia o campana de cumpleanos.",
+      priority: "BAJA" as const,
+      date: today,
+      href: "/app/marketing?segment=birthday_month&type=birthday",
+      resolveLabel: "Resolver",
+    })),
+    ...(inactiveCustomers.length
+      ? [{
+          id: "inactive-customers",
+          area: "Marketing" as const,
+          title: `${inactiveCustomers.length} clientes inactivos`,
+          description: "Hay una oportunidad para recuperar visitas con una campana.",
+          priority: "MEDIA" as const,
+          date: today,
+          href: "/app/marketing?segment=inactive_60d&type=inactive_customers",
+          resolveLabel: "Resolver",
+        }]
+      : []),
+  ].sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
+
+  return {
+    current,
+    alerts,
+    counts: {
+      total: alerts.length,
+      critical: alerts.filter((alert) => alert.priority === "CRITICA").length,
+      high: alerts.filter((alert) => alert.priority === "ALTA").length,
+      medium: alerts.filter((alert) => alert.priority === "MEDIA").length,
+      low: alerts.filter((alert) => alert.priority === "BAJA").length,
+    },
   };
 }
 
@@ -1324,6 +1629,90 @@ export async function getBusinessSettingsData() {
   };
 }
 
+export async function getOnboardingChecklistData() {
+  const current = await requireCurrentBusiness();
+  const supabase = await createClient();
+  const [settings, rewards, customers, employees, inventoryItems, loyaltyAccounts] = await Promise.all([
+    supabase
+      .from("business_settings")
+      .select("points_per_currency")
+      .eq("business_id", current.businessId)
+      .maybeSingle<{ points_per_currency: number }>(),
+    supabase
+      .from("rewards")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "active"),
+    supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId),
+    supabase
+      .from("employees")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "active"),
+    supabase
+      .from("inventory_items")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .eq("status", "active"),
+    supabase
+      .from("loyalty_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId),
+  ]);
+
+  const items = [
+    {
+      label: "Logo cargado",
+      done: Boolean(current.business.logo_url),
+      href: "/app/configuracion",
+    },
+    {
+      label: "Programa de puntos configurado",
+      done: Boolean(settings.data?.points_per_currency && Number(settings.data.points_per_currency) > 0),
+      href: "/app/clientes?tab=fidelizacion",
+    },
+    {
+      label: "Primer beneficio creado",
+      done: (rewards.count ?? 0) > 0,
+      href: "/app/clientes?tab=beneficios&action=benefit",
+    },
+    {
+      label: "Primer cliente registrado",
+      done: (customers.count ?? 0) > 0,
+      href: "/app/clientes?action=new",
+    },
+    {
+      label: "Primer QR generado",
+      done: Boolean(current.business.slug) && ((loyaltyAccounts.count ?? 0) > 0 || (customers.count ?? 0) > 0),
+      href: "/app/clientes?tab=registro",
+    },
+    {
+      label: "Equipo agregado",
+      done: (employees.count ?? 0) > 0,
+      href: "/app/rrhh",
+    },
+    {
+      label: "Menu cargado",
+      done: (inventoryItems.count ?? 0) > 0,
+      href: "/app/inventario?action=new",
+    },
+  ];
+
+  const completed = items.filter((item) => item.done).length;
+  const progress = Math.round((completed / items.length) * 100);
+
+  return {
+    current,
+    items,
+    completed,
+    total: items.length,
+    progress,
+  };
+}
+
 export async function getLoyaltyData() {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
@@ -1472,6 +1861,7 @@ export async function getMarketingData(selectedSegment = "all_customers") {
     inactiveCustomers,
     birthdayCustomers,
     vipCustomers,
+    urgentBatches,
     templates,
   ] = await Promise.all([
     supabase
@@ -1492,6 +1882,12 @@ export async function getMarketingData(selectedSegment = "all_customers") {
     getSegmentCustomers({ businessId: current.businessId, segmentKey: "inactive_60d" }),
     getSegmentCustomers({ businessId: current.businessId, segmentKey: "birthday_month" }),
     getSegmentCustomers({ businessId: current.businessId, segmentKey: "vip_customers" }),
+    supabase
+      .from("inventory_batches")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId)
+      .in("status", ["near_expiration", "urgent", "expired"])
+      .gt("quantity", 0),
     supabase
       .from("message_templates")
       .select("id, name, type, message, status")
@@ -1524,6 +1920,7 @@ export async function getMarketingData(selectedSegment = "all_customers") {
       inactiveCustomers: inactiveCustomers.length,
       birthdayCustomers: birthdayCustomers.length,
       vipCustomers: vipCustomers.length,
+      expiringProducts: urgentBatches.count ?? 0,
     },
   };
 }

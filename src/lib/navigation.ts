@@ -14,6 +14,7 @@ import {
   QrCode,
   Route,
   Settings,
+  CheckCircle2,
   Users,
   Utensils,
   Workflow,
@@ -86,6 +87,7 @@ export const footerNavigation = [
     icon: Settings,
     moduleKey: "dashboard",
     children: [
+      { name: "Primeros pasos", href: "/app/configuracion#primeros-pasos", icon: CheckCircle2, moduleKey: "dashboard" },
       { name: "Automatizaciones", href: "/app/automatizaciones", icon: Workflow, moduleKey: "automation" },
     ],
   },

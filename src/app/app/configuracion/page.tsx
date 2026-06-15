@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { ExternalLink } from "lucide-react";
+import { CheckCircle2, Circle, ExternalLink } from "lucide-react";
 import {
   updateBusinessProfileAction,
   updateBusinessSettingsAction,
   updateBusinessUserAction,
   updatePublicWebsiteSettingsAction,
 } from "@/app/app/actions";
-import { getBusinessSettingsData } from "@/lib/data";
+import { getBusinessSettingsData, getOnboardingChecklistData } from "@/lib/data";
 import { ModuleCard, StatusBadge } from "@/components/ui";
 import { PublicLinkActions } from "@/components/public-link-actions";
 import { getModuleAccess, moduleCatalog, planModules } from "@/lib/plans";
@@ -20,7 +20,10 @@ export default async function SettingsPage({
   searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   const params = await searchParams;
-  const { current, hours, modules, settings, users } = await getBusinessSettingsData();
+  const [{ current, hours, modules, settings, users }, onboarding] = await Promise.all([
+    getBusinessSettingsData(),
+    getOnboardingChecklistData(),
+  ]);
   const { plan, access } = await getModuleAccess();
   const business = current.business;
   const headerStore = await headers();
@@ -61,6 +64,34 @@ export default async function SettingsPage({
 
       {params.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{params.error}</p> : null}
       {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{params.success}</p> : null}
+
+      <ModuleCard title="Primeros pasos" description={`Tu restaurante esta configurado al ${onboarding.progress}%.`}>
+        <div id="primeros-pasos" className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
+          <div className="rounded-3xl border border-stone-900 bg-stone-950 p-6 text-white">
+            <p className="text-sm text-stone-300">Progreso</p>
+            <p className="mt-3 text-5xl font-semibold">{onboarding.progress}%</p>
+            <p className="mt-3 text-sm leading-6 text-stone-300">
+              {onboarding.completed} de {onboarding.total} pasos completados para operar con menos friccion.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {onboarding.items.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-white"
+              >
+                {item.done ? (
+                  <CheckCircle2 size={18} className="text-emerald-600" />
+                ) : (
+                  <Circle size={18} className="text-stone-400" />
+                )}
+                <span>{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </ModuleCard>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <ModuleCard title="Perfil del negocio" description="Datos internos principales del negocio.">

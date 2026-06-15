@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight, BarChart3, Megaphone, Package, Users } from "lucide-react";
+import { AssistantQuickActions } from "@/components/assistant-quick-actions";
 import { getDashboardData } from "@/lib/data";
 import { ModuleCard, SectionHeader, StatCard, StatusBadge } from "@/components/ui";
 
@@ -151,6 +152,8 @@ export default async function DashboardPage() {
         </Link>
       ) : null}
 
+      <AssistantQuickActions compact />
+
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Ventas estimadas" value={currency.format(stats.estimatedSales)} detail="Este mes" tone="dark" />
         <StatCard title="Clientes nuevos" value={String(stats.customersNew)} detail="Este mes" />
@@ -158,7 +161,7 @@ export default async function DashboardPage() {
         <StatCard title="Perdida estimada" value={currency.format(stats.estimatedWasteLoss)} detail="En riesgo" />
       </section>
 
-      <ModuleCard title="Lectura rapida" description="Senales ejecutivas para entender donde ganas, donde pierdes y que revisar.">
+      <ModuleCard title="Royalty Insights" description="Lectura humana para entender donde ganas, donde pierdes y que revisar.">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {insights.map((insight) => (
             <InsightCard key={insight.text} tone={insight.tone}>

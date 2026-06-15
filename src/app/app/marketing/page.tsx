@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Send } from "lucide-react";
+import { AssistantQuickActions } from "@/components/assistant-quick-actions";
 import {
   createCampaignAction,
   createMessageTemplateAction,
@@ -84,6 +85,11 @@ export default async function MarketingPage({
     : "promotion";
   const { current, campaigns, templates, segmentCustomers, segmentSummaries, metrics } =
     await getMarketingData(selectedSegment);
+  const opportunityCount =
+    metrics.inactiveCustomers +
+    metrics.birthdayCustomers +
+    metrics.expiringProducts +
+    metrics.vipCustomers;
   const previewCustomer = segmentCustomers[0];
   const previewMessage = previewCustomer
     ? renderMarketingMessage({
@@ -99,30 +105,49 @@ export default async function MarketingPage({
     <div className="space-y-6">
       <div>
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-700">
-          Acciones comerciales
+          Royalty Assistant
         </p>
         <h1 className="mt-3 text-3xl font-semibold text-stone-950">
-          Acciones comerciales
+          Centro de oportunidades
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-          Convierte datos del restaurante en acciones simples para recuperar clientes, activar VIP y reducir merma.
+          Detecta oportunidades comerciales y conviertelas en acciones simples para recuperar clientes, activar VIP y reducir merma.
         </p>
       </div>
 
       {params.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formatEventType(params.error)}</p> : null}
       {params.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{formatEventType(params.success)}</p> : null}
 
+      <AssistantQuickActions compact />
+
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard title="Acciones creadas" value={String(metrics.campaignsCreated)} detail="Recientes" tone="dark" />
-        <StatCard title="Enviadas" value={String(metrics.campaignsSent)} detail="Comunicaciones" />
-        <StatCard title="Clientes alcanzados" value={String(metrics.customersReached)} detail="Contactos" />
+        <StatCard title="Oportunidades" value={String(opportunityCount)} detail="Detectadas" tone="dark" />
+        <StatCard title="Clientes recuperables" value={String(metrics.inactiveCustomers)} detail="Inactivos" />
+        <StatCard title="Productos por vencer" value={String(metrics.expiringProducts)} detail="Promocion posible" />
         <StatCard title="Inactivos" value={String(metrics.inactiveCustomers)} detail="60 dias" />
         <StatCard title="Cumpleanos" value={String(metrics.birthdayCustomers)} detail="Este mes" />
         <StatCard title="Clientes VIP" value={String(metrics.vipCustomers)} detail="Visitas o gasto" />
       </section>
 
-      <ModuleCard title="Oportunidades comerciales" description="El sistema traduce clientes e inventario en acciones listas para revisar.">
-        <div className="grid gap-3 md:grid-cols-3">
+      <ModuleCard title="Royalty Insights" description="Lectura humana de oportunidades comerciales.">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+            Hay clientes que no regresan hace mas de 60 dias y pueden recibir una invitacion directa.
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+            {metrics.expiringProducts} productos por vencer pueden convertirse en promocion antes de perder valor.
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
+            Tus clientes VIP pueden recibir experiencias especiales para aumentar recurrencia.
+          </div>
+          <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm leading-6 text-violet-900">
+            Los cumpleanos del mes son una excusa clara para traer clientes de vuelta.
+          </div>
+        </div>
+      </ModuleCard>
+
+      <ModuleCard title="Oportunidades detectadas" description="El sistema traduce clientes e inventario en acciones listas para revisar.">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
             <p className="text-sm font-semibold text-stone-950">{metrics.inactiveCustomers} clientes pueden recuperarse</p>
             <p className="mt-2 text-sm leading-6 text-stone-700">Crea una campana para quienes no visitan hace mas de 60 dias.</p>
@@ -135,6 +160,13 @@ export default async function MarketingPage({
             <p className="mt-2 text-sm leading-6 text-stone-700">Invita a celebrar y aumenta visitas con un beneficio simple.</p>
             <Link href="/app/marketing?segment=birthday_month&type=birthday" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
               Crear campana
+            </Link>
+          </div>
+          <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+            <p className="text-sm font-semibold text-stone-950">{metrics.expiringProducts} producto por vencer</p>
+            <p className="mt-2 text-sm leading-6 text-stone-700">Convierte riesgo de perdida en promocion antes del cierre.</p>
+            <Link href="/app/inventario?view=vencimientos" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
+              Crear promocion
             </Link>
           </div>
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
