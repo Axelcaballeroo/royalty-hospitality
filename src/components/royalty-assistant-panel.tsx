@@ -69,8 +69,7 @@ export function RoyaltyAssistantPanel({
                   index === 0
                     ? "bg-stone-950 text-white hover:bg-stone-800"
                     : "border border-stone-200 bg-white text-stone-800 hover:bg-stone-50",
-                ].join(" ")}
-              >
+                ].join(" ")} prefetch={false}>
                 {action.label}
                 <ArrowRight size={15} />
               </Link>

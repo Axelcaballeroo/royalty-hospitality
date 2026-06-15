@@ -42,8 +42,7 @@ function RecommendedAction({
   return (
     <Link
       href={href}
-      className="group flex flex-col justify-between rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_12px_40px_rgba(28,25,23,0.04)] transition hover:-translate-y-0.5 hover:border-stone-300 hover:shadow-[0_18px_55px_rgba(28,25,23,0.08)]"
-    >
+      className="group flex flex-col justify-between rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_12px_40px_rgba(28,25,23,0.04)] transition hover:-translate-y-0.5 hover:border-stone-300 hover:shadow-[0_18px_55px_rgba(28,25,23,0.08)]" prefetch={false}>
       <span>
         <span className="text-sm font-semibold text-stone-950">{title}</span>
         <span className="mt-2 block text-sm leading-6 text-stone-500">{description}</span>
@@ -80,7 +79,7 @@ function SummaryBlock({
           </div>
         ))}
       </div>
-      <Link href={href} className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-stone-950 hover:underline">
+      <Link href={href} className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-stone-950 hover:underline" prefetch={false}>
         Ver detalle
         <ArrowRight size={15} />
       </Link>
@@ -151,8 +150,7 @@ export default async function DashboardPage() {
         actions={
           <Link
             href="/app/operacion"
-            className="inline-flex h-12 items-center justify-center rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800"
-          >
+            className="inline-flex h-12 items-center justify-center rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800" prefetch={false}>
             Ir al Centro Operativo
           </Link>
         }
@@ -161,8 +159,7 @@ export default async function DashboardPage() {
       {!current.business.onboarding_completed && onboarding.progress < 100 ? (
         <Link
           href="/app/onboarding"
-          className="block rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800 transition hover:border-amber-300"
-        >
+          className="block rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800 transition hover:border-amber-300" prefetch={false}>
           Te faltan {onboarding.total - onboarding.completed} pasos para completar la configuracion.
           <span className="ml-2 underline">Continuar configuracion</span>
         </Link>

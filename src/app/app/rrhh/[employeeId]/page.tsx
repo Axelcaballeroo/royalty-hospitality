@@ -36,7 +36,7 @@ export default async function EmployeeDetailPage({
   if (!employee) {
     return (
       <div className="space-y-6">
-        <Link href="/app/rrhh" className="inline-flex items-center gap-2 text-sm font-medium text-stone-700 hover:text-stone-950">
+        <Link href="/app/rrhh" className="inline-flex items-center gap-2 text-sm font-medium text-stone-700 hover:text-stone-950" prefetch={false}>
           <ArrowLeft size={16} />
           Volver a RRHH
         </Link>
@@ -52,7 +52,7 @@ export default async function EmployeeDetailPage({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <Link href="/app/rrhh" className="inline-flex items-center gap-2 text-sm font-medium text-stone-700 hover:text-stone-950">
+          <Link href="/app/rrhh" className="inline-flex items-center gap-2 text-sm font-medium text-stone-700 hover:text-stone-950" prefetch={false}>
             <ArrowLeft size={16} />
             Volver a RRHH
           </Link>

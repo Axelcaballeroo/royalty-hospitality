@@ -167,7 +167,7 @@ export default async function WalletPage({
               const lastTransaction = account.wallet_transactions?.[0];
               return [
                 account.customers ? (
-                  <Link key="customer" href={`/app/clientes/${account.customer_id}`} className="font-medium text-stone-950 hover:underline">
+                  <Link key="customer" href={`/app/clientes/${account.customer_id}`} className="font-medium text-stone-950 hover:underline" prefetch={false}>
                     {account.customers.full_name}
                   </Link>
                 ) : "Cliente",

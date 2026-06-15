@@ -109,7 +109,7 @@ export default async function InternalCrmPage({
                 </div>,
                 task.assigned_to ? task.assigned_to.slice(0, 8) : "Sin responsable",
                 task.customers ? (
-                  <Link key="customer" href={`/app/clientes/${task.customers.id}`} className="font-medium text-stone-950 hover:underline">
+                  <Link key="customer" href={`/app/clientes/${task.customers.id}`} className="font-medium text-stone-950 hover:underline" prefetch={false}>
                     {task.customers.full_name}
                   </Link>
                 ) : task.reservations ? `${task.reservations.date} ${task.reservations.time.slice(0, 5)}` : "General",
@@ -173,7 +173,7 @@ export default async function InternalCrmPage({
                   <p className="text-sm font-semibold text-stone-950">{note.title}</p>
                   <p className="mt-1 text-sm text-stone-600">{note.content}</p>
                   {note.customers ? (
-                    <Link href={`/app/clientes/${note.customers.id}`} className="mt-2 inline-flex text-xs font-medium text-stone-950 hover:underline">
+                    <Link href={`/app/clientes/${note.customers.id}`} className="mt-2 inline-flex text-xs font-medium text-stone-950 hover:underline" prefetch={false}>
                       {note.customers.full_name}
                     </Link>
                   ) : null}

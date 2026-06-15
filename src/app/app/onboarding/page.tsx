@@ -150,7 +150,7 @@ export default async function OnboardingPage({
             Royalty ya puede ayudarte a gestionar clientes, fidelizar visitas, detectar oportunidades y controlar perdidas.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Link href="/app/operacion" className="inline-flex h-11 items-center rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white">
+            <Link href="/app/operacion" className="inline-flex h-11 items-center rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white" prefetch={false}>
               Ir al Centro Operativo
             </Link>
             {!onboarding.current.business.onboarding_completed ? (
@@ -198,8 +198,7 @@ export default async function OnboardingPage({
                 </div>
                 <Link
                   href={item.href}
-                  className={["inline-flex h-10 shrink-0 items-center justify-center rounded-2xl px-4 text-sm font-semibold transition", item.done ? "border border-stone-200 bg-white text-stone-700 hover:bg-stone-100" : "bg-stone-950 text-white hover:bg-stone-800"].join(" ")}
-                >
+                  className={["inline-flex h-10 shrink-0 items-center justify-center rounded-2xl px-4 text-sm font-semibold transition", item.done ? "border border-stone-200 bg-white text-stone-700 hover:bg-stone-100" : "bg-stone-950 text-white hover:bg-stone-800"].join(" ")} prefetch={false}>
                   {item.done ? "Revisar" : meta.action}
                 </Link>
               </div>

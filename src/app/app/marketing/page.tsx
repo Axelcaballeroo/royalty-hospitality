@@ -159,35 +159,35 @@ export default async function MarketingPage({
           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
             <p className="text-sm font-semibold text-stone-950">{metrics.inactiveCustomers} clientes pueden recuperarse</p>
             <p className="mt-2 text-sm leading-6 text-stone-700">Crea una campana para quienes no visitan hace mas de 60 dias.</p>
-            <Link href="/app/marketing?segment=inactive_60d&type=inactive_customers" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
+            <Link href="/app/marketing?segment=inactive_60d&type=inactive_customers" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800" prefetch={false}>
               Crear campana
             </Link>
           </div>
           <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
             <p className="text-sm font-semibold text-stone-950">{metrics.birthdayCustomers} cumpleanos del mes</p>
             <p className="mt-2 text-sm leading-6 text-stone-700">Invita a celebrar y aumenta visitas con un beneficio simple.</p>
-            <Link href="/app/marketing?segment=birthday_month&type=birthday" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
+            <Link href="/app/marketing?segment=birthday_month&type=birthday" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800" prefetch={false}>
               Crear campana
             </Link>
           </div>
           <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
             <p className="text-sm font-semibold text-stone-950">{metrics.expiringProducts} producto por vencer</p>
             <p className="mt-2 text-sm leading-6 text-stone-700">Convierte riesgo de perdida en promocion antes del cierre.</p>
-            <Link href="/app/inventario?view=vencimientos" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
+            <Link href="/app/inventario?view=vencimientos" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800" prefetch={false}>
               Crear promocion
             </Link>
           </div>
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
             <p className="text-sm font-semibold text-stone-950">{metrics.vipCustomers} clientes VIP</p>
             <p className="mt-2 text-sm leading-6 text-stone-700">Comunica experiencias especiales a clientes frecuentes.</p>
-            <Link href="/app/marketing?segment=vip_customers&type=vip" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
+            <Link href="/app/marketing?segment=vip_customers&type=vip" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800" prefetch={false}>
               Crear campana
             </Link>
           </div>
           <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4">
             <p className="text-sm font-semibold text-stone-950">{metrics.nearRewardCustomers} cerca de recompensa</p>
             <p className="mt-2 text-sm leading-6 text-stone-700">Invitalos a volver para completar puntos y canjear.</p>
-            <Link href="/app/marketing?segment=customers_near_reward&type=reward" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800">
+            <Link href="/app/marketing?segment=customers_near_reward&type=reward" className="mt-4 inline-flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold text-stone-800" prefetch={false}>
               Crear campana
             </Link>
           </div>
@@ -202,8 +202,7 @@ export default async function MarketingPage({
               <p className="mt-2 text-sm leading-6 text-stone-600">{play.description}</p>
               <Link
                 href={`/app/marketing?type=${play.type}&segment=${play.segment}&name=${encodeURIComponent(play.title)}&message=${encodeURIComponent(play.message)}`}
-                className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-stone-950 px-3 text-sm font-medium text-white transition hover:bg-stone-800"
-              >
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-stone-950 px-3 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
                 Crear campana
               </Link>
             </div>
@@ -274,7 +273,7 @@ export default async function MarketingPage({
                 segmentDefinitions.find((segment) => segment.key === campaign.segment_key)?.name ?? campaign.segment_key,
                 formatStatus(campaign.channel),
                 <StatusBadge key="status" status={campaign.status} />,
-                <Link key="detail" href={`/app/marketing/${campaign.id}`} className="font-medium text-stone-950 hover:underline">Abrir</Link>,
+                <Link key="detail" href={`/app/marketing/${campaign.id}`} className="font-medium text-stone-950 hover:underline" prefetch={false}>Abrir</Link>,
               ])}
             />
           ) : (

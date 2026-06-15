@@ -50,8 +50,7 @@ function ActionLink({
   return (
     <Link
       href={href}
-      className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50"
-    >
+      className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50" prefetch={false}>
       {children}
     </Link>
   );
@@ -178,18 +177,16 @@ export default async function InventoryPage({
               ) : (
                 <Link
                   href={`/app/marketing?type=waste_reduction&segment=customers_with_points&name=${encodeURIComponent(`Promocion ${recommendedItemName}`)}&message=${encodeURIComponent("Hoy tenemos una promocion especial en productos seleccionados. Reserva o visitanos antes de que termine el dia.")}`}
-                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white"
-                >
+                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white" prefetch={false}>
                   Crear promocion
                 </Link>
               )}
-              <Link href="/app/inventario?action=waste" className="inline-flex h-11 items-center justify-center rounded-2xl border border-orange-200 bg-white px-5 text-sm font-semibold text-stone-800">
+              <Link href="/app/inventario?action=waste" className="inline-flex h-11 items-center justify-center rounded-2xl border border-orange-200 bg-white px-5 text-sm font-semibold text-stone-800" prefetch={false}>
                 Registrar perdida
               </Link>
               <Link
                 href={recommendedBatch ? `/app/inventario/${recommendedBatch.item_id}` : "/app/inventario?view=alertas"}
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-orange-200 bg-white px-5 text-sm font-semibold text-stone-800"
-              >
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-orange-200 bg-white px-5 text-sm font-semibold text-stone-800" prefetch={false}>
                 Ver detalle
               </Link>
             </div>
@@ -250,7 +247,7 @@ export default async function InventoryPage({
                 <button className="h-11 rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white">
                   Crear producto
                 </button>
-                <Link href="/app/inventario" className="inline-flex h-11 items-center rounded-2xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800">
+                <Link href="/app/inventario" className="inline-flex h-11 items-center rounded-2xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800" prefetch={false}>
                   Cancelar
                 </Link>
               </div>
@@ -278,7 +275,7 @@ export default async function InventoryPage({
                 <button className="h-11 rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white">
                   Registrar entrada
                 </button>
-                <Link href="/app/inventario" className="inline-flex h-11 items-center rounded-2xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800">
+                <Link href="/app/inventario" className="inline-flex h-11 items-center rounded-2xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800" prefetch={false}>
                   Cancelar
                 </Link>
               </div>
@@ -325,7 +322,7 @@ export default async function InventoryPage({
                 >
                   Registrar
                 </ConfirmSubmitButton>
-                <Link href="/app/inventario" className="inline-flex h-11 items-center rounded-2xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800">
+                <Link href="/app/inventario" className="inline-flex h-11 items-center rounded-2xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800" prefetch={false}>
                   Cancelar
                 </Link>
               </div>
@@ -336,19 +333,19 @@ export default async function InventoryPage({
 
       <section className="grid gap-4 md:grid-cols-3">
         <ModuleCard title="Catalogo" description={`${metrics.activeItems} ${metrics.activeItems === 1 ? "producto activo" : "productos activos"}.`}>
-          <Link href="/app/inventario?view=catalogo" className="inline-flex items-center gap-2 text-sm font-semibold text-stone-950">
+          <Link href="/app/inventario?view=catalogo" className="inline-flex items-center gap-2 text-sm font-semibold text-stone-950" prefetch={false}>
             Ver catalogo
             <ArrowRight size={15} />
           </Link>
         </ModuleCard>
         <ModuleCard title="Vencimientos" description={`${metrics.expiringBatches} ${metrics.expiringBatches === 1 ? "producto requiere" : "productos requieren"} atencion.`}>
-          <Link href="/app/inventario?view=vencimientos" className="inline-flex items-center gap-2 text-sm font-semibold text-stone-950">
+          <Link href="/app/inventario?view=vencimientos" className="inline-flex items-center gap-2 text-sm font-semibold text-stone-950" prefetch={false}>
             Ver vencimientos
             <ArrowRight size={15} />
           </Link>
         </ModuleCard>
         <ModuleCard title="Movimientos" description={`${movements.length} ${movements.length === 1 ? "movimiento reciente" : "movimientos recientes"}.`}>
-          <Link href="/app/inventario?view=movimientos" className="inline-flex items-center gap-2 text-sm font-semibold text-stone-950">
+          <Link href="/app/inventario?view=movimientos" className="inline-flex items-center gap-2 text-sm font-semibold text-stone-950" prefetch={false}>
             Ver movimientos
             <ArrowRight size={15} />
           </Link>
@@ -371,8 +368,7 @@ export default async function InventoryPage({
                 activeView === view
                   ? "bg-stone-950 text-white"
                   : "border border-stone-200 bg-white text-stone-700 hover:border-stone-300",
-              ].join(" ")}
-            >
+              ].join(" ")} prefetch={false}>
               {label}
             </Link>
           ))}
@@ -405,10 +401,10 @@ export default async function InventoryPage({
                           Crear promocion
                         </button>
                       </form>
-                      <Link href="/app/inventario?action=waste" className="inline-flex h-9 items-center rounded-xl border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800">
+                      <Link href="/app/inventario?action=waste" className="inline-flex h-9 items-center rounded-xl border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800" prefetch={false}>
                         Registrar perdida
                       </Link>
-                      <Link href="/app/inventario?view=alertas" className="inline-flex h-9 items-center rounded-xl border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800">
+                      <Link href="/app/inventario?view=alertas" className="inline-flex h-9 items-center rounded-xl border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800" prefetch={false}>
                         Resolver alerta
                       </Link>
                     </div>
@@ -435,7 +431,7 @@ export default async function InventoryPage({
                 ) : (
                   <StatusBadge key="ok" status={item.status} />
                 ),
-                <Link key="detail" href={`/app/inventario/${item.id}`} className="font-medium text-stone-950 hover:underline">
+                <Link key="detail" href={`/app/inventario/${item.id}`} className="font-medium text-stone-950 hover:underline" prefetch={false}>
                   Abrir
                 </Link>,
               ])}
@@ -462,7 +458,7 @@ export default async function InventoryPage({
                   <p className="mt-3 text-sm font-semibold text-stone-700">
                     Valor en riesgo: {currency.format(Number(batch.quantity) * Number(batch.cost))}
                   </p>
-                  <Link href={`/app/inventario/${batch.item_id}`} className="mt-4 inline-flex h-9 items-center rounded-xl bg-white px-3 text-xs font-semibold text-stone-800">
+                  <Link href={`/app/inventario/${batch.item_id}`} className="mt-4 inline-flex h-9 items-center rounded-xl bg-white px-3 text-xs font-semibold text-stone-800" prefetch={false}>
                     Ver detalle
                   </Link>
                 </div>

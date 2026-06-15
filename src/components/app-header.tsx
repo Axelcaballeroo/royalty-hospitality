@@ -28,8 +28,7 @@ export async function AppHeader() {
           <CreateMenu />
           <Link
             href="/app/dashboard"
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-700 transition hover:border-stone-300"
-          >
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-700 transition hover:border-stone-300" prefetch={false}>
             Dashboard ejecutivo
           </Link>
           <label className="flex h-10 w-80 items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 text-sm text-stone-500">
@@ -44,8 +43,7 @@ export async function AppHeader() {
             href="/app/alertas"
             className="relative flex size-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
             aria-label="Alertas"
-            title="Alertas"
-          >
+            title="Alertas" prefetch={false}>
             <Bell size={17} />
             {alertCount ? (
               <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-stone-950 px-1.5 text-[10px] font-bold text-white">
@@ -58,8 +56,7 @@ export async function AppHeader() {
               href="/superadmin"
               className="flex size-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
               aria-label="Superadmin"
-              title="Superadmin"
-            >
+              title="Superadmin" prefetch={false}>
               <ShieldCheck size={17} />
             </Link>
           ) : null}
@@ -68,6 +65,7 @@ export async function AppHeader() {
             className="flex size-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
             aria-label="Cerrar sesion"
             title="Cerrar sesion"
+            prefetch={false}
           >
             <LogOut size={17} />
           </Link>

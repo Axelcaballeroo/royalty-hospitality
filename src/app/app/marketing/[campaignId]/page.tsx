@@ -35,7 +35,7 @@ export default async function CampaignDetailPage({
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
-          <Link href="/app/marketing" className="text-sm font-medium text-stone-500 hover:text-stone-950">
+          <Link href="/app/marketing" className="text-sm font-medium text-stone-500 hover:text-stone-950" prefetch={false}>
             Volver a marketing
           </Link>
           <h1 className="mt-3 text-3xl font-semibold text-stone-950">

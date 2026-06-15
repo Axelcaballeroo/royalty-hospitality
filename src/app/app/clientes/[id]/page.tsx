@@ -63,7 +63,7 @@ export default async function CustomerDetailPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/app/clientes" className="text-sm font-medium text-stone-500 hover:text-stone-950">
+        <Link href="/app/clientes" className="text-sm font-medium text-stone-500 hover:text-stone-950" prefetch={false}>
           Volver a clientes
         </Link>
         <h1 className="mt-3 text-4xl font-semibold text-stone-950">

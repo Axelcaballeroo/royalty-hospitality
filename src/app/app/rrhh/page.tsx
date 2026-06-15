@@ -55,8 +55,7 @@ export default async function PeoplePage({
         </div>
         <Link
           href="/app/rrhh/checador"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
-        >
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
           <Clock size={16} />
           Abrir checador
         </Link>
@@ -166,7 +165,7 @@ export default async function PeoplePage({
                 employee.position ?? "-",
                 employee.phone ?? employee.email ?? "-",
                 <StatusBadge key="status" status={employee.status} />,
-                <Link key="detail" href={`/app/rrhh/${employee.id}`} className="font-medium text-stone-950 hover:underline">
+                <Link key="detail" href={`/app/rrhh/${employee.id}`} className="font-medium text-stone-950 hover:underline" prefetch={false}>
                   Abrir
                 </Link>,
               ])}

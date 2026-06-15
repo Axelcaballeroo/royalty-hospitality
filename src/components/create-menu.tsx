@@ -35,6 +35,7 @@ export function CreateMenu() {
             <Link
               key={action.href}
               href={action.href}
+              prefetch={false}
               onClick={() => setOpen(false)}
               className="block rounded-xl px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950"
             >

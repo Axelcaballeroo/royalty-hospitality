@@ -43,7 +43,7 @@ export default async function SuperadminBusinessesPage({
               <StatusBadge key="status" status={business.status} />,
               String(business.business_users?.length ?? 0),
               new Date(business.created_at).toLocaleDateString("es-MX"),
-              <Link key="detail" href={`/superadmin/businesses/${business.id}`} className="font-medium text-stone-950 hover:underline">
+              <Link key="detail" href={`/superadmin/businesses/${business.id}`} className="font-medium text-stone-950 hover:underline" prefetch={false}>
                 Ver detalle
               </Link>,
             ])}

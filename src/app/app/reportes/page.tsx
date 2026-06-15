@@ -51,8 +51,7 @@ export default async function ReportsPage({
         <div className="flex flex-wrap gap-2">
           <Link
             href={`/app/reportes/export?type=report&period=${period}`}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
-          >
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
             <Download size={16} />
             Exportar CSV
           </Link>
@@ -188,8 +187,7 @@ export default async function ReportsPage({
             <Link
               key={type}
               href={`/app/reportes/export?type=${type}&period=${period}`}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 transition hover:border-stone-300"
-            >
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 transition hover:border-stone-300" prefetch={false}>
               <Download size={15} />
               {label}
             </Link>

@@ -27,7 +27,7 @@ export function AppSidebarClient({
   return (
     <aside className="hidden min-h-screen w-72 shrink-0 border-r border-stone-200/70 bg-white/95 px-5 py-6 shadow-[20px_0_60px_rgba(28,25,23,0.04)] backdrop-blur lg:flex lg:flex-col">
       <div className="flex items-center justify-between px-2">
-        <Link href="/app/operacion" className="flex items-center gap-3">
+        <Link href="/app/operacion" className="flex items-center gap-3" prefetch={false}>
           <span className="flex size-11 items-center justify-center rounded-2xl bg-stone-950 text-white shadow-sm">
             <Crown size={19} />
           </span>
@@ -96,6 +96,7 @@ export function AppSidebarClient({
                     <Link
                       key={`${group.label}-${item.href}-${item.name}`}
                       href={item.href}
+                      prefetch={false}
                       onClick={() => setOpenGroup(group.label)}
                       className={[
                         "flex h-9 items-center gap-2 rounded-xl px-3 text-sm font-medium transition",
@@ -137,6 +138,7 @@ export function AppSidebarClient({
               <div key={item.href}>
                 <Link
                   href={item.href}
+                  prefetch={false}
                   className={[
                     "flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium transition",
                     active
@@ -159,6 +161,7 @@ export function AppSidebarClient({
                         <Link
                           key={child.href}
                           href={child.href}
+                          prefetch={false}
                           className={[
                             "flex h-8 items-center gap-2 rounded-lg px-2 text-xs font-medium transition",
                             childActive

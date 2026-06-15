@@ -56,10 +56,10 @@ export default async function SuperadminPage() {
       </section>
 
       <div className="flex flex-wrap gap-3">
-        <Link href="/superadmin/businesses" className="rounded-lg bg-white px-4 py-3 text-sm font-medium text-stone-950">
+        <Link href="/superadmin/businesses" className="rounded-lg bg-white px-4 py-3 text-sm font-medium text-stone-950" prefetch={false}>
           Gestionar negocios
         </Link>
-        <Link href="/superadmin/plans" className="rounded-lg border border-white/20 px-4 py-3 text-sm font-medium text-white">
+        <Link href="/superadmin/plans" className="rounded-lg border border-white/20 px-4 py-3 text-sm font-medium text-white" prefetch={false}>
           Ver planes
         </Link>
       </div>

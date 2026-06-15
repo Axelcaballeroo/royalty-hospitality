@@ -36,7 +36,7 @@ export default async function SuperadminBusinessDetailPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/superadmin/businesses" className="text-sm font-medium text-stone-300 hover:text-white">
+        <Link href="/superadmin/businesses" className="text-sm font-medium text-stone-300 hover:text-white" prefetch={false}>
           Volver a negocios
         </Link>
         <h1 className="mt-3 text-3xl font-semibold text-white">{business.name}</h1>

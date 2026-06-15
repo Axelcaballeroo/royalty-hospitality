@@ -26,7 +26,7 @@ export function MobileNavClient({
   return (
     <div className="border-b border-stone-200/80 bg-white/90 px-4 py-4 backdrop-blur lg:hidden">
       <div className="flex items-center justify-between">
-        <Link href="/app/operacion" className="flex items-center gap-3">
+        <Link href="/app/operacion" className="flex items-center gap-3" prefetch={false}>
           <span className="flex size-10 items-center justify-center rounded-2xl bg-stone-950 text-white">
             <Crown size={17} />
           </span>
@@ -39,15 +39,13 @@ export function MobileNavClient({
           <Link
             href="/app/operacion?tab=reservas&action=nueva-reserva"
             className="inline-flex size-10 items-center justify-center rounded-xl bg-stone-950 text-white"
-            aria-label="Crear"
-          >
+            aria-label="Crear" prefetch={false}>
             <Plus size={18} />
           </Link>
           <Link
             href="/app/alertas"
             className="relative inline-flex size-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700"
-            aria-label="Alertas"
-          >
+            aria-label="Alertas" prefetch={false}>
             <Bell size={18} />
             {alertCount ? (
               <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-stone-950 px-1.5 text-[10px] font-bold text-white">
@@ -114,6 +112,7 @@ export function MobileNavClient({
                     <Link
                       key={`${group.label}-${item.href}-${item.name}`}
                       href={item.href}
+                      prefetch={false}
                       onClick={() => {
                         setOpenGroup(group.label);
                         setOpen(false);
@@ -152,6 +151,7 @@ export function MobileNavClient({
                   <div key={item.href}>
                     <Link
                       href={item.href}
+                      prefetch={false}
                       onClick={() => setOpen(false)}
                       className={[
                         "inline-flex h-10 w-full items-center gap-2 rounded-xl px-3 text-sm font-medium",
@@ -174,6 +174,7 @@ export function MobileNavClient({
                             <Link
                               key={child.href}
                               href={child.href}
+                              prefetch={false}
                               onClick={() => setOpen(false)}
                               className={[
                                 "inline-flex h-8 items-center gap-2 rounded-lg px-2 text-xs font-medium",

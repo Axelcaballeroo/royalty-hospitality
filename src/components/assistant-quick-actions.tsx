@@ -25,6 +25,7 @@ export function AssistantQuickActions({ compact = false }: { compact?: boolean }
             <Link
               key={action.href}
               href={action.href}
+              prefetch={false}
               className={[
                 "inline-flex h-10 items-center justify-center rounded-xl px-3 text-sm font-semibold transition",
                 index === 0

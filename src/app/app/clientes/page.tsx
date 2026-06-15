@@ -158,7 +158,7 @@ export default async function CustomersPage({
   const qrDataUrl = activeTab === "registro" && registerLink ? await createQrDataUrl(registerLink) : "";
 
   const rows = customers.map((customer) => [
-    <Link key="name" href={`/app/clientes/${customer.id}`} className="font-medium text-stone-950 hover:underline">
+    <Link key="name" href={`/app/clientes/${customer.id}`} className="font-medium text-stone-950 hover:underline" prefetch={false}>
       {customer.full_name}
     </Link>,
     customer.phone ?? "-",
@@ -167,7 +167,7 @@ export default async function CustomersPage({
     String(customer.total_visits),
     customer.last_visit_at ? new Date(customer.last_visit_at).toLocaleDateString("es-MX") : "-",
     <StatusBadge key="status" status={customer.status} />,
-    <Link key="detail" href={`/app/clientes/${customer.id}`} className="font-medium text-stone-950 hover:underline">
+    <Link key="detail" href={`/app/clientes/${customer.id}`} className="font-medium text-stone-950 hover:underline" prefetch={false}>
       Abrir perfil 360
     </Link>,
   ]);
@@ -181,8 +181,7 @@ export default async function CustomersPage({
         actions={
           <Link
             href="/app/clientes?action=new"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800"
-          >
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800" prefetch={false}>
             <Plus size={16} />
             Nuevo cliente
           </Link>
@@ -194,16 +193,16 @@ export default async function CustomersPage({
 
       <ModuleCard title="Acciones rapidas" description="Atajos para operar clientes sin aprender cinco modulos separados.">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Link href="/app/clientes?action=new" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm hover:bg-stone-50">
+          <Link href="/app/clientes?action=new" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm hover:bg-stone-50" prefetch={false}>
             Nuevo cliente
           </Link>
-          <Link href="/app/checkin" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm hover:bg-stone-50">
+          <Link href="/app/checkin" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm hover:bg-stone-50" prefetch={false}>
             Registrar consumo
           </Link>
-          <Link href="/app/clientes?tab=beneficios&action=benefit" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm hover:bg-stone-50">
+          <Link href="/app/clientes?tab=beneficios&action=benefit" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm hover:bg-stone-50" prefetch={false}>
             Crear beneficio
           </Link>
-          <Link href="/app/clientes?tab=registro" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm hover:bg-stone-50">
+          <Link href="/app/clientes?tab=registro" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm hover:bg-stone-50" prefetch={false}>
             Ver QR
           </Link>
         </div>
@@ -219,8 +218,7 @@ export default async function CustomersPage({
               activeTab === tab.key
                 ? "bg-stone-950 text-white"
                 : "text-stone-600 hover:bg-stone-100 hover:text-stone-950",
-            ].join(" ")}
-          >
+            ].join(" ")} prefetch={false}>
             {tab.label}
           </Link>
         ))}
@@ -240,7 +238,7 @@ export default async function CustomersPage({
             <textarea name="notes" placeholder="Notas iniciales" className="min-h-24 rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
             <div className="flex flex-wrap gap-2">
               <PrimaryButton>Crear cliente</PrimaryButton>
-              <Link href="/app/clientes" className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800">
+              <Link href="/app/clientes" className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800" prefetch={false}>
                 Cancelar
               </Link>
             </div>
@@ -319,16 +317,16 @@ export default async function CustomersPage({
 
           <ModuleCard title="Acciones del journey" description="Mueve clientes de un paso al siguiente sin pensar en modulos.">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <Link href="/app/clientes?tab=registro" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800">
+              <Link href="/app/clientes?tab=registro" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800" prefetch={false}>
                 Compartir QR del club
               </Link>
-              <Link href="/app/operacion?tab=reservas&action=nueva-reserva" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800">
+              <Link href="/app/operacion?tab=reservas&action=nueva-reserva" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800" prefetch={false}>
                 Crear reserva
               </Link>
-              <Link href="/app/operacion?tab=sala" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800">
+              <Link href="/app/operacion?tab=sala" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800" prefetch={false}>
                 Check-in / consumo
               </Link>
-              <Link href="/app/marketing?segment=customers_near_reward&type=reward" className="inline-flex h-11 items-center justify-center rounded-2xl bg-stone-950 px-4 text-sm font-semibold text-white">
+              <Link href="/app/marketing?segment=customers_near_reward&type=reward" className="inline-flex h-11 items-center justify-center rounded-2xl bg-stone-950 px-4 text-sm font-semibold text-white" prefetch={false}>
                 Activar regreso
               </Link>
             </div>
@@ -443,14 +441,14 @@ export default async function CustomersPage({
                 </select>
                 <div className="flex flex-wrap gap-2">
                   <PrimaryButton>Crear beneficio</PrimaryButton>
-                  <Link href="/app/clientes?tab=beneficios" className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800">
+                  <Link href="/app/clientes?tab=beneficios" className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800" prefetch={false}>
                     Cancelar
                   </Link>
                 </div>
               </form>
             </ModuleCard>
           ) : (
-            <Link href="/app/clientes?tab=beneficios&action=benefit" className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800">
+            <Link href="/app/clientes?tab=beneficios&action=benefit" className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800" prefetch={false}>
               <Plus size={16} />
               Nuevo beneficio
             </Link>
@@ -509,7 +507,7 @@ export default async function CustomersPage({
               <p className="text-sm leading-6 text-stone-600">
                 Usa Nuevo cliente cuando una persona llama, reserva o llega sin escanear el QR.
               </p>
-              <Link href="/app/clientes?action=new" className="mt-4 inline-flex h-10 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">
+              <Link href="/app/clientes?action=new" className="mt-4 inline-flex h-10 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white" prefetch={false}>
                 Nuevo cliente
               </Link>
             </ModuleCard>

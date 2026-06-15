@@ -34,7 +34,7 @@ export default async function SuperadminLayout({
     <div className="min-h-screen bg-stone-950 text-white">
       <header className="border-b border-white/10 bg-stone-950/95 px-5 py-4">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <Link href="/superadmin" className="flex items-center gap-3">
+          <Link href="/superadmin" className="flex items-center gap-3" prefetch={false}>
             <span className="flex size-10 items-center justify-center rounded-lg bg-white text-stone-950">
               <Crown size={19} />
             </span>
@@ -48,15 +48,13 @@ export default async function SuperadminLayout({
               <Link
                 key={href}
                 href={href}
-                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-stone-300 transition hover:bg-white hover:text-stone-950"
-              >
+                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-stone-300 transition hover:bg-white hover:text-stone-950" prefetch={false}>
                 {label}
               </Link>
             ))}
             <Link
               href="/app/dashboard"
-              className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-stone-950"
-            >
+              className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-stone-950" prefetch={false}>
               Volver al app
             </Link>
           </nav>

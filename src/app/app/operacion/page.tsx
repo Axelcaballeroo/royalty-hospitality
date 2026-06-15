@@ -274,14 +274,12 @@ export default async function OperationPage({
           <>
             <Link
               href="/app/dashboard"
-              className="inline-flex h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300"
-            >
+              className="inline-flex h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300" prefetch={false}>
               Ver Dashboard Ejecutivo
             </Link>
             <Link
               href="/app/operacion?tab=reservas&action=nueva-reserva"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
-            >
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
               <Plus size={16} />
               Nueva reserva
             </Link>
@@ -328,8 +326,7 @@ export default async function OperationPage({
               activeTab === tab.key
                 ? "bg-stone-950 text-white"
                 : "text-stone-600 hover:bg-stone-50 hover:text-stone-950",
-            ].join(" ")}
-          >
+            ].join(" ")} prefetch={false}>
             {tab.label}
           </Link>
         ))}
@@ -349,7 +346,7 @@ export default async function OperationPage({
               <div className="divide-y divide-stone-100">
                 {pendingItems.map((item) => (
                   <InboxItem key={item.id} title={item.title} description={item.description} priority={item.priority}>
-                    <Link href={item.href} className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800">
+                    <Link href={item.href} className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800" prefetch={false}>
                       {item.label}
                     </Link>
                   </InboxItem>
@@ -398,7 +395,7 @@ export default async function OperationPage({
                 <input type="hidden" name="source" value="manual" />
                 <div className="flex flex-wrap gap-2">
                   <PrimaryButton>Crear reserva</PrimaryButton>
-                  <Link href={tabHref("reservas")} className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800">
+                  <Link href={tabHref("reservas")} className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800" prefetch={false}>
                     Cancelar
                   </Link>
                 </div>
@@ -417,7 +414,7 @@ export default async function OperationPage({
                 title="Sin reservas hoy"
                 description="Crea una reserva para iniciar la agenda del dia."
                 action={
-                  <Link href="/app/operacion?tab=reservas&action=nueva-reserva" className="inline-flex h-11 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">
+                  <Link href="/app/operacion?tab=reservas&action=nueva-reserva" className="inline-flex h-11 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white" prefetch={false}>
                     Nueva reserva
                   </Link>
                 }
@@ -462,7 +459,7 @@ export default async function OperationPage({
                             {customer.phone ?? "Sin telefono"} / {account.points_balance} puntos / {customer.loyalty_code ?? "Sin codigo"}
                           </p>
                         </div>
-                        <Link href={`/app/clientes/${customer.id}`} className="text-sm font-semibold text-stone-950 hover:underline">
+                        <Link href={`/app/clientes/${customer.id}`} className="text-sm font-semibold text-stone-950 hover:underline" prefetch={false}>
                           Ver perfil
                         </Link>
                       </div>
@@ -513,7 +510,7 @@ export default async function OperationPage({
                             </span>
                           </div>
                         </div>
-                        <Link href={`/app/clientes/${reservation.customer_id}`} className="text-sm font-semibold text-stone-950 hover:underline">
+                        <Link href={`/app/clientes/${reservation.customer_id}`} className="text-sm font-semibold text-stone-950 hover:underline" prefetch={false}>
                           Ver perfil
                         </Link>
                       </div>
@@ -548,7 +545,7 @@ export default async function OperationPage({
                 title="Todavia no hay clientes en sala"
                 description="Haz check-in desde Reservas para mover clientes automaticamente a esta vista."
                 action={
-                  <Link href={tabHref("reservas")} className="inline-flex h-11 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">
+                  <Link href={tabHref("reservas")} className="inline-flex h-11 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white" prefetch={false}>
                     Abrir reservas
                   </Link>
                 }
@@ -586,7 +583,7 @@ export default async function OperationPage({
                         Crear promocion
                       </button>
                     </form>
-                    <Link href="/app/inventario?view=mermas" className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800">
+                    <Link href="/app/inventario?view=mermas" className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800" prefetch={false}>
                       Registrar perdida
                     </Link>
                   </InboxItem>
@@ -599,7 +596,7 @@ export default async function OperationPage({
                     description={`${batch.quantity} ${batch.inventory_items?.unit ?? ""} / vence ${batch.expiration_date ?? "sin fecha"}.`}
                     priority="Alta"
                   >
-                    <Link href="/app/inventario?view=vencimientos" className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800">
+                    <Link href="/app/inventario?view=vencimientos" className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800" prefetch={false}>
                       Ver vencimientos
                     </Link>
                   </InboxItem>
@@ -612,7 +609,7 @@ export default async function OperationPage({
                     description={`Stock ${item.stock} ${item.unit}, minimo ${item.min_stock} ${item.unit}.`}
                     priority="Media"
                   >
-                    <Link href="/app/inventario" className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800">
+                    <Link href="/app/inventario" className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800" prefetch={false}>
                       Revisar stock
                     </Link>
                   </InboxItem>
@@ -667,7 +664,7 @@ export default async function OperationPage({
                     description={`Entrada ${new Date(entry.clock_in).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}.`}
                     priority="Baja"
                   >
-                    <Link href="/app/rrhh/checador" className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800">
+                    <Link href="/app/rrhh/checador" className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800" prefetch={false}>
                       Ir a checador
                     </Link>
                   </InboxItem>
@@ -680,7 +677,7 @@ export default async function OperationPage({
                     description={task.due_date ? new Date(task.due_date).toLocaleString("es-MX") : "Sin fecha."}
                     priority="Media"
                   >
-                    <Link href="/app/crm-interno" className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800">
+                    <Link href="/app/crm-interno" className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-800" prefetch={false}>
                       Ver tarea
                     </Link>
                   </InboxItem>
@@ -801,13 +798,13 @@ export default async function OperationPage({
                 <textarea name="notes" placeholder="Notas" className="min-h-20 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
                 <div className="flex flex-wrap gap-2">
                   <PrimaryButton>Agregar cortesia</PrimaryButton>
-                  <Link href={`${tabHref("cierre")}&date=${closureContext.date}`} className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800">
+                  <Link href={`${tabHref("cierre")}&date=${closureContext.date}`} className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800" prefetch={false}>
                     Cancelar
                   </Link>
                 </div>
               </form>
             ) : (
-              <Link href={`${tabHref("cierre")}&action=cortesia&date=${closureContext.date}`} className="mb-5 inline-flex h-11 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">
+              <Link href={`${tabHref("cierre")}&action=cortesia&date=${closureContext.date}`} className="mb-5 inline-flex h-11 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white" prefetch={false}>
                 Agregar cortesia
               </Link>
             )}

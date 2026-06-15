@@ -69,8 +69,7 @@ export default async function SettingsPage({
         <Link
           href={`/site/${business.slug}`}
           target="_blank"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
-        >
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
           Ver web publica
           <ExternalLink size={16} />
         </Link>
@@ -93,8 +92,7 @@ export default async function SettingsPage({
               <Link
                 key={item.label}
                 href={item.href}
-                className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-white"
-              >
+                className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-white" prefetch={false}>
                 {item.done ? (
                   <CheckCircle2 size={18} className="text-emerald-600" />
                 ) : (

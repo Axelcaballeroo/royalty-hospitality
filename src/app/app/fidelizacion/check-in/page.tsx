@@ -52,7 +52,7 @@ export default async function LoyaltyCheckInPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/app/fidelizacion" className="text-sm font-medium text-stone-500 hover:text-stone-950">
+        <Link href="/app/fidelizacion" className="text-sm font-medium text-stone-500 hover:text-stone-950" prefetch={false}>
           Volver a fidelizacion
         </Link>
         <h1 className="mt-3 text-3xl font-semibold text-stone-950">

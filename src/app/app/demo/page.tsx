@@ -91,8 +91,7 @@ export default async function DemoPage() {
           </div>
           <Link
             href="/app/ayuda"
-            className="inline-flex h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300"
-          >
+            className="inline-flex h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300" prefetch={false}>
             Abrir centro de ayuda
           </Link>
         </div>
@@ -115,8 +114,7 @@ export default async function DemoPage() {
                 </p>
                 <Link
                   href={href}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-950 px-3 text-sm font-medium text-white transition hover:bg-stone-800"
-                >
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-950 px-3 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
                   Ir a {item.linkLabel}
                   <ArrowRight size={15} />
                 </Link>

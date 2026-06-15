@@ -43,8 +43,7 @@ export default function Home() {
         </Link>
         <Link
           href="/app/dashboard"
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800"
-        >
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
           Entrar
           <ArrowRight size={16} />
         </Link>
@@ -66,8 +65,7 @@ export default function Home() {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/app/dashboard"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-stone-950 px-5 text-sm font-medium text-white transition hover:bg-stone-800"
-            >
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-stone-950 px-5 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
               Ver app privada
               <ArrowRight size={17} />
             </Link>
@@ -181,8 +179,7 @@ export default function Home() {
           </div>
           <Link
             href="/app/dashboard"
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-white px-5 text-sm font-medium text-stone-950 transition hover:bg-stone-100"
-          >
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-white px-5 text-sm font-medium text-stone-950 transition hover:bg-stone-100" prefetch={false}>
             Abrir SaaS
             <ArrowRight size={17} />
           </Link>

@@ -24,8 +24,7 @@ export default async function AlertsCenterPage() {
         actions={
           <Link
             href="/app/operacion"
-            className="inline-flex h-11 items-center justify-center rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800"
-          >
+            className="inline-flex h-11 items-center justify-center rounded-2xl bg-stone-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800" prefetch={false}>
             Ir al Centro Operativo
           </Link>
         }
@@ -59,8 +58,7 @@ export default async function AlertsCenterPage() {
                 </div>
                 <Link
                   href={alert.href}
-                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800"
-                >
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800" prefetch={false}>
                   {alert.resolveLabel}
                 </Link>
               </div>
