@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight, BarChart3, Megaphone, Package, Users } from "lucide-react";
 import { AssistantQuickActions } from "@/components/assistant-quick-actions";
 import { RoyaltyAssistantPanel } from "@/components/royalty-assistant-panel";
-import { getDashboardData } from "@/lib/data";
+import { getDashboardData, getOnboardingChecklistData } from "@/lib/data";
 import { ModuleCard, SectionHeader, StatCard, StatusBadge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -89,7 +89,10 @@ function SummaryBlock({
 }
 
 export default async function DashboardPage() {
-  const { current, stats } = await getDashboardData();
+  const [{ current, stats }, onboarding] = await Promise.all([
+    getDashboardData(),
+    getOnboardingChecklistData(),
+  ]);
   const opportunities =
     stats.inactiveCustomers +
     stats.birthdayCustomers +
@@ -155,12 +158,13 @@ export default async function DashboardPage() {
         }
       />
 
-      {!current.business.onboarding_completed ? (
+      {!current.business.onboarding_completed && onboarding.progress < 100 ? (
         <Link
           href="/app/onboarding"
           className="block rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800 transition hover:border-amber-300"
         >
-          Completa la configuracion inicial para que el dashboard lea mejor tu negocio.
+          Te faltan {onboarding.total - onboarding.completed} pasos para completar la configuracion.
+          <span className="ml-2 underline">Continuar configuracion</span>
         </Link>
       ) : null}
 

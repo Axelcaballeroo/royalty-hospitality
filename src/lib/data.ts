@@ -1652,7 +1652,7 @@ export async function getBusinessSettingsData() {
 export async function getOnboardingChecklistData() {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
-  const [settings, rewards, customers, employees, loyaltyAccounts] = await Promise.all([
+  const [settings, rewards, customers, employees, loyaltyAccounts, reservations] = await Promise.all([
     supabase
       .from("business_settings")
       .select("points_per_currency")
@@ -1674,6 +1674,10 @@ export async function getOnboardingChecklistData() {
       .eq("status", "active"),
     supabase
       .from("loyalty_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", current.businessId),
+    supabase
+      .from("reservations")
       .select("id", { count: "exact", head: true })
       .eq("business_id", current.businessId),
   ]);
@@ -1714,10 +1718,16 @@ export async function getOnboardingChecklistData() {
       done: Boolean(current.business.menu_pdf_url),
       href: "/app/configuracion",
     },
+    {
+      label: "Primera reserva",
+      done: (reservations.count ?? 0) > 0,
+      href: "/app/operacion?tab=reservas&action=nueva-reserva",
+    },
   ];
 
   const completed = items.filter((item) => item.done).length;
-  const progress = Math.round((completed / items.length) * 100);
+  const progressSteps = [0, 15, 30, 45, 60, 75, 90, 100, 100];
+  const progress = progressSteps[completed] ?? 100;
 
   return {
     current,
