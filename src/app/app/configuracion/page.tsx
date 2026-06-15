@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import Image from "next/image";
 import { CheckCircle2, Circle, ExternalLink } from "lucide-react";
 import {
   updateBusinessProfileAction,
@@ -10,6 +11,7 @@ import {
 import { getBusinessSettingsData, getOnboardingChecklistData } from "@/lib/data";
 import { ModuleCard, StatusBadge } from "@/components/ui";
 import { PublicLinkActions } from "@/components/public-link-actions";
+import { createQrDataUrl } from "@/lib/qr";
 import { getModuleAccess, moduleCatalog, planModules } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
@@ -31,10 +33,22 @@ export default async function SettingsPage({
   const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "";
   const origin = host ? `${protocol}://${host}` : "";
   const publicLinks = [
-    { label: "Link del Club", href: `${origin}/club/${business.slug}` },
+    { label: "Link del Club", href: `${origin}/site/${business.slug}/club` },
     { label: "Link de Reservas", href: `${origin}/site/${business.slug}/reservas` },
     { label: "Link Web publica", href: `${origin}/site/${business.slug}` },
+    { label: "Link Menu", href: `${origin}/site/${business.slug}/menu` },
   ];
+  const qrLinks = await Promise.all(
+    [
+      { label: "Web", href: `${origin}/site/${business.slug}` },
+      { label: "Reservas", href: `${origin}/site/${business.slug}/reservas` },
+      { label: "Club", href: `${origin}/site/${business.slug}/club` },
+      { label: "Menu", href: `${origin}/site/${business.slug}/menu` },
+    ].map(async (item) => ({
+      ...item,
+      qrDataUrl: await createQrDataUrl(item.href),
+    })),
+  );
   const includedModules = planModules[plan];
   const blockedModules = Object.keys(moduleCatalog).filter((moduleKey) => !access[moduleKey]);
 
@@ -151,6 +165,7 @@ export default async function SettingsPage({
             <div className="grid gap-3 sm:grid-cols-2">
               <input name="logo_url" defaultValue={business.logo_url ?? ""} placeholder="Logo URL" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
               <input name="cover_url" defaultValue={business.cover_url ?? ""} placeholder="Cover URL" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
+              <input name="menu_pdf_url" defaultValue={business.menu_pdf_url ?? ""} placeholder="Menu PDF URL" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
               <input name="brand_primary_color" defaultValue={business.brand_primary_color ?? "#1c1917"} placeholder="#1c1917" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
               <input name="brand_secondary_color" defaultValue={business.brand_secondary_color ?? "#10b981"} placeholder="#10b981" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
               <input name="phone" defaultValue={business.phone ?? ""} placeholder="Telefono" className="h-11 rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
@@ -179,6 +194,30 @@ export default async function SettingsPage({
                   <div className="mt-3">
                     <PublicLinkActions href={item.href} />
                   </div>
+                </div>
+              ))}
+            </div>
+          </ModuleCard>
+          <ModuleCard title="QR universales" description="Descargables para mesas, recepcion, menu y club.">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {qrLinks.map((item) => (
+                <div key={item.href} className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+                  <p className="text-sm font-semibold text-stone-950">{item.label}</p>
+                  <Image
+                    src={item.qrDataUrl}
+                    alt={`QR ${item.label}`}
+                    width={144}
+                    height={144}
+                    unoptimized
+                    className="mx-auto mt-3 size-36 rounded-lg border border-stone-200 bg-white p-2"
+                  />
+                  <a
+                    href={item.qrDataUrl}
+                    download={`royalty-${business.slug}-${item.label.toLowerCase()}.png`}
+                    className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-lg bg-stone-950 text-sm font-medium text-white"
+                  >
+                    Descargar QR
+                  </a>
                 </div>
               ))}
             </div>

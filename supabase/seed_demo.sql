@@ -25,6 +25,7 @@ begin
     plan,
     status,
     public_description,
+    menu_pdf_url,
     brand_primary_color,
     brand_secondary_color,
     website_enabled,
@@ -43,7 +44,8 @@ begin
     'Mexico',
     'business',
     'active',
-    'Experiencia demo para mostrar CRM, reservas, fidelizacion, inventario, RRHH y wallet.',
+    'Reserva mesa, unete al club y acumula puntos en cada visita. Una experiencia demo conectada de web, reservas, clientes y beneficios.',
+    'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
     '#1c1917',
     '#10b981',
     true,
@@ -54,6 +56,10 @@ begin
   on conflict (slug) do update
     set plan = excluded.plan,
         status = excluded.status,
+        public_description = excluded.public_description,
+        menu_pdf_url = excluded.menu_pdf_url,
+        website_enabled = excluded.website_enabled,
+        reservation_enabled = excluded.reservation_enabled,
         onboarding_completed = excluded.onboarding_completed
   returning id into demo_business_id;
 

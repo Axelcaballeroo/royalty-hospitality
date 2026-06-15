@@ -22,7 +22,7 @@ export default async function CustomerClubPage({
   const protocol = headerStore.get("x-forwarded-proto") ?? "https";
   const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "";
   const origin = host ? `${protocol}://${host}` : "";
-  const clubLink = `${origin}/club/${business.slug}`;
+  const clubLink = `${origin}/site/${business.slug}/club`;
 
   return (
     <div className="space-y-6">
@@ -40,6 +40,7 @@ export default async function CustomerClubPage({
           <form action={updatePublicWebsiteSettingsAction} className="grid gap-3">
             <input type="hidden" name="return_to" value="/app/club-clientes" />
             <input type="hidden" name="cover_url" value={business.cover_url ?? ""} />
+            <input type="hidden" name="menu_pdf_url" value={business.menu_pdf_url ?? ""} />
             <input type="hidden" name="phone" value={business.phone ?? ""} />
             <input type="hidden" name="email" value={business.email ?? ""} />
             <input type="hidden" name="address" value={business.address ?? ""} />

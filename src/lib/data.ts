@@ -99,6 +99,7 @@ export type PublicBusiness = {
   instagram_url: string | null;
   facebook_url: string | null;
   whatsapp_url: string | null;
+  menu_pdf_url?: string | null;
   website_enabled: boolean;
   reservation_enabled: boolean;
   plan: string;

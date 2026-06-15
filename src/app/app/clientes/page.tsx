@@ -100,7 +100,7 @@ export default async function CustomersPage({
   const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "";
   const origin = host ? `${protocol}://${host}` : "";
   const registerLink = `${origin}/club/${business.slug}/registro`;
-  const clubLink = `${origin}/club/${business.slug}`;
+  const clubLink = `${origin}/site/${business.slug}/club`;
   const qrDataUrl = await createQrDataUrl(registerLink);
 
   const rows = customers.map((customer) => [
@@ -325,6 +325,7 @@ export default async function CustomersPage({
               <form action={updatePublicWebsiteSettingsAction} className="grid gap-3">
                 <input type="hidden" name="return_to" value="/app/clientes?tab=fidelizacion" />
                 <input type="hidden" name="cover_url" value={business.cover_url ?? ""} />
+                <input type="hidden" name="menu_pdf_url" value={business.menu_pdf_url ?? ""} />
                 <input type="hidden" name="phone" value={business.phone ?? ""} />
                 <input type="hidden" name="email" value={business.email ?? ""} />
                 <input type="hidden" name="address" value={business.address ?? ""} />

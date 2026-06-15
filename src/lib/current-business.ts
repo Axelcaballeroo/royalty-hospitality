@@ -24,6 +24,7 @@ export type CurrentBusiness = {
       instagram_url?: string | null;
       facebook_url?: string | null;
       whatsapp_url?: string | null;
+      menu_pdf_url?: string | null;
       website_enabled?: boolean;
       reservation_enabled?: boolean;
       onboarding_completed?: boolean;
@@ -56,6 +57,7 @@ type BusinessUserRow = {
         instagram_url: string | null;
         facebook_url: string | null;
         whatsapp_url: string | null;
+        menu_pdf_url: string | null;
         website_enabled: boolean;
         reservation_enabled: boolean;
         onboarding_completed: boolean;
@@ -82,6 +84,7 @@ type BusinessUserRow = {
         instagram_url: string | null;
         facebook_url: string | null;
         whatsapp_url: string | null;
+        menu_pdf_url: string | null;
         website_enabled: boolean;
         reservation_enabled: boolean;
         onboarding_completed: boolean;
@@ -105,7 +108,7 @@ export async function getCurrentBusiness(): Promise<CurrentBusiness | null> {
   const { data, error } = await supabase
     .from("business_users")
     .select(
-      "business_id, role, businesses(id, name, slug, type, logo_url, cover_url, phone, email, address, city, country, public_description, brand_primary_color, brand_secondary_color, instagram_url, facebook_url, whatsapp_url, website_enabled, reservation_enabled, onboarding_completed, onboarding_step, plan, status, timezone)",
+      "business_id, role, businesses(id, name, slug, type, logo_url, cover_url, phone, email, address, city, country, public_description, brand_primary_color, brand_secondary_color, instagram_url, facebook_url, whatsapp_url, menu_pdf_url, website_enabled, reservation_enabled, onboarding_completed, onboarding_step, plan, status, timezone)",
     )
     .eq("user_id", user.id)
     .eq("status", "active")

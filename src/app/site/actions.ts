@@ -62,6 +62,7 @@ export async function createPublicReservationAction(formData: FormData) {
   }
 
   let customerId: string | null = null;
+  let loyaltyCode: string | null = null;
 
   const { data: customerByPhone } = await admin
     .from("customers")
@@ -107,20 +108,27 @@ export async function createPublicReservationAction(formData: FormData) {
       .maybeSingle<{ loyalty_code: string | null }>();
 
     if (!updatedCustomer?.loyalty_code) {
+      loyaltyCode = await createUniqueLoyaltyCode({
+        businessId: business.id,
+        prefixSource: businessSlug,
+      });
       await admin
         .from("customers")
         .update({
-          loyalty_code: await createUniqueLoyaltyCode({
-            businessId: business.id,
-            prefixSource: businessSlug,
-          }),
+          loyalty_code: loyaltyCode,
           loyalty_enabled: true,
           updated_at: new Date().toISOString(),
         })
         .eq("business_id", business.id)
         .eq("id", customerId);
+    } else {
+      loyaltyCode = updatedCustomer.loyalty_code;
     }
   } else {
+    loyaltyCode = await createUniqueLoyaltyCode({
+      businessId: business.id,
+      prefixSource: businessSlug,
+    });
     const { data: customer, error: customerError } = await admin
       .from("customers")
       .insert({
@@ -128,10 +136,7 @@ export async function createPublicReservationAction(formData: FormData) {
         full_name: fullName,
         phone,
         email: email || null,
-        loyalty_code: await createUniqueLoyaltyCode({
-          businessId: business.id,
-          prefixSource: businessSlug,
-        }),
+        loyalty_code: loyaltyCode,
         loyalty_enabled: true,
         status: "active",
       })
@@ -199,5 +204,5 @@ export async function createPublicReservationAction(formData: FormData) {
     due_date: `${date}T${time}:00`,
   });
 
-  redirect(`/site/${businessSlug}/reservas?success=1`);
+  redirect(`/site/${businessSlug}/reservas?success=1&phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(loyaltyCode ?? "")}`);
 }

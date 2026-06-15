@@ -616,6 +616,7 @@ export async function updatePublicWebsiteSettingsAction(formData: FormData) {
       instagram_url: requiredString(formData, "instagram_url") || null,
       facebook_url: requiredString(formData, "facebook_url") || null,
       whatsapp_url: requiredString(formData, "whatsapp_url") || null,
+      menu_pdf_url: requiredString(formData, "menu_pdf_url") || null,
       website_enabled: formData.get("website_enabled") === "on",
       reservation_enabled: formData.get("reservation_enabled") === "on",
       updated_at: new Date().toISOString(),
@@ -629,6 +630,7 @@ export async function updatePublicWebsiteSettingsAction(formData: FormData) {
   revalidatePath("/app/configuracion");
   revalidatePath("/app/club-clientes");
   revalidatePath(`/site/${current.business.slug}`);
+  revalidatePath(`/site/${current.business.slug}/menu`);
   redirect(`${returnTo}${separator}success=public_settings_updated`);
 }
 
