@@ -625,7 +625,7 @@ export async function getDashboardData() {
           const account = Array.isArray(reservation.customers?.loyalty_accounts)
             ? reservation.customers?.loyalty_accounts[0]
             : reservation.customers?.loyalty_accounts;
-          return Boolean(reservation.customers?.loyalty_code) || ["gold", "black"].includes(account?.tier ?? "");
+          return ["gold", "black"].includes(account?.tier ?? "");
         }).length,
       completedReservations: completedReservations.count ?? 0,
       estimatedSales:
@@ -1116,7 +1116,7 @@ export async function getOperationData() {
     const account = Array.isArray(reservation.customers?.loyalty_accounts)
       ? reservation.customers?.loyalty_accounts[0]
       : reservation.customers?.loyalty_accounts;
-    return reservation.customers?.loyalty_code || ["gold", "black"].includes(account?.tier ?? "");
+    return ["gold", "black"].includes(account?.tier ?? "");
   });
   const lowStockItems = ((inventoryItems.data ?? []) as LowStockRow[])
     .map((item) => {

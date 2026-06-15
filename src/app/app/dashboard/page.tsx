@@ -137,9 +137,9 @@ export default async function DashboardPage() {
     stats.openWasteAlerts || stats.urgentBatches
       ? "Hay productos proximos a vencer que podrian convertirse en promocion hoy."
       : "Inventario no muestra productos urgentes por convertir en promocion.",
-    stats.birthdayCustomers
-      ? `${stats.birthdayCustomers} clientes cumplen anos este mes y pueden recibir una cortesia.`
-      : "No hay cumpleanos detectados este mes en la base actual.",
+    stats.vipReservationsToday === 2
+      ? "Dos clientes VIP visitaran hoy tu restaurante."
+      : `${stats.vipReservationsToday} clientes VIP visitaran hoy tu restaurante.`,
   ];
 
   return (
@@ -188,9 +188,9 @@ export default async function DashboardPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Ventas estimadas" value={currency.format(stats.estimatedSales)} detail="Este mes" tone="dark" />
-        <StatCard title="Clientes nuevos" value={String(stats.customersNew)} detail="Este mes" />
-        <StatCard title="Reservas completadas" value={String(stats.completedReservations)} detail="Este mes" />
-        <StatCard title="Perdida estimada" value={currency.format(stats.estimatedWasteLoss)} detail="En riesgo" />
+        <StatCard title="Clientes" value={String(stats.customersTotal)} detail="Base activa" />
+        <StatCard title="Reservas" value={String(stats.completedReservations)} detail="Este mes" />
+        <StatCard title="Perdida evitada" value={currency.format(stats.estimatedWasteLoss)} detail="En riesgo convertido" />
       </section>
 
       <ModuleCard title="Royalty Insights" description="Lectura humana para entender donde ganas, donde pierdes y que revisar.">
