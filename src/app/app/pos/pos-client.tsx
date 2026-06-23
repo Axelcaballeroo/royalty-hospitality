@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ArrowLeft,
@@ -10,7 +10,6 @@ import {
   CreditCard,
   Minus,
   Plus,
-  Printer,
   ReceiptText,
   Sparkles,
   Trash2,
@@ -18,152 +17,27 @@ import {
   X,
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
+import {
+  categories,
+  initialTables,
+  makeLineId,
+  posStateEvent,
+  products,
+  readPosTables,
+  writePosTables,
+} from "@/lib/pos-shared";
+import type {
+  Category,
+  OrderItemStatus,
+  PaymentMethod,
+  PosTable,
+  Product,
+  Sale,
+  TableStatus,
+} from "@/lib/pos-shared";
 
-type TableStatus = "free" | "occupied" | "checkout";
 type ModalType = "open" | "quick" | "order" | "cashier" | null;
-type PosStep = "order" | "payment" | "paid";
-type PaymentMethod = "Efectivo" | "Tarjeta" | "Transferencia" | "Mixto";
-type Category = "Sushi" | "Entradas" | "Bebidas" | "Postres" | "Promos";
-
-type Product = {
-  id: string;
-  name: string;
-  price: number;
-  category: Category;
-};
-
-type OrderItem = Product & {
-  quantity: number;
-  sent: boolean;
-};
-
-type Discount = {
-  type: "percent" | "fixed";
-  value: number;
-  reason: string;
-};
-
-type Courtesy = {
-  label: string;
-  amount: number;
-  reason: string;
-  authorizedBy: string;
-};
-
-type PosTable = {
-  id: string;
-  name: string;
-  customer: string;
-  people: number;
-  openedAt: string | null;
-  items: OrderItem[];
-  discount: Discount | null;
-  courtesy: Courtesy | null;
-  readyToPay: boolean;
-  quickType?: string;
-};
-
-type Sale = {
-  id: string;
-  tableName: string;
-  total: number;
-  paymentMethod: PaymentMethod;
-  closedAt: string;
-};
-
-type PaidOrder = {
-  tableId: string;
-  method: PaymentMethod;
-  amountReceived: number;
-};
-
-const categories: Category[] = ["Sushi", "Entradas", "Bebidas", "Postres", "Promos"];
-
-const products: Product[] = [
-  { id: "california", name: "Rollo California", price: 180, category: "Sushi" },
-  { id: "salmon", name: "Rollo Salmon", price: 220, category: "Sushi" },
-  { id: "ramen", name: "Ramen", price: 190, category: "Entradas" },
-  { id: "edamame", name: "Edamame", price: 120, category: "Entradas" },
-  { id: "agua", name: "Agua mineral", price: 60, category: "Bebidas" },
-  { id: "sake", name: "Sake", price: 250, category: "Bebidas" },
-  { id: "mochi", name: "Postre Mochi", price: 140, category: "Postres" },
-];
-
-const initialTables: PosTable[] = [
-  {
-    id: "mesa-1",
-    name: "Mesa 1",
-    customer: "",
-    people: 0,
-    openedAt: null,
-    items: [],
-    discount: null,
-    courtesy: null,
-    readyToPay: false,
-  },
-  {
-    id: "mesa-2",
-    name: "Mesa 2",
-    customer: "Ana Lopez",
-    people: 2,
-    openedAt: new Date(Date.now() - 38 * 60 * 1000).toISOString(),
-    items: [
-      { ...products[0], quantity: 2, sent: true },
-      { ...products[4], quantity: 2, sent: true },
-    ],
-    discount: null,
-    courtesy: null,
-    readyToPay: false,
-  },
-  {
-    id: "mesa-3",
-    name: "Mesa 3",
-    customer: "",
-    people: 0,
-    openedAt: null,
-    items: [],
-    discount: null,
-    courtesy: null,
-    readyToPay: false,
-  },
-  {
-    id: "mesa-4",
-    name: "Mesa 4",
-    customer: "Roberto",
-    people: 4,
-    openedAt: new Date(Date.now() - 64 * 60 * 1000).toISOString(),
-    items: [
-      { ...products[1], quantity: 3, sent: true },
-      { ...products[5], quantity: 1, sent: false },
-    ],
-    discount: { type: "percent", value: 10, reason: "Descuento gerente" },
-    courtesy: null,
-    readyToPay: true,
-  },
-  {
-    id: "barra",
-    name: "Barra",
-    customer: "Venta rapida",
-    people: 1,
-    openedAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-    items: [{ ...products[2], quantity: 1, sent: false }],
-    discount: null,
-    courtesy: null,
-    readyToPay: false,
-    quickType: "Comer aqui",
-  },
-  {
-    id: "terraza",
-    name: "Terraza",
-    customer: "",
-    people: 0,
-    openedAt: null,
-    items: [],
-    discount: null,
-    courtesy: null,
-    readyToPay: false,
-  },
-];
+type PosStep = "order" | "payment";
 
 const money = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -226,10 +100,24 @@ export function PosClient() {
   const [posStep, setPosStep] = useState<PosStep>("order");
   const [toast, setToast] = useState("");
   const [sales, setSales] = useState<Sale[]>([]);
-  const [paidOrder, setPaidOrder] = useState<PaidOrder | null>(null);
 
   const selectedTable = tables.find((table) => table.id === selectedTableId) ?? tables[0];
   const categoryProducts = products.filter((product) => product.category === activeCategory);
+
+  useEffect(() => {
+    const syncTables = () => setTables(readPosTables());
+
+    syncTables();
+    const interval = window.setInterval(syncTables, 1000);
+    window.addEventListener("storage", syncTables);
+    window.addEventListener(posStateEvent, syncTables);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("storage", syncTables);
+      window.removeEventListener(posStateEvent, syncTables);
+    };
+  }, []);
 
   const metrics = useMemo(() => {
     const openTables = tables.filter((table) => table.openedAt);
@@ -243,6 +131,14 @@ export function PosClient() {
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2800);
+  }
+
+  function updateTables(updater: (current: PosTable[]) => PosTable[]) {
+    setTables((current) => {
+      const next = updater(current);
+      writePosTables(next);
+      return next;
+    });
   }
 
   function openTableMap(table: PosTable) {
@@ -262,7 +158,7 @@ export function PosClient() {
   }
 
   function openTable(tableId: string, people: number, customer: string) {
-    setTables((current) =>
+    updateTables((current) =>
       current.map((table) =>
         table.id === tableId
           ? {
@@ -286,27 +182,43 @@ export function PosClient() {
   }
 
   function addProduct(product: Product) {
-    setTables((current) =>
+    const pendingStatus: OrderItemStatus = "pending";
+    updateTables((current) =>
       current.map((table) => {
         if (table.id !== selectedTable.id || !table.openedAt) return table;
-        const existing = table.items.find((item) => item.id === product.id);
+        const existing = table.items.find((item) => item.id === product.id && item.status === "pending");
         const items = existing
           ? table.items.map((item) =>
-              item.id === product.id ? { ...item, quantity: item.quantity + 1, sent: false } : item,
+              item.lineId === existing.lineId
+                ? { ...item, quantity: item.quantity + 1, status: pendingStatus, updatedAt: new Date().toISOString() }
+                : item,
             )
-          : [...table.items, { ...product, quantity: 1, sent: false }];
+          : [
+              ...table.items,
+              {
+                ...product,
+                lineId: makeLineId(table.id, product.id),
+                quantity: 1,
+                status: pendingStatus,
+                updatedAt: new Date().toISOString(),
+              },
+            ];
         return { ...table, items, readyToPay: false };
       }),
     );
+    showToast(`Producto agregado: ${product.name}`);
   }
 
   function changeQuantity(productId: string, change: number) {
-    setTables((current) =>
+    const pendingStatus: OrderItemStatus = "pending";
+    updateTables((current) =>
       current.map((table) => {
         if (table.id !== selectedTable.id) return table;
         const items = table.items
           .map((item) =>
-            item.id === productId ? { ...item, quantity: item.quantity + change, sent: false } : item,
+            item.lineId === productId
+              ? { ...item, quantity: item.quantity + change, status: pendingStatus, updatedAt: new Date().toISOString() }
+              : item,
           )
           .filter((item) => item.quantity > 0);
         return { ...table, items, readyToPay: false };
@@ -315,10 +227,10 @@ export function PosClient() {
   }
 
   function removeProduct(productId: string) {
-    setTables((current) =>
+    updateTables((current) =>
       current.map((table) =>
         table.id === selectedTable.id
-          ? { ...table, items: table.items.filter((item) => item.id !== productId), readyToPay: false }
+          ? { ...table, items: table.items.filter((item) => item.lineId !== productId), readyToPay: false }
           : table,
       ),
     );
@@ -326,33 +238,50 @@ export function PosClient() {
 
   function sendToKitchen() {
     if (!selectedTable.openedAt || selectedTable.items.length === 0) return;
-    setTables((current) =>
+    updateTables((current) =>
       current.map((table) =>
         table.id === selectedTable.id
-          ? { ...table, items: table.items.map((item) => ({ ...item, sent: true })), readyToPay: false }
+          ? {
+              ...table,
+              items: table.items.map((item) => ({
+                ...item,
+                status: item.status === "pending" ? "sent" : item.status,
+                sentAt: item.status === "pending" ? new Date().toISOString() : item.sentAt,
+                updatedAt: new Date().toISOString(),
+              })),
+              readyToPay: false,
+            }
           : table,
       ),
     );
     showToast("Orden enviada a cocina");
   }
 
+  function markServed(productId: string) {
+    updateTables((current) =>
+      current.map((table) =>
+        table.id === selectedTable.id
+          ? {
+              ...table,
+              items: table.items.map((item) =>
+                item.lineId === productId ? { ...item, status: "served", updatedAt: new Date().toISOString() } : item,
+              ),
+            }
+          : table,
+      ),
+    );
+  }
+
   function startPayment() {
     if (!selectedTable.openedAt || selectedTable.items.length === 0) return;
-    setTables((current) =>
+    updateTables((current) =>
       current.map((table) => (table.id === selectedTable.id ? { ...table, readyToPay: true } : table)),
     );
     setPosStep("payment");
   }
 
-  function registerPayment(method: PaymentMethod, amountReceived: number) {
-    setPaidOrder({ tableId: selectedTable.id, method, amountReceived });
-    setPosStep("paid");
-    showToast("Pago completado");
-  }
-
-  function closeOrder() {
-    if (!paidOrder) return;
-    const table = tables.find((item) => item.id === paidOrder.tableId);
+  function registerPayment(method: PaymentMethod) {
+    const table = selectedTable;
     if (!table) return;
 
     setSales((current) => [
@@ -360,14 +289,14 @@ export function PosClient() {
         id: `sale-${Date.now()}`,
         tableName: table.name,
         total: total(table),
-        paymentMethod: paidOrder.method,
+        paymentMethod: method,
         closedAt: new Date().toISOString(),
       },
       ...current,
     ]);
-    setTables((current) =>
+    updateTables((current) =>
       current.map((item) =>
-        item.id === paidOrder.tableId
+        item.id === table.id
           ? {
               ...item,
               customer: "",
@@ -382,15 +311,14 @@ export function PosClient() {
           : item,
       ),
     );
-    setPaidOrder(null);
     setPosStep("order");
     setModal(null);
-    showToast("Mesa liberada");
+    showToast("Pago registrado. Mesa liberada");
   }
 
   function openQuickSale(type: string) {
     const barId = "barra";
-    setTables((current) =>
+    updateTables((current) =>
       current.map((table) =>
         table.id === barId
           ? {
@@ -474,12 +402,11 @@ export function PosClient() {
           onAddProduct={addProduct}
           onChangeQuantity={changeQuantity}
           onRemoveProduct={removeProduct}
+          onMarkServed={markServed}
           onSendKitchen={sendToKitchen}
           onStartPayment={startPayment}
           onBackToOrder={() => setPosStep("order")}
           onPay={registerPayment}
-          onPrint={() => showToast("Ticket listo para imprimir")}
-          onCloseOrder={closeOrder}
         />
       ) : null}
 
@@ -564,6 +491,47 @@ function CardFact({ icon, label, value }: { icon: ReactNode; label: string; valu
   );
 }
 
+function ProductImage({ product }: { product: Product }) {
+  return (
+    <span className={["block h-32 bg-gradient-to-br p-4", product.tone].join(" ")}>
+      <span className="grid h-full place-items-center rounded-3xl bg-white/45">
+        <span className="text-5xl font-semibold text-stone-950/65">
+          {product.name
+            .split(" ")
+            .slice(0, 2)
+            .map((word) => word[0])
+            .join("")}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+function OrderStatusBadge({ status }: { status: OrderItemStatus }) {
+  const labels: Record<OrderItemStatus, string> = {
+    pending: "🟡 Pendiente",
+    sent: "🔵 En cocina",
+    preparing: "🟣 Preparando",
+    ready: "🟢 Listo para servir",
+    served: "✅ Servido",
+    paid: "⚫ Cobrado",
+  };
+  const classes: Record<OrderItemStatus, string> = {
+    pending: "border-amber-200 bg-amber-50 text-amber-800",
+    sent: "border-sky-200 bg-sky-50 text-sky-800",
+    preparing: "border-indigo-200 bg-indigo-50 text-indigo-800",
+    ready: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    served: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    paid: "border-stone-300 bg-stone-100 text-stone-800",
+  };
+
+  return (
+    <span className={["mt-2 inline-flex h-8 items-center rounded-full border px-3 text-sm font-semibold", classes[status]].join(" ")}>
+      {labels[status]}
+    </span>
+  );
+}
+
 function FullscreenPos({
   table,
   step,
@@ -574,12 +542,11 @@ function FullscreenPos({
   onAddProduct,
   onChangeQuantity,
   onRemoveProduct,
+  onMarkServed,
   onSendKitchen,
   onStartPayment,
   onBackToOrder,
   onPay,
-  onPrint,
-  onCloseOrder,
 }: {
   table: PosTable;
   step: PosStep;
@@ -590,12 +557,11 @@ function FullscreenPos({
   onAddProduct: (product: Product) => void;
   onChangeQuantity: (productId: string, change: number) => void;
   onRemoveProduct: (productId: string) => void;
+  onMarkServed: (productId: string) => void;
   onSendKitchen: () => void;
   onStartPayment: () => void;
   onBackToOrder: () => void;
-  onPay: (method: PaymentMethod, amountReceived: number) => void;
-  onPrint: () => void;
-  onCloseOrder: () => void;
+  onPay: (method: PaymentMethod) => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 p-3 transition-opacity">
@@ -639,16 +605,13 @@ function FullscreenPos({
             onAddProduct={onAddProduct}
             onChangeQuantity={onChangeQuantity}
             onRemoveProduct={onRemoveProduct}
+            onMarkServed={onMarkServed}
             onSendKitchen={onSendKitchen}
             onStartPayment={onStartPayment}
           />
         ) : null}
 
         {step === "payment" ? <PaymentStep table={table} onBack={onBackToOrder} onPay={onPay} /> : null}
-
-        {step === "paid" ? (
-          <PaidStep table={table} onPrint={onPrint} onCloseOrder={onCloseOrder} />
-        ) : null}
       </div>
     </div>
   );
@@ -662,6 +625,7 @@ function OrderStep({
   onAddProduct,
   onChangeQuantity,
   onRemoveProduct,
+  onMarkServed,
   onSendKitchen,
   onStartPayment,
 }: {
@@ -672,6 +636,7 @@ function OrderStep({
   onAddProduct: (product: Product) => void;
   onChangeQuantity: (productId: string, change: number) => void;
   onRemoveProduct: (productId: string) => void;
+  onMarkServed: (productId: string) => void;
   onSendKitchen: () => void;
   onStartPayment: () => void;
 }) {
@@ -696,21 +661,24 @@ function OrderStep({
           ))}
         </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-5 grid max-w-6xl gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {categoryProducts.length ? (
             categoryProducts.map((product) => (
               <button
                 type="button"
                 key={product.id}
                 onClick={() => onAddProduct(product)}
-                className="min-h-44 rounded-3xl border border-stone-200 bg-white p-5 text-left shadow-sm transition active:scale-[0.99] hover:border-stone-300 hover:shadow-md"
+                className="overflow-hidden rounded-3xl border border-stone-200 bg-white text-left shadow-sm transition active:scale-[0.99] hover:border-stone-300 hover:shadow-md"
               >
-                <span className="block text-2xl font-semibold text-stone-950">{product.name}</span>
-                <span className="mt-6 block text-4xl font-semibold text-stone-950">
-                  {money.format(product.price)}
-                </span>
-                <span className="mt-6 inline-flex h-12 items-center rounded-2xl bg-stone-950 px-5 text-base font-semibold text-white">
-                  Agregar
+                <ProductImage product={product} />
+                <span className="block p-5">
+                  <span className="block min-h-16 text-2xl font-semibold text-stone-950">{product.name}</span>
+                  <span className="mt-3 flex items-end justify-between gap-3">
+                    <span className="text-4xl font-semibold text-stone-950">{money.format(product.price)}</span>
+                    <span className="inline-flex h-14 items-center rounded-2xl bg-stone-950 px-5 text-lg font-semibold text-white">
+                      Agregar
+                    </span>
+                  </span>
                 </span>
               </button>
             ))
@@ -735,15 +703,13 @@ function OrderStep({
           <div className="mt-5 space-y-3">
             {table.items.length ? (
               table.items.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                <div key={item.lineId} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-lg font-semibold text-stone-950">
                         {item.quantity}x {item.name}
                       </p>
-                      <p className="mt-1 text-sm font-semibold text-stone-500">
-                        {item.sent ? "Enviado cocina" : "Nuevo"}
-                      </p>
+                      <OrderStatusBadge status={item.status} />
                     </div>
                     <p className="text-xl font-semibold text-stone-950">
                       {money.format(item.price * item.quantity)}
@@ -751,15 +717,24 @@ function OrderStep({
                   </div>
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <RoundIconButton label={`Restar ${item.name}`} onClick={() => onChangeQuantity(item.id, -1)}>
-                        <Minus size={18} />
+                      <RoundIconButton label={`Restar ${item.name}`} onClick={() => onChangeQuantity(item.lineId, -1)}>
+                        <Minus size={24} />
                       </RoundIconButton>
-                      <RoundIconButton label={`Sumar ${item.name}`} onClick={() => onChangeQuantity(item.id, 1)}>
-                        <Plus size={18} />
+                      <RoundIconButton label={`Sumar ${item.name}`} onClick={() => onChangeQuantity(item.lineId, 1)}>
+                        <Plus size={24} />
                       </RoundIconButton>
+                      {item.status === "ready" ? (
+                        <button
+                          type="button"
+                          onClick={() => onMarkServed(item.lineId)}
+                          className="h-16 rounded-2xl bg-emerald-600 px-4 text-base font-semibold text-white transition hover:bg-emerald-700"
+                        >
+                          Servido
+                        </button>
+                      ) : null}
                     </div>
-                    <RoundIconButton label={`Quitar ${item.name}`} onClick={() => onRemoveProduct(item.id)}>
-                      <Trash2 size={18} />
+                    <RoundIconButton label={`Quitar ${item.name}`} onClick={() => onRemoveProduct(item.lineId)}>
+                      <Trash2 size={24} />
                     </RoundIconButton>
                   </div>
                 </div>
@@ -812,7 +787,7 @@ function PaymentStep({
 }: {
   table: PosTable;
   onBack: () => void;
-  onPay: (method: PaymentMethod, amountReceived: number) => void;
+  onPay: (method: PaymentMethod) => void;
 }) {
   const [method, setMethod] = useState<PaymentMethod>("Efectivo");
   const [amountReceived, setAmountReceived] = useState(total(table));
@@ -866,7 +841,7 @@ function PaymentStep({
           ) : null}
           <button
             type="button"
-            onClick={() => onPay(method, amountReceived)}
+            onClick={() => onPay(method)}
             className="mt-6 h-20 w-full rounded-3xl bg-stone-950 text-2xl font-semibold text-white transition hover:bg-stone-800"
           >
             Registrar pago
@@ -878,44 +853,6 @@ function PaymentStep({
   );
 }
 
-function PaidStep({
-  table,
-  onPrint,
-  onCloseOrder,
-}: {
-  table: PosTable;
-  onPrint: () => void;
-  onCloseOrder: () => void;
-}) {
-  return (
-    <div className="grid min-h-0 flex-1 place-items-center bg-stone-50 p-5">
-      <div className="w-full max-w-2xl rounded-[2rem] bg-white p-8 text-center shadow-sm">
-        <CheckCircle2 className="mx-auto text-emerald-700" size={64} />
-        <h3 className="mt-5 text-4xl font-semibold text-stone-950">Pago completado</h3>
-        <p className="mt-3 text-xl font-semibold text-stone-500">{table.name}</p>
-        <p className="mt-5 text-6xl font-semibold text-stone-950">{money.format(total(table))}</p>
-        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={onPrint}
-            className="inline-flex h-20 items-center justify-center gap-2 rounded-3xl border border-stone-200 bg-white text-xl font-semibold text-stone-950 transition hover:bg-stone-50"
-          >
-            <Printer size={24} />
-            Imprimir ticket
-          </button>
-          <button
-            type="button"
-            onClick={onCloseOrder}
-            className="h-20 rounded-3xl bg-stone-950 text-xl font-semibold text-white transition hover:bg-stone-800"
-          >
-            Cerrar orden
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ReceiptPanel({ table }: { table: PosTable }) {
   return (
     <aside className="hidden min-h-0 flex-col overflow-y-auto rounded-[2rem] bg-white p-5 shadow-sm lg:flex">
@@ -923,9 +860,12 @@ function ReceiptPanel({ table }: { table: PosTable }) {
       <h3 className="mt-1 text-3xl font-semibold text-stone-950">{table.name}</h3>
       <div className="mt-5 space-y-3">
         {table.items.map((item) => (
-          <div key={item.id} className="flex justify-between gap-4 rounded-2xl bg-stone-50 p-4 text-base font-semibold text-stone-950">
-            <span>{item.quantity}x {item.name}</span>
-            <span>{money.format(item.price * item.quantity)}</span>
+          <div key={item.lineId} className="rounded-2xl bg-stone-50 p-4 text-base font-semibold text-stone-950">
+            <div className="flex justify-between gap-4">
+              <span>{item.quantity}x {item.name}</span>
+              <span>{money.format(item.price * item.quantity)}</span>
+            </div>
+            <OrderStatusBadge status={item.status} />
           </div>
         ))}
       </div>
@@ -955,7 +895,7 @@ function RoundIconButton({
     <button
       type="button"
       onClick={onClick}
-      className="grid size-12 place-items-center rounded-2xl border border-stone-200 bg-white text-stone-900 transition hover:bg-stone-50"
+      className="grid size-16 place-items-center rounded-2xl border border-stone-200 bg-white text-stone-900 transition hover:bg-stone-50"
       aria-label={label}
       title={label}
     >
