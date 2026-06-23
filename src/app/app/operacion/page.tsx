@@ -44,9 +44,9 @@ type CheckInCustomer = {
 const tabs: { key: OperationTab; label: string }[] = [
   { key: "hoy", label: "Hoy" },
   { key: "reservas", label: "Reservas" },
-  { key: "sala", label: "Clientes en sala" },
+  { key: "sala", label: "Punto de venta" },
   { key: "alertas", label: "Alertas" },
-  { key: "cierre", label: "Cierre" },
+  { key: "cierre", label: "Cierre del dia" },
 ];
 
 const currency = new Intl.NumberFormat("es-MX", {
@@ -263,27 +263,34 @@ export default async function OperationPage({
     courtesy.reason,
     courtesy.customers?.full_name ?? "-",
   ]);
+  const pageTitle =
+    activeTab === "hoy"
+      ? "Buenos días"
+      : activeTab === "reservas"
+        ? "Reservas"
+        : activeTab === "sala"
+          ? "Punto de Venta"
+          : activeTab === "alertas"
+            ? "Alertas"
+            : "Cierre del Día";
+  const pageDescription =
+    activeTab === "hoy"
+      ? "Resumen operativo del restaurante para iniciar el dia con reservas, alertas, promociones y ventas."
+      : "El flujo diario del restaurante en una sola pantalla: agenda, sala, alertas y cierre.";
 
   return (
     <div className="space-y-6">
       <SectionHeader
         eyebrow={data.current.business.name}
-        title="Centro Operativo"
-        description="El flujo diario del restaurante en una sola pantalla: agenda, sala, alertas y cierre."
+        title={pageTitle}
+        description={pageDescription}
         actions={
-          <>
-            <Link
-              href="/app/dashboard"
-              className="inline-flex h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 transition hover:border-stone-300" prefetch={false}>
-              Ver Dashboard Ejecutivo
-            </Link>
-            <Link
-              href="/app/operacion?tab=reservas&action=nueva-reserva"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
-              <Plus size={16} />
-              Nueva reserva
-            </Link>
-          </>
+          <Link
+            href="/app/operacion?tab=reservas&action=nueva-reserva"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
+            <Plus size={16} />
+            Nueva reserva
+          </Link>
         }
       />
 
@@ -336,9 +343,9 @@ export default async function OperationPage({
         <div className="space-y-6">
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <StatCard title="Reservas hoy" value={String(data.stats.reservationsToday)} detail="Agenda del dia" tone="dark" />
-            <StatCard title="Clientes en sala" value={String(customersInRoom)} detail={`${inRoomReservations.length} mesas con check-in`} />
-            <StatCard title="Ventas estimadas" value={currency.format(estimatedSales)} detail="Dato del cierre" />
             <StatCard title="Alertas activas" value={String(activeAlerts)} detail="Pendientes operativos" />
+            <StatCard title="Promociones" value={String(data.stats.suggestedCampaigns)} detail="Borradores y oportunidades" />
+            <StatCard title="Ventas estimadas" value={currency.format(estimatedSales)} detail="Dato del cierre" />
           </section>
 
           <ModuleCard title="Pendientes para hoy" description="Bandeja unica con lo que requiere atencion antes del cierre.">

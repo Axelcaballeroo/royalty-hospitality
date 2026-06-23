@@ -18,7 +18,7 @@ export async function AppHeader() {
       <div className="flex items-center justify-between gap-6">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
-            Centro operativo
+            Royalty OS
           </p>
           <p className="mt-1 text-sm font-semibold text-stone-950">
             {current.business.name}
@@ -26,11 +26,6 @@ export async function AppHeader() {
         </div>
         <div className="flex items-center gap-3">
           <CreateMenu />
-          <Link
-            href="/app/dashboard"
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-700 transition hover:border-stone-300" prefetch={false}>
-            Dashboard ejecutivo
-          </Link>
           <label className="flex h-10 w-80 items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 text-sm text-stone-500">
             <span className="sr-only">Buscar en el negocio</span>
             <Search size={16} />
