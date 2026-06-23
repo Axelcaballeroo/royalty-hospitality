@@ -34,14 +34,14 @@ export default async function SettingsPage({
   const origin = host ? `${protocol}://${host}` : "";
   const publicLinks = [
     { label: "Link del Club", href: `${origin}/site/${business.slug}/club` },
-    { label: "Link de Reservas", href: `${origin}/site/${business.slug}/reservas` },
+    { label: "Link de Reservas", href: `${origin}/reservar` },
     { label: "Link Web publica", href: `${origin}/site/${business.slug}` },
     { label: "Link Menu", href: `${origin}/site/${business.slug}/menu` },
   ];
   const qrLinks = await Promise.all(
     [
       { label: "Web", href: `${origin}/site/${business.slug}` },
-      { label: "Reservas", href: `${origin}/site/${business.slug}/reservas` },
+      { label: "Reservas", href: `${origin}/reservar` },
       { label: "Club", href: `${origin}/site/${business.slug}/club` },
       { label: "Menu", href: `${origin}/site/${business.slug}/menu` },
     ].map(async (item) => ({

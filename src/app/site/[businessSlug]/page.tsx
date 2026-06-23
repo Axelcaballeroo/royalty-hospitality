@@ -80,7 +80,7 @@ export default async function PublicBusinessSitePage({
             <span className="text-sm font-semibold">{business.name}</span>
           </Link>
           <Link
-            href={`/site/${business.slug}/reservas`}
+            href="/reservar"
             className="inline-flex h-10 items-center gap-2 rounded-2xl bg-white px-4 text-sm font-semibold"
             style={{ color: primary }}
           >
@@ -102,7 +102,7 @@ export default async function PublicBusinessSitePage({
           </p>
           <div className="mt-8 grid gap-3 sm:flex sm:flex-wrap">
             <Link
-              href={`/site/${business.slug}/reservas`}
+              href="/reservar"
               className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold"
               style={{ color: primary }}
             >
@@ -144,7 +144,7 @@ export default async function PublicBusinessSitePage({
             La web conecta tu reserva con el club para que el restaurante pueda reconocerte, darte puntos y ofrecerte beneficios.
           </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            <Link href={`/site/${business.slug}/reservas`} className="rounded-2xl bg-stone-950 px-4 py-3 text-center text-sm font-semibold text-white">
+            <Link href="/reservar" className="rounded-2xl bg-stone-950 px-4 py-3 text-center text-sm font-semibold text-white">
               Reservar
             </Link>
             <Link href={`/site/${business.slug}/club`} className="rounded-2xl border border-stone-200 px-4 py-3 text-center text-sm font-semibold text-stone-800">

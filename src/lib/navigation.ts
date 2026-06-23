@@ -10,7 +10,7 @@ import {
 
 export const appNavigation = [
   { name: "Inicio", href: "/app/operacion", icon: Home, moduleKey: "dashboard" },
-  { name: "Reservas", href: "/app/operacion?tab=reservas", icon: CalendarDays, moduleKey: "reservas" },
+  { name: "Reservas", href: "/app/reservas", icon: CalendarDays, moduleKey: "reservations" },
   { name: "Punto de Venta", href: "/app/operacion?tab=sala", icon: Utensils, moduleKey: "dashboard" },
   { name: "Inventario", href: "/app/inventario", icon: Package, moduleKey: "inventory" },
   { name: "Clientes", href: "/app/clientes", icon: Users, moduleKey: "crm" },

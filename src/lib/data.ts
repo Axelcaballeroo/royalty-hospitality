@@ -37,7 +37,42 @@ export type Reservation = {
   notes: string | null;
   special_request: string | null;
   customer_id: string;
-  customers: { full_name: string; phone: string | null } | null;
+  customers: {
+    id?: string;
+    full_name: string;
+    phone: string | null;
+    email?: string | null;
+    loyalty_code?: string | null;
+    total_visits?: number;
+  } | null;
+};
+
+export type BusinessHour = {
+  day_of_week: number;
+  opens_at: string | null;
+  closes_at: string | null;
+  is_closed: boolean;
+};
+
+export type RestaurantTable = {
+  id: string;
+  name: string;
+  area: string | null;
+  capacity: number;
+  is_active: boolean;
+};
+
+export type ReservationSlot = {
+  time: string;
+  available: boolean;
+  availableTables: number;
+  label: string;
+};
+
+export type ReservationWithTable = Reservation & {
+  tableName: string;
+  tableArea: string | null;
+  checkInReady: boolean;
 };
 
 export type BusinessUser = {
@@ -129,6 +164,111 @@ export type ReservationFilters = {
   status?: string;
   source?: string;
 };
+
+function normalizeTime(value: string) {
+  return value.slice(0, 5);
+}
+
+function minutesFromTime(value: string) {
+  const [hours = "0", minutes = "0"] = normalizeTime(value).split(":");
+  return Number(hours) * 60 + Number(minutes);
+}
+
+function timeFromMinutes(value: number) {
+  const hours = Math.floor(value / 60).toString().padStart(2, "0");
+  const minutes = (value % 60).toString().padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function getDateDayOfWeek(date: string) {
+  return new Date(`${date}T00:00:00`).getDay();
+}
+
+function getFallbackHours(date: string): BusinessHour {
+  return {
+    day_of_week: getDateDayOfWeek(date),
+    opens_at: "12:00",
+    closes_at: "23:00",
+    is_closed: false,
+  };
+}
+
+export function buildReservationSlots(input: {
+  date: string;
+  hours: BusinessHour[];
+  intervalMinutes?: number | null;
+  reservations: Reservation[];
+  tables: RestaurantTable[];
+  partySize?: number;
+}) {
+  const interval = Math.max(5, input.intervalMinutes ?? 30);
+  const dayHours =
+    input.hours.find((hour) => Number(hour.day_of_week) === getDateDayOfWeek(input.date)) ??
+    getFallbackHours(input.date);
+  const configuredTables = input.tables.filter(
+    (table) => table.is_active && (!input.partySize || table.capacity >= input.partySize),
+  );
+  const openTableCount = configuredTables.length || 12;
+
+  if (dayHours.is_closed || !dayHours.opens_at || !dayHours.closes_at) {
+    return [];
+  }
+
+  const occupiedByTime = new Map<string, number>();
+
+  for (const reservation of input.reservations) {
+    if (["cancelled", "no_show"].includes(reservation.status)) continue;
+    const key = normalizeTime(reservation.time);
+    occupiedByTime.set(key, (occupiedByTime.get(key) ?? 0) + 1);
+  }
+
+  const slots: ReservationSlot[] = [];
+  const opensAt = minutesFromTime(dayHours.opens_at);
+  const closesAt = minutesFromTime(dayHours.closes_at);
+
+  for (let value = opensAt; value < closesAt; value += interval) {
+    const time = timeFromMinutes(value);
+    const availableTables = Math.max(0, openTableCount - (occupiedByTime.get(time) ?? 0));
+    slots.push({
+      time,
+      available: availableTables > 0,
+      availableTables,
+      label: `${time} (${availableTables} ${availableTables === 1 ? "mesa" : "mesas"})`,
+    });
+  }
+
+  return slots;
+}
+
+function assignSuggestedTables(input: {
+  reservations: Reservation[];
+  tables: RestaurantTable[];
+}) {
+  const activeTables = input.tables
+    .filter((table) => table.is_active)
+    .sort((a, b) => a.capacity - b.capacity || a.name.localeCompare(b.name));
+  const occupiedTableByTime = new Map<string, Set<string>>();
+
+  return input.reservations.map((reservation) => {
+    const time = normalizeTime(reservation.time);
+    const occupied = occupiedTableByTime.get(time) ?? new Set<string>();
+    const table = activeTables.find(
+      (candidate) => candidate.capacity >= reservation.party_size && !occupied.has(candidate.id),
+    );
+
+    if (table && !["cancelled", "no_show"].includes(reservation.status)) {
+      occupied.add(table.id);
+      occupiedTableByTime.set(time, occupied);
+    }
+
+    return {
+      ...reservation,
+      tableName: activeTables.length ? table?.name ?? "Lista de espera" : "Por asignar",
+      tableArea: table?.area ?? null,
+      checkInReady: ["confirmed", "pending"].includes(reservation.status),
+    };
+  });
+}
 
 export type LoyaltyAccount = {
   id: string;
@@ -859,7 +999,7 @@ export async function getAssistantData() {
       description: `${reservation.date} ${reservation.time.slice(0, 5)} / ${reservation.party_size} personas.`,
       priority: "ALTA" as const,
       date: reservation.date,
-      href: "/app/operacion?tab=reservas",
+      href: "/app/reservas",
       resolveLabel: "Resolver",
     })),
     ...noShowRows.map((reservation) => ({
@@ -1576,14 +1716,13 @@ export async function getInternalCrmData() {
 export async function getReservationsData(filters: ReservationFilters = {}) {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
+  const selectedDate = filters.date ?? new Date().toISOString().slice(0, 10);
   let reservationsQuery = supabase
     .from("reservations")
-    .select("id, date, time, party_size, status, source, notes, special_request, customer_id, customers(full_name, phone)")
+    .select("id, date, time, party_size, status, source, notes, special_request, customer_id, customers(id, full_name, phone, email, loyalty_code, total_visits)")
     .eq("business_id", current.businessId);
 
-  if (filters.date) {
-    reservationsQuery = reservationsQuery.eq("date", filters.date);
-  }
+  reservationsQuery = reservationsQuery.eq("date", selectedDate);
 
   if (filters.status && filters.status !== "all") {
     reservationsQuery = reservationsQuery.eq("status", filters.status);
@@ -1593,7 +1732,7 @@ export async function getReservationsData(filters: ReservationFilters = {}) {
     reservationsQuery = reservationsQuery.eq("source", filters.source);
   }
 
-  const [reservations, customers] = await Promise.all([
+  const [reservations, customers, tables, hours, settings] = await Promise.all([
     reservationsQuery
       .order("date", { ascending: true })
       .order("time", { ascending: true }),
@@ -1602,12 +1741,102 @@ export async function getReservationsData(filters: ReservationFilters = {}) {
       .select("id, full_name, phone, email")
       .eq("business_id", current.businessId)
       .order("full_name", { ascending: true }),
+    supabase
+      .from("tables")
+      .select("id, name, area, capacity, is_active")
+      .eq("business_id", current.businessId)
+      .order("capacity", { ascending: true }),
+    supabase
+      .from("business_hours")
+      .select("day_of_week, opens_at, closes_at, is_closed")
+      .eq("business_id", current.businessId)
+      .order("day_of_week", { ascending: true }),
+    supabase
+      .from("business_settings")
+      .select("reservation_interval_minutes")
+      .eq("business_id", current.businessId)
+      .maybeSingle<{ reservation_interval_minutes: number }>(),
   ]);
+  const reservationRows = (reservations.data ?? []) as unknown as Reservation[];
+  const tableRows = (tables.data ?? []) as RestaurantTable[];
 
   return {
     current,
-    reservations: (reservations.data ?? []) as unknown as Reservation[],
+    date: selectedDate,
+    reservations: assignSuggestedTables({
+      reservations: reservationRows,
+      tables: tableRows,
+    }),
     customers: (customers.data ?? []) as Customer[],
+    hours: (hours.data ?? []) as BusinessHour[],
+    settings: settings.data,
+    slots: buildReservationSlots({
+      date: selectedDate,
+      hours: (hours.data ?? []) as BusinessHour[],
+      intervalMinutes: settings.data?.reservation_interval_minutes,
+      reservations: reservationRows,
+      tables: tableRows,
+    }),
+    tables: tableRows,
+  };
+}
+
+export async function getDefaultPublicReservationData(input?: {
+  date?: string;
+  partySize?: number;
+}) {
+  const admin = createAdminClient();
+  const selectedDate = input?.date ?? new Date().toISOString().slice(0, 10);
+  const { data: business } = await admin
+    .from("businesses")
+    .select("*")
+    .eq("status", "active")
+    .eq("reservation_enabled", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle<PublicBusiness>();
+
+  if (!business) {
+    return null;
+  }
+
+  const [reservations, hours, tables, settings] = await Promise.all([
+    admin
+      .from("reservations")
+      .select("id, date, time, party_size, status, source, notes, special_request, customer_id, customers(id, full_name, phone, email, loyalty_code, total_visits)")
+      .eq("business_id", business.id)
+      .eq("date", selectedDate)
+      .order("time", { ascending: true }),
+    admin
+      .from("business_hours")
+      .select("day_of_week, opens_at, closes_at, is_closed")
+      .eq("business_id", business.id)
+      .order("day_of_week", { ascending: true }),
+    admin
+      .from("tables")
+      .select("id, name, area, capacity, is_active")
+      .eq("business_id", business.id)
+      .order("capacity", { ascending: true }),
+    admin
+      .from("business_settings")
+      .select("reservation_interval_minutes")
+      .eq("business_id", business.id)
+      .maybeSingle<{ reservation_interval_minutes: number }>(),
+  ]);
+  const reservationRows = (reservations.data ?? []) as unknown as Reservation[];
+  const tableRows = (tables.data ?? []) as RestaurantTable[];
+
+  return {
+    business,
+    date: selectedDate,
+    slots: buildReservationSlots({
+      date: selectedDate,
+      hours: (hours.data ?? []) as BusinessHour[],
+      intervalMinutes: settings.data?.reservation_interval_minutes,
+      reservations: reservationRows,
+      tables: tableRows,
+      partySize: input?.partySize,
+    }),
   };
 }
 
@@ -1746,7 +1975,7 @@ export async function getOnboardingChecklistData() {
     {
       label: "Primera reserva",
       done: (reservations.count ?? 0) > 0,
-      href: "/app/operacion?tab=reservas&action=nueva-reserva",
+      href: "/app/reservas?new=1",
     },
   ];
 

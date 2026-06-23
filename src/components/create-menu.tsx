@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 
 const createActions = [
-  { label: "Nueva reserva", href: "/app/operacion?tab=reservas&action=nueva-reserva" },
+  { label: "Nueva reserva", href: "/app/reservas?new=1" },
   { label: "Nuevo cliente", href: "/app/clientes?action=new" },
   { label: "Registrar consumo", href: "/app/operacion?tab=sala" },
   { label: "Crear campana", href: "/app/marketing" },

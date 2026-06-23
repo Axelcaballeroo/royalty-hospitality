@@ -320,7 +320,7 @@ export default async function CustomersPage({
               <Link href="/app/clientes?tab=registro" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800" prefetch={false}>
                 Compartir QR del club
               </Link>
-              <Link href="/app/operacion?tab=reservas&action=nueva-reserva" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800" prefetch={false}>
+              <Link href="/app/reservas?new=1" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800" prefetch={false}>
                 Crear reserva
               </Link>
               <Link href="/app/operacion?tab=sala" className="inline-flex h-11 items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800" prefetch={false}>

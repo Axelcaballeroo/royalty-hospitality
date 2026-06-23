@@ -10,6 +10,7 @@ import { getSegmentCustomers } from "@/lib/marketing";
 import { getBatchStatus, getRiskLevel, inventoryMovementTypes, inventoryUnits } from "@/lib/inventory";
 import { employeeStatuses, shiftStatuses } from "@/lib/hr";
 import { applyWalletTransaction, ensureWalletAccount, walletStatuses } from "@/lib/wallet";
+import { buildReservationSlots, type BusinessHour, type Reservation, type RestaurantTable } from "@/lib/data";
 
 const validReservationStatuses = [
   "pending",
@@ -370,6 +371,9 @@ export async function createReservationAction(formData: FormData) {
   const date = requiredString(formData, "date");
   const time = requiredString(formData, "time");
   const partySize = Number(requiredString(formData, "party_size"));
+  const quickName = requiredString(formData, "quick_customer_name");
+  const quickPhone = requiredString(formData, "quick_customer_phone");
+  const quickEmail = requiredString(formData, "quick_customer_email");
   const returnTo = requiredString(formData, "return_to") || "/app/reservas";
   const separator = returnTo.includes("?") ? "&" : "?";
 
@@ -377,15 +381,77 @@ export async function createReservationAction(formData: FormData) {
     redirect(`${returnTo}${separator}error=reservation_validation`);
   }
 
-  if (!customerId) {
-    const quickName = requiredString(formData, "quick_customer_name");
-    const quickPhone = requiredString(formData, "quick_customer_phone");
-    const quickEmail = requiredString(formData, "quick_customer_email");
+  const [sameDayReservations, tables, hours, settings] = await Promise.all([
+    supabase
+      .from("reservations")
+      .select("id, date, time, party_size, status, source, notes, special_request, customer_id, customers(full_name, phone)")
+      .eq("business_id", current.businessId)
+      .eq("date", date),
+    supabase
+      .from("tables")
+      .select("id, name, area, capacity, is_active")
+      .eq("business_id", current.businessId),
+    supabase
+      .from("business_hours")
+      .select("day_of_week, opens_at, closes_at, is_closed")
+      .eq("business_id", current.businessId),
+    supabase
+      .from("business_settings")
+      .select("reservation_interval_minutes")
+      .eq("business_id", current.businessId)
+      .maybeSingle<{ reservation_interval_minutes: number }>(),
+  ]);
+  const availableSlot = buildReservationSlots({
+    date,
+    hours: (hours.data ?? []) as BusinessHour[],
+    intervalMinutes: settings.data?.reservation_interval_minutes,
+    reservations: (sameDayReservations.data ?? []) as unknown as Reservation[],
+    tables: (tables.data ?? []) as RestaurantTable[],
+    partySize,
+  }).find((slot) => slot.time === time && slot.available);
 
+  if (!availableSlot) {
+    redirect(`${returnTo}${separator}error=reservation_unavailable`);
+  }
+
+  if (!customerId) {
     if (!quickName || (!quickPhone && !quickEmail)) {
       redirect(`${returnTo}${separator}error=customer_required`);
     }
 
+    const existingByPhone = quickPhone
+      ? await supabase
+          .from("customers")
+          .select("id")
+          .eq("business_id", current.businessId)
+          .eq("phone", quickPhone)
+          .maybeSingle<{ id: string }>()
+      : { data: null };
+    const existingByEmail = !existingByPhone.data && quickEmail
+      ? await supabase
+          .from("customers")
+          .select("id")
+          .eq("business_id", current.businessId)
+          .eq("email", quickEmail)
+          .maybeSingle<{ id: string }>()
+      : { data: null };
+
+    if (existingByPhone.data?.id || existingByEmail.data?.id) {
+      customerId = existingByPhone.data?.id ?? existingByEmail.data?.id ?? "";
+      await supabase
+        .from("customers")
+        .update({
+          full_name: quickName,
+          ...(quickPhone ? { phone: quickPhone } : {}),
+          ...(quickEmail ? { email: quickEmail } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("business_id", current.businessId)
+        .eq("id", customerId);
+    }
+  }
+
+  if (!customerId) {
     const { data: customer, error: customerError } = await supabase
       .from("customers")
       .insert({

@@ -286,7 +286,7 @@ export default async function OperationPage({
         description={pageDescription}
         actions={
           <Link
-            href="/app/operacion?tab=reservas&action=nueva-reserva"
+            href="/app/reservas?new=1"
             className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800" prefetch={false}>
             <Plus size={16} />
             Nueva reserva
@@ -314,7 +314,7 @@ export default async function OperationPage({
         ]}
         insights={assistantInsights}
         actions={[
-          { label: "Revisar reservas", href: "/app/operacion?tab=reservas" },
+          { label: "Revisar reservas", href: "/app/reservas" },
           { label: "Crear promocion", href: "/app/marketing?type=waste_reduction" },
           { label: "Recuperar clientes", href: "/app/marketing?segment=inactive_60d&type=inactive_customers" },
           { label: "Ver inventario", href: "/app/inventario?view=vencimientos" },
@@ -421,7 +421,7 @@ export default async function OperationPage({
                 title="Sin reservas hoy"
                 description="Crea una reserva para iniciar la agenda del dia."
                 action={
-                  <Link href="/app/operacion?tab=reservas&action=nueva-reserva" className="inline-flex h-11 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white" prefetch={false}>
+                  <Link href="/app/reservas?new=1" className="inline-flex h-11 items-center rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white" prefetch={false}>
                     Nueva reserva
                   </Link>
                 }

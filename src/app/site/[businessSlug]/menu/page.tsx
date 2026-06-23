@@ -36,7 +36,7 @@ export default async function PublicMenuPage({
               </p>
             </div>
             <Link
-              href={`/site/${business.slug}/reservas`}
+              href="/reservar"
               className="inline-flex h-11 items-center justify-center rounded-2xl px-5 text-sm font-semibold text-white"
               style={{ backgroundColor: primary }}
             >

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateLoyaltyCode } from "@/lib/loyalty-code";
+import { buildReservationSlots, type BusinessHour, type Reservation, type RestaurantTable } from "@/lib/data";
 
 function requiredString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -33,6 +34,7 @@ async function createUniqueLoyaltyCode(input: {
 
 export async function createPublicReservationAction(formData: FormData) {
   const businessSlug = requiredString(formData, "business_slug");
+  const returnTo = requiredString(formData, "return_to");
   const fullName = requiredString(formData, "full_name");
   const phone = requiredString(formData, "phone");
   const email = requiredString(formData, "email");
@@ -40,13 +42,15 @@ export async function createPublicReservationAction(formData: FormData) {
   const time = requiredString(formData, "time");
   const partySize = Number(requiredString(formData, "party_size"));
   const specialRequest = requiredString(formData, "special_request");
+  const targetPath = returnTo || (businessSlug ? `/site/${businessSlug}/reservas` : "/reservar");
+  const separator = targetPath.includes("?") ? "&" : "?";
 
   if (!businessSlug) {
-    redirect("/site/not-found/reservas?error=business_missing");
+    redirect(`${targetPath}${separator}error=business_missing`);
   }
 
   if (!fullName || !phone || !date || !time || !partySize || partySize <= 0) {
-    redirect(`/site/${businessSlug}/reservas?error=reservation_validation`);
+    redirect(`${targetPath}${separator}error=reservation_validation`);
   }
 
   const admin = createAdminClient();
@@ -58,7 +62,40 @@ export async function createPublicReservationAction(formData: FormData) {
     .maybeSingle<{ id: string; slug: string; reservation_enabled: boolean }>();
 
   if (!business || !business.reservation_enabled) {
-    redirect(`/site/${businessSlug}/reservas?error=reservations_unavailable`);
+    redirect(`${targetPath}${separator}error=reservations_unavailable`);
+  }
+
+  const [sameDayReservations, tables, hours, settings] = await Promise.all([
+    admin
+      .from("reservations")
+      .select("id, date, time, party_size, status, source, notes, special_request, customer_id, customers(full_name, phone)")
+      .eq("business_id", business.id)
+      .eq("date", date),
+    admin
+      .from("tables")
+      .select("id, name, area, capacity, is_active")
+      .eq("business_id", business.id),
+    admin
+      .from("business_hours")
+      .select("day_of_week, opens_at, closes_at, is_closed")
+      .eq("business_id", business.id),
+    admin
+      .from("business_settings")
+      .select("reservation_interval_minutes")
+      .eq("business_id", business.id)
+      .maybeSingle<{ reservation_interval_minutes: number }>(),
+  ]);
+  const availableSlot = buildReservationSlots({
+    date,
+    hours: (hours.data ?? []) as BusinessHour[],
+    intervalMinutes: settings.data?.reservation_interval_minutes,
+    reservations: (sameDayReservations.data ?? []) as unknown as Reservation[],
+    tables: (tables.data ?? []) as RestaurantTable[],
+    partySize,
+  }).find((slot) => slot.time === time && slot.available);
+
+  if (!availableSlot) {
+    redirect(`${targetPath}${separator}error=reservation_unavailable`);
   }
 
   let customerId: string | null = null;
@@ -97,7 +134,7 @@ export async function createPublicReservationAction(formData: FormData) {
       .eq("id", customerId);
 
     if (customerUpdateError) {
-      redirect(`/site/${businessSlug}/reservas?error=${encodeURIComponent(customerUpdateError.message)}`);
+      redirect(`${targetPath}${separator}error=${encodeURIComponent(customerUpdateError.message)}`);
     }
 
     const { data: updatedCustomer } = await admin
@@ -144,7 +181,7 @@ export async function createPublicReservationAction(formData: FormData) {
       .single<{ id: string }>();
 
     if (customerError || !customer) {
-      redirect(`/site/${businessSlug}/reservas?error=${encodeURIComponent(customerError?.message ?? "customer_failed")}`);
+      redirect(`${targetPath}${separator}error=${encodeURIComponent(customerError?.message ?? "customer_failed")}`);
     }
 
     customerId = customer.id;
@@ -161,7 +198,7 @@ export async function createPublicReservationAction(formData: FormData) {
   );
 
   if (loyaltyError) {
-    redirect(`/site/${businessSlug}/reservas?error=${encodeURIComponent(loyaltyError.message)}`);
+    redirect(`${targetPath}${separator}error=${encodeURIComponent(loyaltyError.message)}`);
   }
 
   const { data: reservation, error: reservationError } = await admin
@@ -181,7 +218,7 @@ export async function createPublicReservationAction(formData: FormData) {
     .single<{ id: string }>();
 
   if (reservationError || !reservation) {
-    redirect(`/site/${businessSlug}/reservas?error=${encodeURIComponent(reservationError?.message ?? "reservation_failed")}`);
+    redirect(`${targetPath}${separator}error=${encodeURIComponent(reservationError?.message ?? "reservation_failed")}`);
   }
 
   await admin.from("customer_events").insert({
@@ -204,5 +241,5 @@ export async function createPublicReservationAction(formData: FormData) {
     due_date: `${date}T${time}:00`,
   });
 
-  redirect(`/site/${businessSlug}/reservas?success=1&phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(loyaltyCode ?? "")}`);
+  redirect(`${targetPath}${separator}success=1&phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(loyaltyCode ?? "")}`);
 }

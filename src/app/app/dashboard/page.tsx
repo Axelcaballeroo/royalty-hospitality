@@ -174,7 +174,7 @@ export default async function DashboardPage() {
         ]}
         insights={assistantInsights}
         actions={[
-          { label: "Revisar reservas", href: "/app/operacion?tab=reservas" },
+          { label: "Revisar reservas", href: "/app/reservas" },
           { label: "Crear promocion", href: "/app/marketing?type=waste_reduction" },
           { label: "Recuperar clientes", href: "/app/marketing?segment=inactive_60d&type=inactive_customers" },
           { label: "Ver inventario", href: "/app/inventario?view=vencimientos" },

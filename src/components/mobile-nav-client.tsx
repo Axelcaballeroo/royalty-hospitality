@@ -50,7 +50,7 @@ export function MobileNavClient({
         </Link>
         <div className="flex items-center gap-2">
           <Link
-            href="/app/operacion?tab=reservas&action=nueva-reserva"
+            href="/app/reservas?new=1"
             className="inline-flex size-10 items-center justify-center rounded-xl bg-stone-950 text-white"
             aria-label="Crear" prefetch={false}>
             <Plus size={18} />
