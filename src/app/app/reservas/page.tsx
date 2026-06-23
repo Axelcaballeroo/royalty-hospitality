@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, Clock, Plus, UserRound } from "lucide-react";
+import { CheckCircle2, Clock, Plus, UserRound, X } from "lucide-react";
 import { createReservationAction, updateReservationStatusAction } from "@/app/app/actions";
 import { EmptyState, ModuleCard, SectionHeader, StatCard } from "@/components/ui";
 import { getReservationsData, type ReservationWithTable } from "@/lib/data";
@@ -72,6 +72,124 @@ function StatusButton({
   );
 }
 
+function NewReservationModal({
+  customers,
+  date,
+  defaultTime,
+  slots,
+}: {
+  customers: Awaited<ReturnType<typeof getReservationsData>>["customers"];
+  date: string;
+  defaultTime: string;
+  slots: Awaited<ReturnType<typeof getReservationsData>>["slots"];
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/55 px-4 py-6 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-reservation-title"
+        className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_30px_100px_rgba(28,25,23,0.28)]"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
+              Nueva Reserva
+            </p>
+            <h2 id="new-reservation-title" className="mt-2 text-2xl font-semibold text-stone-950">
+              Captura rapida
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-stone-500">
+              Elige horario, personas y cliente. Si el telefono o email ya existe, se asocia automaticamente.
+            </p>
+          </div>
+          <Link
+            href={`/app/reservas?date=${date}`}
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+            aria-label="Cerrar"
+            prefetch={false}
+          >
+            <X size={18} />
+          </Link>
+        </div>
+
+        <form action={createReservationAction} className="mt-5 grid gap-4">
+          <input type="hidden" name="return_to" value={`/app/reservas?date=${date}`} />
+          <input type="hidden" name="source" value="manual" />
+
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_9rem]">
+            <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+              Fecha
+              <input required type="date" name="date" defaultValue={date} className={fieldClass} />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+              Hora
+              <select required name="time" defaultValue={defaultTime} className={fieldClass}>
+                <option value="">Horario</option>
+                {slots.map((slot) => (
+                  <option key={slot.time} value={slot.time} disabled={!slot.available}>
+                    {slot.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+              Personas
+              <input required min={1} type="number" name="party_size" defaultValue={2} className={fieldClass} />
+            </label>
+          </div>
+
+          <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+            Cliente existente
+            <select name="customer_id" className={fieldClass}>
+              <option value="">Crear o asociar por telefono/email</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.full_name} {customer.phone ? `- ${customer.phone}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4 sm:grid-cols-3">
+            <input
+              autoFocus
+              name="quick_customer_name"
+              placeholder="Nombre"
+              className={fieldClass}
+            />
+            <input name="quick_customer_phone" placeholder="Telefono" className={fieldClass} />
+            <input type="email" name="quick_customer_email" placeholder="Email" className={fieldClass} />
+          </div>
+
+          <details className="rounded-2xl border border-stone-200 bg-white p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-stone-950">
+              Notas opcionales
+            </summary>
+            <div className="mt-4 grid gap-3">
+              <input name="special_request" placeholder="Solicitud especial" className={fieldClass} />
+              <textarea name="notes" placeholder="Notas internas" className="min-h-20 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
+            </div>
+          </details>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Link
+              href={`/app/reservas?date=${date}`}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800"
+              prefetch={false}
+            >
+              Cancelar
+            </Link>
+            <button className="inline-flex h-11 items-center justify-center rounded-xl bg-stone-950 px-5 text-sm font-semibold text-white">
+              Crear reserva
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default async function ReservationsPage({
   searchParams,
 }: {
@@ -80,6 +198,7 @@ export default async function ReservationsPage({
     error?: string;
     new?: string;
     selected?: string;
+    slot?: string;
     success?: string;
   }>;
 }) {
@@ -90,7 +209,11 @@ export default async function ReservationsPage({
     data.reservations.find((reservation) => reservation.id === params.selected) ??
     data.reservations[0] ??
     null;
-  const showNewReservation = params.new === "1" || !data.reservations.length;
+  const showNewReservation = params.new === "1";
+  const defaultReservationTime =
+    data.slots.find((slot) => slot.time === params.slot && slot.available)?.time ??
+    data.slots.find((slot) => slot.available)?.time ??
+    "";
   const returnTo = selectedReservation
     ? reservationHref(selectedDate, selectedReservation.id)
     : `/app/reservas?date=${selectedDate}`;
@@ -125,6 +248,15 @@ export default async function ReservationsPage({
         <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
           {formatEventType(params.success)}
         </p>
+      ) : null}
+
+      {showNewReservation ? (
+        <NewReservationModal
+          customers={data.customers}
+          date={selectedDate}
+          defaultTime={defaultReservationTime}
+          slots={data.slots}
+        />
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-4">
@@ -195,7 +327,7 @@ export default async function ReservationsPage({
                             <span>{slot.available ? `${slot.availableTables} mesas disponibles` : "Sin disponibilidad"}</span>
                             {slot.available ? (
                               <Link
-                                href={`/app/reservas?date=${selectedDate}&new=1`}
+                                href={`/app/reservas?date=${selectedDate}&new=1&slot=${slot.time}`}
                                 className="text-xs font-semibold text-stone-950 hover:underline"
                                 prefetch={false}
                               >
@@ -216,49 +348,6 @@ export default async function ReservationsPage({
             </div>
           </ModuleCard>
 
-          {showNewReservation ? (
-            <ModuleCard title="Nueva Reserva" description="Asocia un cliente existente o captura uno nuevo; si coincide telefono o email se vincula automaticamente.">
-              <form action={createReservationAction} className="grid gap-3">
-                <input type="hidden" name="return_to" value={`/app/reservas?date=${selectedDate}`} />
-                <select name="customer_id" className={fieldClass}>
-                  <option value="">Cliente nuevo o buscar por telefono/email</option>
-                  {data.customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.full_name} {customer.phone ? `- ${customer.phone}` : ""}
-                    </option>
-                  ))}
-                </select>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <input required type="date" name="date" defaultValue={selectedDate} className={fieldClass} />
-                  <select required name="time" className={fieldClass}>
-                    <option value="">Horario disponible</option>
-                    {data.slots.map((slot) => (
-                      <option key={slot.time} value={slot.time} disabled={!slot.available}>
-                        {slot.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input required min={1} type="number" name="party_size" placeholder="Personas" className={fieldClass} />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <input name="quick_customer_name" placeholder="Nombre del cliente" className={fieldClass} />
-                  <input name="quick_customer_phone" placeholder="Telefono" className={fieldClass} />
-                  <input type="email" name="quick_customer_email" placeholder="Email" className={fieldClass} />
-                </div>
-                <input name="special_request" placeholder="Solicitud especial" className={fieldClass} />
-                <textarea name="notes" placeholder="Notas internas" className="min-h-20 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
-                <input type="hidden" name="source" value="manual" />
-                <div className="flex flex-wrap gap-2">
-                  <button className="inline-flex h-11 items-center rounded-xl bg-stone-950 px-5 text-sm font-semibold text-white">
-                    Crear reserva
-                  </button>
-                  <Link href={`/app/reservas?date=${selectedDate}`} className="inline-flex h-11 items-center rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800" prefetch={false}>
-                    Cancelar
-                  </Link>
-                </div>
-              </form>
-            </ModuleCard>
-          ) : null}
         </div>
 
         <aside className="space-y-6">
