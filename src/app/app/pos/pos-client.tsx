@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  ArrowLeft,
   Banknote,
   CheckCircle2,
   Clock,
   CreditCard,
-  Gift,
   Minus,
   Plus,
   Printer,
@@ -20,7 +20,8 @@ import {
 import { SectionHeader } from "@/components/ui";
 
 type TableStatus = "free" | "occupied" | "checkout";
-type ModalType = "open" | "quick" | "discount" | "courtesy" | "payment" | "paid" | "cashier" | null;
+type ModalType = "open" | "quick" | "order" | "cashier" | null;
+type PosStep = "order" | "payment" | "paid";
 type PaymentMethod = "Efectivo" | "Tarjeta" | "Transferencia" | "Mixto";
 type Category = "Sushi" | "Entradas" | "Bebidas" | "Postres" | "Promos";
 
@@ -222,6 +223,7 @@ export function PosClient() {
   const [selectedTableId, setSelectedTableId] = useState(initialTables[1].id);
   const [activeCategory, setActiveCategory] = useState<Category>("Sushi");
   const [modal, setModal] = useState<ModalType>(null);
+  const [posStep, setPosStep] = useState<PosStep>("order");
   const [toast, setToast] = useState("");
   const [sales, setSales] = useState<Sale[]>([]);
   const [paidOrder, setPaidOrder] = useState<PaidOrder | null>(null);
@@ -243,10 +245,19 @@ export function PosClient() {
     window.setTimeout(() => setToast(""), 2800);
   }
 
+  function openTableMap(table: PosTable) {
+    setSelectedTableId(table.id);
+    if (!table.openedAt) {
+      setModal("open");
+      return;
+    }
+    setPosStep("order");
+    setModal("order");
+  }
+
   function beginOpenTable(tableId?: string) {
     const firstFree = tables.find((table) => !table.openedAt);
-    const targetId = tableId ?? firstFree?.id ?? selectedTableId;
-    setSelectedTableId(targetId);
+    setSelectedTableId(tableId ?? firstFree?.id ?? selectedTableId);
     setModal("open");
   }
 
@@ -269,19 +280,15 @@ export function PosClient() {
       ),
     );
     setSelectedTableId(tableId);
-    setModal(null);
+    setPosStep("order");
+    setModal("order");
     showToast("Mesa abierta");
   }
 
   function addProduct(product: Product) {
-    if (!selectedTable.openedAt) {
-      beginOpenTable(selectedTable.id);
-      return;
-    }
-
     setTables((current) =>
       current.map((table) => {
-        if (table.id !== selectedTable.id) return table;
+        if (table.id !== selectedTable.id || !table.openedAt) return table;
         const existing = table.items.find((item) => item.id === product.id);
         const items = existing
           ? table.items.map((item) =>
@@ -329,46 +336,17 @@ export function PosClient() {
     showToast("Orden enviada a cocina");
   }
 
-  function markReadyToPay() {
+  function startPayment() {
     if (!selectedTable.openedAt || selectedTable.items.length === 0) return;
     setTables((current) =>
       current.map((table) => (table.id === selectedTable.id ? { ...table, readyToPay: true } : table)),
     );
-    setModal("payment");
-  }
-
-  function applyDiscount(formData: FormData) {
-    const type = formData.get("type") === "fixed" ? "fixed" : "percent";
-    const value = Number(formData.get("value") ?? 0);
-    const reason = String(formData.get("reason") ?? "").trim();
-    if (!value || !reason) return;
-    setTables((current) =>
-      current.map((table) =>
-        table.id === selectedTable.id ? { ...table, discount: { type, value, reason } } : table,
-      ),
-    );
-    setModal(null);
-  }
-
-  function applyCourtesy(formData: FormData) {
-    const label = String(formData.get("label") ?? "").trim() || "Cortesia";
-    const amount = Number(formData.get("amount") ?? 0);
-    const reason = String(formData.get("reason") ?? "").trim();
-    const authorizedBy = String(formData.get("authorizedBy") ?? "").trim();
-    if (!amount || !reason || !authorizedBy) return;
-    setTables((current) =>
-      current.map((table) =>
-        table.id === selectedTable.id
-          ? { ...table, courtesy: { label, amount, reason, authorizedBy } }
-          : table,
-      ),
-    );
-    setModal(null);
+    setPosStep("payment");
   }
 
   function registerPayment(method: PaymentMethod, amountReceived: number) {
     setPaidOrder({ tableId: selectedTable.id, method, amountReceived });
-    setModal("paid");
+    setPosStep("paid");
     showToast("Pago completado");
   }
 
@@ -404,9 +382,9 @@ export function PosClient() {
           : item,
       ),
     );
-    setModal(null);
     setPaidOrder(null);
-    setSelectedTableId(paidOrder.tableId);
+    setPosStep("order");
+    setModal(null);
     showToast("Mesa liberada");
   }
 
@@ -427,14 +405,15 @@ export function PosClient() {
       ),
     );
     setSelectedTableId(barId);
-    setModal(null);
+    setPosStep("order");
+    setModal("order");
     showToast("Venta rapida abierta");
   }
 
   return (
     <div className="space-y-6">
       {toast ? (
-        <div className="fixed right-5 top-5 z-50 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800 shadow-xl">
+        <div className="fixed right-5 top-5 z-[70] flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800 shadow-xl">
           <CheckCircle2 size={20} />
           {toast}
         </div>
@@ -443,33 +422,18 @@ export function PosClient() {
       <SectionHeader
         eyebrow="POS"
         title="Punto de Venta"
-        description="Mesas, orden y cobro en un flujo claro para operar desde tablet."
+        description="Mapa de mesas para abrir, cobrar y operar sin pasos tecnicos."
         actions={
           <>
-            <button
-              type="button"
-              onClick={() => beginOpenTable()}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-stone-800"
-            >
-              <Plus size={22} />
+            <ActionButton onClick={() => beginOpenTable()} icon={<Plus size={22} />}>
               Abrir mesa
-            </button>
-            <button
-              type="button"
-              onClick={() => setModal("quick")}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-6 text-base font-semibold text-stone-900 shadow-sm transition hover:bg-stone-50"
-            >
-              <Sparkles size={22} />
+            </ActionButton>
+            <ActionButton onClick={() => setModal("quick")} icon={<Sparkles size={22} />} light>
               Venta rapida
-            </button>
-            <button
-              type="button"
-              onClick={() => setModal("cashier")}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-6 text-base font-semibold text-stone-900 shadow-sm transition hover:bg-stone-50"
-            >
-              <ReceiptText size={22} />
+            </ActionButton>
+            <ActionButton onClick={() => setModal("cashier")} icon={<ReceiptText size={22} />} light>
               Cierre de caja
-            </button>
+            </ActionButton>
           </>
         }
       />
@@ -482,196 +446,8 @@ export function PosClient() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {tables.map((table) => (
-          <TableCard
-            key={table.id}
-            table={table}
-            selected={table.id === selectedTable.id}
-            onClick={() => {
-              setSelectedTableId(table.id);
-              if (!table.openedAt) beginOpenTable(table.id);
-            }}
-          />
+          <TableCard key={table.id} table={table} onClick={() => openTableMap(table)} />
         ))}
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
-        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-stone-100 pb-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-stone-500">Orden abierta</p>
-              <h2 className="mt-1 text-3xl font-semibold text-stone-950">{selectedTable.name}</h2>
-            </div>
-            <div className="flex flex-wrap gap-3 text-sm font-semibold text-stone-700">
-              <span className="inline-flex h-11 items-center gap-2 rounded-2xl bg-stone-100 px-4">
-                <Users size={18} />
-                {selectedTable.people || 0} personas
-              </span>
-              <span className="inline-flex h-11 items-center rounded-2xl bg-stone-100 px-4">
-                {selectedTable.customer || "Cliente opcional"}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-5 flex gap-3 overflow-x-auto pb-1">
-            {categories.map((category) => (
-              <button
-                type="button"
-                key={category}
-                onClick={() => setActiveCategory(category)}
-                className={[
-                  "h-14 min-w-32 rounded-2xl px-5 text-base font-semibold transition",
-                  activeCategory === category
-                    ? "bg-stone-950 text-white shadow-sm"
-                    : "border border-stone-200 bg-stone-50 text-stone-800 hover:bg-white",
-                ].join(" ")}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {categoryProducts.length ? (
-              categoryProducts.map((product) => (
-                <button
-                  type="button"
-                  key={product.id}
-                  onClick={() => addProduct(product)}
-                  className="min-h-36 rounded-3xl border border-stone-200 bg-stone-50 p-5 text-left transition hover:-translate-y-0.5 hover:border-stone-300 hover:bg-white hover:shadow-md"
-                >
-                  <span className="block text-xl font-semibold text-stone-950">{product.name}</span>
-                  <span className="mt-5 block text-3xl font-semibold text-stone-950">
-                    {money.format(product.price)}
-                  </span>
-                  <span className="mt-5 inline-flex h-10 items-center gap-2 rounded-2xl bg-stone-950 px-4 text-sm font-semibold text-white">
-                    <Plus size={18} />
-                    Agregar
-                  </span>
-                </button>
-              ))
-            ) : (
-              <div className="rounded-3xl border border-dashed border-stone-300 bg-stone-50 p-8 text-center text-base font-semibold text-stone-500 sm:col-span-2 lg:col-span-3">
-                Sin promos por ahora
-              </div>
-            )}
-          </div>
-        </div>
-
-        <aside className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm xl:sticky xl:top-5 xl:self-start">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-stone-500">Cuenta</p>
-              <h2 className="mt-1 text-3xl font-semibold text-stone-950">{selectedTable.name}</h2>
-            </div>
-            <span className={["rounded-full border px-3 py-1 text-sm font-semibold", statusClasses(tableStatus(selectedTable))].join(" ")}>
-              {statusLabel(tableStatus(selectedTable))}
-            </span>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            {selectedTable.items.length ? (
-              selectedTable.items.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-stone-950">{item.name}</p>
-                      <p className="mt-1 text-sm font-medium text-stone-500">
-                        {item.sent ? "Enviado cocina" : "Nuevo"} · {money.format(item.price)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeProduct(item.id)}
-                      className="grid size-10 place-items-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:text-red-600"
-                      aria-label={`Quitar ${item.name}`}
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => changeQuantity(item.id, -1)}
-                        className="grid size-12 place-items-center rounded-2xl border border-stone-200 bg-white text-stone-900"
-                        aria-label={`Restar ${item.name}`}
-                      >
-                        <Minus size={18} />
-                      </button>
-                      <span className="grid size-12 place-items-center rounded-2xl bg-white text-xl font-semibold text-stone-950">
-                        {item.quantity}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => changeQuantity(item.id, 1)}
-                        className="grid size-12 place-items-center rounded-2xl border border-stone-200 bg-white text-stone-900"
-                        aria-label={`Sumar ${item.name}`}
-                      >
-                        <Plus size={18} />
-                      </button>
-                    </div>
-                    <p className="text-xl font-semibold text-stone-950">
-                      {money.format(item.price * item.quantity)}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-3xl border border-dashed border-stone-300 bg-stone-50 p-7 text-center text-base font-semibold text-stone-500">
-                Agrega productos para empezar
-              </div>
-            )}
-          </div>
-
-          <div className="mt-5 space-y-3 rounded-3xl bg-stone-50 p-4">
-            <TotalLine label="Subtotal" value={subtotal(selectedTable)} />
-            <TotalLine label="Descuento" value={discountAmount(selectedTable)} negative />
-            <TotalLine label="Cortesia" value={courtesyAmount(selectedTable)} negative />
-            <div className="flex items-center justify-between border-t border-stone-200 pt-4">
-              <span className="text-lg font-semibold text-stone-950">Total</span>
-              <span className="text-4xl font-semibold text-stone-950">{money.format(total(selectedTable))}</span>
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setModal("discount")}
-              className="h-14 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-900 transition hover:bg-stone-50"
-            >
-              Descuento
-            </button>
-            <button
-              type="button"
-              onClick={() => setModal("courtesy")}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-900 transition hover:bg-stone-50"
-            >
-              <Gift size={18} />
-              Cortesia
-            </button>
-          </div>
-
-          <div className="mt-4 grid gap-3">
-            <button
-              type="button"
-              onClick={sendToKitchen}
-              disabled={!selectedTable.openedAt || selectedTable.items.length === 0}
-              className="inline-flex h-16 items-center justify-center gap-3 rounded-3xl bg-emerald-600 text-lg font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
-            >
-              <CheckCircle2 size={24} />
-              Enviar cocina
-            </button>
-            <button
-              type="button"
-              onClick={markReadyToPay}
-              disabled={!selectedTable.openedAt || selectedTable.items.length === 0}
-              className="inline-flex h-16 items-center justify-center gap-3 rounded-3xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
-            >
-              <Banknote size={24} />
-              Cobrar
-            </button>
-          </div>
-        </aside>
       </section>
 
       {modal === "open" ? (
@@ -684,90 +460,24 @@ export function PosClient() {
 
       {modal === "quick" ? <QuickSaleModal onClose={() => setModal(null)} onSelect={openQuickSale} /> : null}
 
-      {modal === "discount" ? (
-        <SimpleFormModal title="Aplicar descuento" onClose={() => setModal(null)} onSubmit={applyDiscount}>
-          <label className="text-sm font-semibold text-stone-700">
-            Tipo
-            <select
-              name="type"
-              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 bg-white px-4 text-base text-stone-950"
-            >
-              <option value="percent">Porcentaje</option>
-              <option value="fixed">Monto fijo</option>
-            </select>
-          </label>
-          <label className="text-sm font-semibold text-stone-700">
-            Valor
-            <input
-              name="value"
-              type="number"
-              min="1"
-              required
-              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
-              placeholder="10"
-            />
-          </label>
-          <label className="text-sm font-semibold text-stone-700">
-            Motivo
-            <input
-              name="reason"
-              required
-              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
-              placeholder="Descuento gerente"
-            />
-          </label>
-        </SimpleFormModal>
-      ) : null}
-
-      {modal === "courtesy" ? (
-        <SimpleFormModal title="Registrar cortesia" onClose={() => setModal(null)} onSubmit={applyCourtesy}>
-          <label className="text-sm font-semibold text-stone-700">
-            Producto o monto
-            <input
-              name="label"
-              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
-              placeholder="Postre Mochi"
-            />
-          </label>
-          <label className="text-sm font-semibold text-stone-700">
-            Monto
-            <input
-              name="amount"
-              type="number"
-              min="1"
-              required
-              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
-              placeholder="140"
-            />
-          </label>
-          <label className="text-sm font-semibold text-stone-700">
-            Motivo
-            <input
-              name="reason"
-              required
-              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
-              placeholder="Cortesia de la casa"
-            />
-          </label>
-          <label className="text-sm font-semibold text-stone-700">
-            Autorizado por
-            <input
-              name="authorizedBy"
-              required
-              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
-              placeholder="Gerente"
-            />
-          </label>
-        </SimpleFormModal>
-      ) : null}
-
-      {modal === "payment" ? (
-        <PaymentModal table={selectedTable} onClose={() => setModal(null)} onPay={registerPayment} />
-      ) : null}
-
-      {modal === "paid" ? (
-        <PaidModal
-          table={tables.find((table) => table.id === paidOrder?.tableId) ?? selectedTable}
+      {modal === "order" ? (
+        <FullscreenPos
+          table={selectedTable}
+          step={posStep}
+          activeCategory={activeCategory}
+          categoryProducts={categoryProducts}
+          onCategoryChange={setActiveCategory}
+          onBack={() => {
+            setPosStep("order");
+            setModal(null);
+          }}
+          onAddProduct={addProduct}
+          onChangeQuantity={changeQuantity}
+          onRemoveProduct={removeProduct}
+          onSendKitchen={sendToKitchen}
+          onStartPayment={startPayment}
+          onBackToOrder={() => setPosStep("order")}
+          onPay={registerPayment}
           onPrint={() => showToast("Ticket listo para imprimir")}
           onCloseOrder={closeOrder}
         />
@@ -780,6 +490,34 @@ export function PosClient() {
   );
 }
 
+function ActionButton({
+  children,
+  icon,
+  light = false,
+  onClick,
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  light?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "inline-flex h-14 items-center justify-center gap-2 rounded-2xl px-6 text-base font-semibold shadow-sm transition",
+        light
+          ? "border border-stone-200 bg-white text-stone-900 hover:bg-stone-50"
+          : "bg-stone-950 text-white hover:bg-stone-800",
+      ].join(" ")}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
+
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
@@ -789,25 +527,14 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TableCard({
-  table,
-  selected,
-  onClick,
-}: {
-  table: PosTable;
-  selected: boolean;
-  onClick: () => void;
-}) {
+function TableCard({ table, onClick }: { table: PosTable; onClick: () => void }) {
   const status = tableStatus(table);
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={[
-        "min-h-52 rounded-3xl border p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
-        selected ? "border-stone-950 bg-white ring-2 ring-stone-950/10" : "border-stone-200 bg-white",
-      ].join(" ")}
+      className="min-h-56 rounded-3xl border border-stone-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-stone-300 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -837,11 +564,414 @@ function CardFact({ icon, label, value }: { icon: ReactNode; label: string; valu
   );
 }
 
+function FullscreenPos({
+  table,
+  step,
+  activeCategory,
+  categoryProducts,
+  onCategoryChange,
+  onBack,
+  onAddProduct,
+  onChangeQuantity,
+  onRemoveProduct,
+  onSendKitchen,
+  onStartPayment,
+  onBackToOrder,
+  onPay,
+  onPrint,
+  onCloseOrder,
+}: {
+  table: PosTable;
+  step: PosStep;
+  activeCategory: Category;
+  categoryProducts: Product[];
+  onCategoryChange: (category: Category) => void;
+  onBack: () => void;
+  onAddProduct: (product: Product) => void;
+  onChangeQuantity: (productId: string, change: number) => void;
+  onRemoveProduct: (productId: string) => void;
+  onSendKitchen: () => void;
+  onStartPayment: () => void;
+  onBackToOrder: () => void;
+  onPay: (method: PaymentMethod, amountReceived: number) => void;
+  onPrint: () => void;
+  onCloseOrder: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 p-3 transition-opacity">
+      <div className="flex h-[95vh] w-[95vw] flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+        <header className="flex flex-col gap-4 border-b border-stone-200 bg-white p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex h-14 items-center gap-2 rounded-2xl border border-stone-200 bg-stone-50 px-5 text-base font-semibold text-stone-950 transition hover:bg-white"
+            >
+              <ArrowLeft size={22} />
+              Volver a mesas
+            </button>
+            <div>
+              <h2 className="text-4xl font-semibold text-stone-950">{table.name}</h2>
+              <p className="mt-1 text-sm font-semibold text-stone-500">{table.customer || "Cliente opcional"}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <span className={["inline-flex h-12 items-center rounded-2xl border px-4 text-base font-semibold", statusClasses(tableStatus(table))].join(" ")}>
+              {statusLabel(tableStatus(table))}
+            </span>
+            <span className="inline-flex h-12 items-center gap-2 rounded-2xl bg-stone-100 px-4 text-base font-semibold text-stone-800">
+              <Users size={20} />
+              {table.people || 0} personas
+            </span>
+            <span className="inline-flex h-12 items-center gap-2 rounded-2xl bg-stone-100 px-4 text-base font-semibold text-stone-800">
+              <Clock size={20} />
+              {elapsed(table.openedAt)}
+            </span>
+          </div>
+        </header>
+
+        {step === "order" ? (
+          <OrderStep
+            table={table}
+            activeCategory={activeCategory}
+            categoryProducts={categoryProducts}
+            onCategoryChange={onCategoryChange}
+            onAddProduct={onAddProduct}
+            onChangeQuantity={onChangeQuantity}
+            onRemoveProduct={onRemoveProduct}
+            onSendKitchen={onSendKitchen}
+            onStartPayment={onStartPayment}
+          />
+        ) : null}
+
+        {step === "payment" ? <PaymentStep table={table} onBack={onBackToOrder} onPay={onPay} /> : null}
+
+        {step === "paid" ? (
+          <PaidStep table={table} onPrint={onPrint} onCloseOrder={onCloseOrder} />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function OrderStep({
+  table,
+  activeCategory,
+  categoryProducts,
+  onCategoryChange,
+  onAddProduct,
+  onChangeQuantity,
+  onRemoveProduct,
+  onSendKitchen,
+  onStartPayment,
+}: {
+  table: PosTable;
+  activeCategory: Category;
+  categoryProducts: Product[];
+  onCategoryChange: (category: Category) => void;
+  onAddProduct: (product: Product) => void;
+  onChangeQuantity: (productId: string, change: number) => void;
+  onRemoveProduct: (productId: string) => void;
+  onSendKitchen: () => void;
+  onStartPayment: () => void;
+}) {
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[7fr_3fr]">
+      <main className="min-h-0 overflow-y-auto bg-stone-50 p-5">
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {categories.map((category) => (
+            <button
+              type="button"
+              key={category}
+              onClick={() => onCategoryChange(category)}
+              className={[
+                "h-16 min-w-36 rounded-2xl px-5 text-lg font-semibold transition",
+                activeCategory === category
+                  ? "bg-stone-950 text-white shadow-sm"
+                  : "border border-stone-200 bg-white text-stone-900 hover:border-stone-300",
+              ].join(" ")}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {categoryProducts.length ? (
+            categoryProducts.map((product) => (
+              <button
+                type="button"
+                key={product.id}
+                onClick={() => onAddProduct(product)}
+                className="min-h-44 rounded-3xl border border-stone-200 bg-white p-5 text-left shadow-sm transition active:scale-[0.99] hover:border-stone-300 hover:shadow-md"
+              >
+                <span className="block text-2xl font-semibold text-stone-950">{product.name}</span>
+                <span className="mt-6 block text-4xl font-semibold text-stone-950">
+                  {money.format(product.price)}
+                </span>
+                <span className="mt-6 inline-flex h-12 items-center rounded-2xl bg-stone-950 px-5 text-base font-semibold text-white">
+                  Agregar
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-10 text-center text-xl font-semibold text-stone-500 sm:col-span-2 xl:col-span-3">
+              Sin promos por ahora
+            </div>
+          )}
+        </div>
+      </main>
+
+      <aside className="flex min-h-0 flex-col border-l border-stone-200 bg-white">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-base font-semibold text-stone-500">Cuenta actual</p>
+              <h3 className="mt-1 text-3xl font-semibold text-stone-950">{table.name}</h3>
+            </div>
+            <p className="text-4xl font-semibold text-stone-950">{money.format(total(table))}</p>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {table.items.length ? (
+              table.items.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-semibold text-stone-950">
+                        {item.quantity}x {item.name}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-stone-500">
+                        {item.sent ? "Enviado cocina" : "Nuevo"}
+                      </p>
+                    </div>
+                    <p className="text-xl font-semibold text-stone-950">
+                      {money.format(item.price * item.quantity)}
+                    </p>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <RoundIconButton label={`Restar ${item.name}`} onClick={() => onChangeQuantity(item.id, -1)}>
+                        <Minus size={18} />
+                      </RoundIconButton>
+                      <RoundIconButton label={`Sumar ${item.name}`} onClick={() => onChangeQuantity(item.id, 1)}>
+                        <Plus size={18} />
+                      </RoundIconButton>
+                    </div>
+                    <RoundIconButton label={`Quitar ${item.name}`} onClick={() => onRemoveProduct(item.id)}>
+                      <Trash2 size={18} />
+                    </RoundIconButton>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-3xl border border-dashed border-stone-300 bg-stone-50 p-8 text-center text-lg font-semibold text-stone-500">
+                Toca un producto para agregarlo
+              </div>
+            )}
+          </div>
+
+          <div className="mt-5 space-y-3 rounded-3xl bg-stone-50 p-4">
+            <TotalLine label="Subtotal" value={subtotal(table)} />
+            <TotalLine label="Descuento" value={discountAmount(table)} negative />
+            <TotalLine label="Cortesia" value={courtesyAmount(table)} negative />
+            <div className="flex items-center justify-between border-t border-stone-200 pt-4">
+              <span className="text-xl font-semibold text-stone-950">TOTAL</span>
+              <span className="text-5xl font-semibold text-stone-950">{money.format(total(table))}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-t border-stone-200 bg-white p-5 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onSendKitchen}
+            disabled={!table.openedAt || table.items.length === 0}
+            className="h-20 rounded-3xl bg-emerald-600 text-xl font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+          >
+            Enviar cocina
+          </button>
+          <button
+            type="button"
+            onClick={onStartPayment}
+            disabled={!table.openedAt || table.items.length === 0}
+            className="h-20 rounded-3xl bg-stone-950 text-xl font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+          >
+            Cobrar
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function PaymentStep({
+  table,
+  onBack,
+  onPay,
+}: {
+  table: PosTable;
+  onBack: () => void;
+  onPay: (method: PaymentMethod, amountReceived: number) => void;
+}) {
+  const [method, setMethod] = useState<PaymentMethod>("Efectivo");
+  const [amountReceived, setAmountReceived] = useState(total(table));
+  const methods: PaymentMethod[] = ["Efectivo", "Tarjeta", "Transferencia", "Mixto"];
+
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-1 bg-stone-50 p-5 lg:grid-cols-[7fr_3fr]">
+      <main className="flex min-h-0 items-center justify-center">
+        <div className="w-full max-w-3xl rounded-[2rem] bg-white p-8 shadow-sm">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex h-14 items-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 text-base font-semibold text-stone-950"
+          >
+            <ArrowLeft size={22} />
+            Volver a orden
+          </button>
+          <div className="mt-8 rounded-3xl bg-stone-50 p-8 text-center">
+            <p className="text-lg font-semibold text-stone-500">Total a pagar</p>
+            <p className="mt-3 text-7xl font-semibold text-stone-950">{money.format(total(table))}</p>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            {methods.map((item) => (
+              <button
+                type="button"
+                key={item}
+                onClick={() => setMethod(item)}
+                className={[
+                  "inline-flex h-24 items-center justify-center gap-3 rounded-3xl border text-xl font-semibold transition",
+                  method === item
+                    ? "border-stone-950 bg-stone-950 text-white"
+                    : "border-stone-200 bg-stone-50 text-stone-950 hover:bg-white",
+                ].join(" ")}
+              >
+                {item === "Efectivo" ? <Banknote size={28} /> : <CreditCard size={28} />}
+                {item}
+              </button>
+            ))}
+          </div>
+          {method === "Efectivo" ? (
+            <label className="mt-5 block text-base font-semibold text-stone-700">
+              Monto recibido
+              <input
+                type="number"
+                min={total(table)}
+                value={amountReceived}
+                onChange={(event) => setAmountReceived(Number(event.target.value))}
+                className="mt-2 h-16 w-full rounded-2xl border border-stone-200 px-5 text-xl text-stone-950"
+              />
+            </label>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => onPay(method, amountReceived)}
+            className="mt-6 h-20 w-full rounded-3xl bg-stone-950 text-2xl font-semibold text-white transition hover:bg-stone-800"
+          >
+            Registrar pago
+          </button>
+        </div>
+      </main>
+      <ReceiptPanel table={table} />
+    </div>
+  );
+}
+
+function PaidStep({
+  table,
+  onPrint,
+  onCloseOrder,
+}: {
+  table: PosTable;
+  onPrint: () => void;
+  onCloseOrder: () => void;
+}) {
+  return (
+    <div className="grid min-h-0 flex-1 place-items-center bg-stone-50 p-5">
+      <div className="w-full max-w-2xl rounded-[2rem] bg-white p-8 text-center shadow-sm">
+        <CheckCircle2 className="mx-auto text-emerald-700" size={64} />
+        <h3 className="mt-5 text-4xl font-semibold text-stone-950">Pago completado</h3>
+        <p className="mt-3 text-xl font-semibold text-stone-500">{table.name}</p>
+        <p className="mt-5 text-6xl font-semibold text-stone-950">{money.format(total(table))}</p>
+        <div className="mt-8 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onPrint}
+            className="inline-flex h-20 items-center justify-center gap-2 rounded-3xl border border-stone-200 bg-white text-xl font-semibold text-stone-950 transition hover:bg-stone-50"
+          >
+            <Printer size={24} />
+            Imprimir ticket
+          </button>
+          <button
+            type="button"
+            onClick={onCloseOrder}
+            className="h-20 rounded-3xl bg-stone-950 text-xl font-semibold text-white transition hover:bg-stone-800"
+          >
+            Cerrar orden
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReceiptPanel({ table }: { table: PosTable }) {
+  return (
+    <aside className="hidden min-h-0 flex-col overflow-y-auto rounded-[2rem] bg-white p-5 shadow-sm lg:flex">
+      <p className="text-base font-semibold text-stone-500">Cuenta actual</p>
+      <h3 className="mt-1 text-3xl font-semibold text-stone-950">{table.name}</h3>
+      <div className="mt-5 space-y-3">
+        {table.items.map((item) => (
+          <div key={item.id} className="flex justify-between gap-4 rounded-2xl bg-stone-50 p-4 text-base font-semibold text-stone-950">
+            <span>{item.quantity}x {item.name}</span>
+            <span>{money.format(item.price * item.quantity)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-auto space-y-3 pt-5">
+        <TotalLine label="Subtotal" value={subtotal(table)} />
+        <TotalLine label="Descuento" value={discountAmount(table)} negative />
+        <TotalLine label="Cortesia" value={courtesyAmount(table)} negative />
+        <div className="flex items-center justify-between border-t border-stone-200 pt-4">
+          <span className="text-xl font-semibold text-stone-950">TOTAL</span>
+          <span className="text-4xl font-semibold text-stone-950">{money.format(total(table))}</span>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function RoundIconButton({
+  children,
+  label,
+  onClick,
+}: {
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="grid size-12 place-items-center rounded-2xl border border-stone-200 bg-white text-stone-900 transition hover:bg-stone-50"
+      aria-label={label}
+      title={label}
+    >
+      {children}
+    </button>
+  );
+}
+
 function TotalLine({ label, value, negative = false }: { label: string; value: number; negative?: boolean }) {
   return (
-    <div className="flex items-center justify-between text-base font-semibold text-stone-700">
+    <div className="flex items-center justify-between text-lg font-semibold text-stone-700">
       <span>{label}</span>
-      <span>{negative && value > 0 ? "-" : ""}{money.format(value)}</span>
+      <span>
+        {negative && value > 0 ? "-" : ""}
+        {money.format(value)}
+      </span>
     </div>
   );
 }
@@ -856,7 +986,7 @@ function ModalShell({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/45 p-4">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/55 p-4">
       <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-2xl font-semibold text-stone-950">{title}</h2>
@@ -888,11 +1018,11 @@ function OpenTableModal({
   const [customer, setCustomer] = useState(table.customer);
 
   return (
-    <ModalShell title={`Abrir ${table.name}`} onClose={onClose}>
+    <ModalShell title={table.name} onClose={onClose}>
       <div className="space-y-5">
         <div>
-          <p className="text-sm font-semibold text-stone-600">Personas</p>
-          <div className="mt-3 grid grid-cols-6 gap-2">
+          <p className="text-xl font-semibold text-stone-950">Cuantas personas?</p>
+          <div className="mt-4 grid grid-cols-6 gap-2">
             {[1, 2, 3, 4, 5].map((value) => (
               <button
                 type="button"
@@ -915,7 +1045,7 @@ function OpenTableModal({
             </button>
           </div>
         </div>
-        <label className="block text-sm font-semibold text-stone-700">
+        <label className="block text-base font-semibold text-stone-700">
           Cliente opcional
           <input
             value={customer}
@@ -952,139 +1082,6 @@ function QuickSaleModal({ onClose, onSelect }: { onClose: () => void; onSelect: 
             {option}
           </button>
         ))}
-      </div>
-    </ModalShell>
-  );
-}
-
-function SimpleFormModal({
-  title,
-  children,
-  onClose,
-  onSubmit,
-}: {
-  title: string;
-  children: ReactNode;
-  onClose: () => void;
-  onSubmit: (formData: FormData) => void;
-}) {
-  return (
-    <ModalShell title={title} onClose={onClose}>
-      <form
-        className="space-y-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSubmit(new FormData(event.currentTarget));
-        }}
-      >
-        {children}
-        <button
-          type="submit"
-          className="h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800"
-        >
-          Guardar
-        </button>
-      </form>
-    </ModalShell>
-  );
-}
-
-function PaymentModal({
-  table,
-  onClose,
-  onPay,
-}: {
-  table: PosTable;
-  onClose: () => void;
-  onPay: (method: PaymentMethod, amountReceived: number) => void;
-}) {
-  const [method, setMethod] = useState<PaymentMethod>("Efectivo");
-  const [amountReceived, setAmountReceived] = useState(total(table));
-  const methods: PaymentMethod[] = ["Efectivo", "Tarjeta", "Transferencia", "Mixto"];
-
-  return (
-    <ModalShell title="Cobrar" onClose={onClose}>
-      <div className="space-y-5">
-        <div className="rounded-3xl bg-stone-50 p-5 text-center">
-          <p className="text-sm font-semibold text-stone-500">Total a pagar</p>
-          <p className="mt-2 text-5xl font-semibold text-stone-950">{money.format(total(table))}</p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {methods.map((item) => (
-            <button
-              type="button"
-              key={item}
-              onClick={() => setMethod(item)}
-              className={[
-                "inline-flex h-20 items-center justify-center gap-3 rounded-3xl border text-lg font-semibold transition",
-                method === item
-                  ? "border-stone-950 bg-stone-950 text-white"
-                  : "border-stone-200 bg-stone-50 text-stone-950 hover:bg-white",
-              ].join(" ")}
-            >
-              {item === "Efectivo" ? <Banknote size={24} /> : <CreditCard size={24} />}
-              {item}
-            </button>
-          ))}
-        </div>
-        {method === "Efectivo" ? (
-          <label className="block text-sm font-semibold text-stone-700">
-            Monto recibido
-            <input
-              type="number"
-              min={total(table)}
-              value={amountReceived}
-              onChange={(event) => setAmountReceived(Number(event.target.value))}
-              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
-            />
-          </label>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => onPay(method, amountReceived)}
-          className="h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800"
-        >
-          Registrar pago
-        </button>
-      </div>
-    </ModalShell>
-  );
-}
-
-function PaidModal({
-  table,
-  onPrint,
-  onCloseOrder,
-}: {
-  table: PosTable;
-  onPrint: () => void;
-  onCloseOrder: () => void;
-}) {
-  return (
-    <ModalShell title="Pago completado" onClose={onCloseOrder}>
-      <div className="space-y-5">
-        <div className="rounded-3xl bg-emerald-50 p-6 text-center">
-          <CheckCircle2 className="mx-auto text-emerald-700" size={42} />
-          <p className="mt-3 text-sm font-semibold text-emerald-700">{table.name}</p>
-          <p className="mt-2 text-4xl font-semibold text-stone-950">{money.format(total(table))}</p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={onPrint}
-            className="inline-flex h-16 items-center justify-center gap-2 rounded-3xl border border-stone-200 bg-white text-lg font-semibold text-stone-950 transition hover:bg-stone-50"
-          >
-            <Printer size={22} />
-            Imprimir ticket
-          </button>
-          <button
-            type="button"
-            onClick={onCloseOrder}
-            className="h-16 rounded-3xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800"
-          >
-            Cerrar orden
-          </button>
-        </div>
       </div>
     </ModalShell>
   );
