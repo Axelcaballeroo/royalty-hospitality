@@ -11,7 +11,7 @@ import {
 export const appNavigation = [
   { name: "Inicio", href: "/app/operacion", icon: Home, moduleKey: "dashboard" },
   { name: "Reservas", href: "/app/reservas", icon: CalendarDays, moduleKey: "reservations" },
-  { name: "Punto de Venta", href: "/app/operacion?tab=sala", icon: Utensils, moduleKey: "dashboard" },
+  { name: "Punto de Venta", href: "/app/pos", icon: Utensils, moduleKey: "dashboard" },
   { name: "Inventario", href: "/app/inventario", icon: Package, moduleKey: "inventory" },
   { name: "Clientes", href: "/app/clientes", icon: Users, moduleKey: "crm" },
   { name: "Cierre del Día", href: "/app/operacion?tab=cierre", icon: ClipboardList, moduleKey: "dashboard" },
