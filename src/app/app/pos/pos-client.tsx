@@ -1,38 +1,43 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Banknote,
   CheckCircle2,
+  Clock,
   CreditCard,
   Gift,
   Minus,
   Plus,
+  Printer,
   ReceiptText,
   Sparkles,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
 
 type TableStatus = "free" | "occupied" | "checkout";
-type ModalType = "open" | "discount" | "courtesy" | "payment" | "cashier" | null;
-type DiscountType = "percent" | "fixed";
+type ModalType = "open" | "quick" | "discount" | "courtesy" | "payment" | "paid" | "cashier" | null;
 type PaymentMethod = "Efectivo" | "Tarjeta" | "Transferencia" | "Mixto";
+type Category = "Sushi" | "Entradas" | "Bebidas" | "Postres" | "Promos";
 
 type Product = {
   id: string;
   name: string;
   price: number;
-  category: string;
+  category: Category;
 };
 
 type OrderItem = Product & {
   quantity: number;
+  sent: boolean;
 };
 
 type Discount = {
-  type: DiscountType;
+  type: "percent" | "fixed";
   value: number;
   reason: string;
 };
@@ -49,11 +54,12 @@ type PosTable = {
   name: string;
   customer: string;
   people: number;
-  note: string;
-  openedAt: number | null;
+  openedAt: string | null;
   items: OrderItem[];
   discount: Discount | null;
   courtesy: Courtesy | null;
+  readyToPay: boolean;
+  quickType?: string;
 };
 
 type Sale = {
@@ -61,17 +67,25 @@ type Sale = {
   tableName: string;
   total: number;
   paymentMethod: PaymentMethod;
-  closedAt: number;
+  closedAt: string;
 };
+
+type PaidOrder = {
+  tableId: string;
+  method: PaymentMethod;
+  amountReceived: number;
+};
+
+const categories: Category[] = ["Sushi", "Entradas", "Bebidas", "Postres", "Promos"];
 
 const products: Product[] = [
   { id: "california", name: "Rollo California", price: 180, category: "Sushi" },
   { id: "salmon", name: "Rollo Salmon", price: 220, category: "Sushi" },
-  { id: "ramen", name: "Ramen", price: 190, category: "Cocina" },
-  { id: "edamame", name: "Edamame", price: 120, category: "Entrada" },
-  { id: "agua", name: "Agua mineral", price: 60, category: "Bebida" },
-  { id: "sake", name: "Sake", price: 250, category: "Bebida" },
-  { id: "mochi", name: "Postre Mochi", price: 140, category: "Postre" },
+  { id: "ramen", name: "Ramen", price: 190, category: "Entradas" },
+  { id: "edamame", name: "Edamame", price: 120, category: "Entradas" },
+  { id: "agua", name: "Agua mineral", price: 60, category: "Bebidas" },
+  { id: "sake", name: "Sake", price: 250, category: "Bebidas" },
+  { id: "mochi", name: "Postre Mochi", price: 140, category: "Postres" },
 ];
 
 const initialTables: PosTable[] = [
@@ -80,111 +94,111 @@ const initialTables: PosTable[] = [
     name: "Mesa 1",
     customer: "",
     people: 0,
-    note: "",
     openedAt: null,
     items: [],
     discount: null,
     courtesy: null,
+    readyToPay: false,
   },
   {
     id: "mesa-2",
     name: "Mesa 2",
     customer: "Ana Lopez",
     people: 2,
-    note: "Sin picante",
-    openedAt: Date.now() - 24 * 60 * 1000,
+    openedAt: new Date(Date.now() - 38 * 60 * 1000).toISOString(),
     items: [
-      { ...products[0], quantity: 1 },
-      { ...products[4], quantity: 2 },
+      { ...products[0], quantity: 2, sent: true },
+      { ...products[4], quantity: 2, sent: true },
     ],
     discount: null,
     courtesy: null,
+    readyToPay: false,
   },
   {
     id: "mesa-3",
     name: "Mesa 3",
     customer: "",
     people: 0,
-    note: "",
     openedAt: null,
     items: [],
     discount: null,
     courtesy: null,
+    readyToPay: false,
   },
   {
     id: "mesa-4",
     name: "Mesa 4",
-    customer: "Roberto Diaz",
+    customer: "Roberto",
     people: 4,
-    note: "Cumpleanos",
-    openedAt: Date.now() - 43 * 60 * 1000,
+    openedAt: new Date(Date.now() - 64 * 60 * 1000).toISOString(),
     items: [
-      { ...products[1], quantity: 2 },
-      { ...products[2], quantity: 1 },
-      { ...products[5], quantity: 1 },
+      { ...products[1], quantity: 3, sent: true },
+      { ...products[5], quantity: 1, sent: false },
     ],
-    discount: { type: "percent", value: 10, reason: "descuento gerente" },
+    discount: { type: "percent", value: 10, reason: "Descuento gerente" },
     courtesy: null,
+    readyToPay: true,
   },
   {
     id: "barra",
     name: "Barra",
-    customer: "",
+    customer: "Venta rapida",
     people: 1,
-    note: "Venta rapida",
-    openedAt: Date.now() - 9 * 60 * 1000,
-    items: [{ ...products[5], quantity: 1 }],
+    openedAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    items: [{ ...products[2], quantity: 1, sent: false }],
     discount: null,
     courtesy: null,
+    readyToPay: false,
+    quickType: "Comer aqui",
   },
   {
     id: "terraza",
     name: "Terraza",
     customer: "",
     people: 0,
-    note: "",
     openedAt: null,
     items: [],
     discount: null,
     courtesy: null,
+    readyToPay: false,
   },
 ];
 
-const currency = new Intl.NumberFormat("es-MX", {
-  currency: "MXN",
+const money = new Intl.NumberFormat("es-MX", {
   style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 0,
 });
 
-function getSubtotal(table: PosTable) {
+function subtotal(table: PosTable) {
   return table.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 }
 
-function getDiscountAmount(table: PosTable) {
-  const subtotal = getSubtotal(table);
+function discountAmount(table: PosTable) {
   if (!table.discount) return 0;
-  if (table.discount.type === "percent") {
-    return Math.min(subtotal, subtotal * (table.discount.value / 100));
-  }
-  return Math.min(subtotal, table.discount.value);
+  const base = subtotal(table);
+  return table.discount.type === "percent"
+    ? Math.round((base * table.discount.value) / 100)
+    : table.discount.value;
 }
 
-function getCourtesyAmount(table: PosTable) {
-  const subtotalAfterDiscount = Math.max(0, getSubtotal(table) - getDiscountAmount(table));
-  return Math.min(subtotalAfterDiscount, table.courtesy?.amount ?? 0);
+function courtesyAmount(table: PosTable) {
+  return table.courtesy?.amount ?? 0;
 }
 
-function getTotal(table: PosTable) {
-  return Math.max(0, getSubtotal(table) - getDiscountAmount(table) - getCourtesyAmount(table));
+function total(table: PosTable) {
+  return Math.max(0, subtotal(table) - discountAmount(table) - courtesyAmount(table));
 }
 
-function getStatus(table: PosTable): TableStatus {
+function tableStatus(table: PosTable): TableStatus {
   if (!table.openedAt) return "free";
-  return table.items.length ? "checkout" : "occupied";
+  if (table.readyToPay) return "checkout";
+  return "occupied";
 }
 
-function formatElapsed(openedAt: number | null) {
-  if (!openedAt) return "-";
-  const minutes = Math.max(1, Math.round((Date.now() - openedAt) / 60000));
+function elapsed(openedAt: string | null) {
+  if (!openedAt) return "--";
+  const minutes = Math.max(1, Math.floor((Date.now() - new Date(openedAt).getTime()) / 60000));
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
@@ -192,559 +206,908 @@ function formatElapsed(openedAt: number | null) {
 }
 
 function statusLabel(status: TableStatus) {
-  return status === "free" ? "Libre" : status === "occupied" ? "Ocupada" : "Por cobrar";
+  if (status === "free") return "Mesa libre";
+  if (status === "checkout") return "Por cobrar";
+  return "Mesa ocupada";
 }
 
-function statusClass(status: TableStatus) {
-  if (status === "free") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "occupied") return "border-amber-200 bg-amber-50 text-amber-700";
+function statusClasses(status: TableStatus) {
+  if (status === "free") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (status === "checkout") return "border-amber-200 bg-amber-50 text-amber-800";
   return "border-stone-900 bg-stone-950 text-white";
 }
 
-function ModalShell({
-  children,
-  onClose,
-  title,
-}: {
-  children: React.ReactNode;
-  onClose: () => void;
-  title: string;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/55 px-4 py-6 backdrop-blur-sm">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_30px_100px_rgba(28,25,23,0.28)]"
-      >
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
-              Punto de Venta
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-stone-950">{title}</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex size-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
-            aria-label="Cerrar"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        {children}
-      </section>
-    </div>
-  );
-}
-
 export function PosClient() {
-  const [tables, setTables] = useState(initialTables);
-  const [selectedTableId, setSelectedTableId] = useState("mesa-2");
+  const [tables, setTables] = useState<PosTable[]>(initialTables);
+  const [selectedTableId, setSelectedTableId] = useState(initialTables[1].id);
+  const [activeCategory, setActiveCategory] = useState<Category>("Sushi");
   const [modal, setModal] = useState<ModalType>(null);
-  const [successMessage, setSuccessMessage] = useState("");
+  const [toast, setToast] = useState("");
   const [sales, setSales] = useState<Sale[]>([]);
+  const [paidOrder, setPaidOrder] = useState<PaidOrder | null>(null);
 
   const selectedTable = tables.find((table) => table.id === selectedTableId) ?? tables[0];
-  const openTables = tables.filter((table) => table.openedAt);
-  const pendingTotal = openTables.reduce((sum, table) => sum + getTotal(table), 0);
-  const dailySales = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const categoryProducts = products.filter((product) => product.category === activeCategory);
 
-  const tableOptions = useMemo(
-    () => tables.map((table) => ({ id: table.id, name: table.name, status: getStatus(table) })),
-    [tables],
-  );
+  const metrics = useMemo(() => {
+    const openTables = tables.filter((table) => table.openedAt);
+    return {
+      pending: openTables.reduce((sum, table) => sum + total(table), 0),
+      open: openTables.length,
+      finished: sales.length,
+    };
+  }, [sales.length, tables]);
 
-  function updateTable(tableId: string, updater: (table: PosTable) => PosTable) {
+  function showToast(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2800);
+  }
+
+  function beginOpenTable(tableId?: string) {
+    const firstFree = tables.find((table) => !table.openedAt);
+    const targetId = tableId ?? firstFree?.id ?? selectedTableId;
+    setSelectedTableId(targetId);
+    setModal("open");
+  }
+
+  function openTable(tableId: string, people: number, customer: string) {
     setTables((current) =>
-      current.map((table) => (table.id === tableId ? updater(table) : table)),
+      current.map((table) =>
+        table.id === tableId
+          ? {
+              ...table,
+              customer,
+              people,
+              openedAt: new Date().toISOString(),
+              items: [],
+              discount: null,
+              courtesy: null,
+              readyToPay: false,
+              quickType: undefined,
+            }
+          : table,
+      ),
     );
+    setSelectedTableId(tableId);
+    setModal(null);
+    showToast("Mesa abierta");
   }
 
   function addProduct(product: Product) {
-    updateTable(selectedTable.id, (table) => {
-      const existing = table.items.find((item) => item.id === product.id);
-      return {
-        ...table,
-        openedAt: table.openedAt ?? Date.now(),
-        people: table.people || 1,
-        items: existing
+    if (!selectedTable.openedAt) {
+      beginOpenTable(selectedTable.id);
+      return;
+    }
+
+    setTables((current) =>
+      current.map((table) => {
+        if (table.id !== selectedTable.id) return table;
+        const existing = table.items.find((item) => item.id === product.id);
+        const items = existing
           ? table.items.map((item) =>
-              item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item,
+              item.id === product.id ? { ...item, quantity: item.quantity + 1, sent: false } : item,
             )
-          : [...table.items, { ...product, quantity: 1 }],
-      };
-    });
+          : [...table.items, { ...product, quantity: 1, sent: false }];
+        return { ...table, items, readyToPay: false };
+      }),
+    );
   }
 
-  function changeQuantity(productId: string, delta: number) {
-    updateTable(selectedTable.id, (table) => ({
-      ...table,
-      items: table.items
-        .map((item) =>
-          item.id === productId
-            ? { ...item, quantity: Math.max(0, item.quantity + delta) }
-            : item,
-        )
-        .filter((item) => item.quantity > 0),
-    }));
+  function changeQuantity(productId: string, change: number) {
+    setTables((current) =>
+      current.map((table) => {
+        if (table.id !== selectedTable.id) return table;
+        const items = table.items
+          .map((item) =>
+            item.id === productId ? { ...item, quantity: item.quantity + change, sent: false } : item,
+          )
+          .filter((item) => item.quantity > 0);
+        return { ...table, items, readyToPay: false };
+      }),
+    );
   }
 
   function removeProduct(productId: string) {
-    updateTable(selectedTable.id, (table) => ({
-      ...table,
-      items: table.items.filter((item) => item.id !== productId),
-    }));
+    setTables((current) =>
+      current.map((table) =>
+        table.id === selectedTable.id
+          ? { ...table, items: table.items.filter((item) => item.id !== productId), readyToPay: false }
+          : table,
+      ),
+    );
   }
 
-  function openTable(formData: FormData) {
-    const tableId = String(formData.get("table_id") ?? "");
-    const people = Number(formData.get("people") ?? 1);
-    const customer = String(formData.get("customer") ?? "").trim();
-    const note = String(formData.get("note") ?? "").trim();
+  function sendToKitchen() {
+    if (!selectedTable.openedAt || selectedTable.items.length === 0) return;
+    setTables((current) =>
+      current.map((table) =>
+        table.id === selectedTable.id
+          ? { ...table, items: table.items.map((item) => ({ ...item, sent: true })), readyToPay: false }
+          : table,
+      ),
+    );
+    showToast("Orden enviada a cocina");
+  }
 
-    updateTable(tableId, (table) => ({
-      ...table,
-      customer,
-      people: Number.isFinite(people) && people > 0 ? people : 1,
-      note,
-      openedAt: table.openedAt ?? Date.now(),
-    }));
-    setSelectedTableId(tableId);
-    setModal(null);
-    setSuccessMessage("Mesa abierta correctamente.");
+  function markReadyToPay() {
+    if (!selectedTable.openedAt || selectedTable.items.length === 0) return;
+    setTables((current) =>
+      current.map((table) => (table.id === selectedTable.id ? { ...table, readyToPay: true } : table)),
+    );
+    setModal("payment");
   }
 
   function applyDiscount(formData: FormData) {
-    const type = String(formData.get("type") ?? "percent") as DiscountType;
+    const type = formData.get("type") === "fixed" ? "fixed" : "percent";
     const value = Number(formData.get("value") ?? 0);
     const reason = String(formData.get("reason") ?? "").trim();
-    if (!reason || !Number.isFinite(value) || value <= 0) return;
-
-    updateTable(selectedTable.id, (table) => ({
-      ...table,
-      discount: { type, value, reason },
-    }));
+    if (!value || !reason) return;
+    setTables((current) =>
+      current.map((table) =>
+        table.id === selectedTable.id ? { ...table, discount: { type, value, reason } } : table,
+      ),
+    );
     setModal(null);
   }
 
-  function registerCourtesy(formData: FormData) {
-    const label = String(formData.get("label") ?? "").trim();
+  function applyCourtesy(formData: FormData) {
+    const label = String(formData.get("label") ?? "").trim() || "Cortesia";
     const amount = Number(formData.get("amount") ?? 0);
     const reason = String(formData.get("reason") ?? "").trim();
-    const authorizedBy = String(formData.get("authorized_by") ?? "").trim();
-    if (!label || !reason || !authorizedBy || !Number.isFinite(amount) || amount <= 0) return;
-
-    updateTable(selectedTable.id, (table) => ({
-      ...table,
-      courtesy: { label, amount, reason, authorizedBy },
-    }));
+    const authorizedBy = String(formData.get("authorizedBy") ?? "").trim();
+    if (!amount || !reason || !authorizedBy) return;
+    setTables((current) =>
+      current.map((table) =>
+        table.id === selectedTable.id
+          ? { ...table, courtesy: { label, amount, reason, authorizedBy } }
+          : table,
+      ),
+    );
     setModal(null);
   }
 
-  function chargeTable(formData: FormData) {
-    const paymentMethod = String(formData.get("payment_method") ?? "Efectivo") as PaymentMethod;
-    const total = getTotal(selectedTable);
+  function registerPayment(method: PaymentMethod, amountReceived: number) {
+    setPaidOrder({ tableId: selectedTable.id, method, amountReceived });
+    setModal("paid");
+    showToast("Pago completado");
+  }
+
+  function closeOrder() {
+    if (!paidOrder) return;
+    const table = tables.find((item) => item.id === paidOrder.tableId);
+    if (!table) return;
 
     setSales((current) => [
-      ...current,
       {
-        id: `${selectedTable.id}-${Date.now()}`,
-        tableName: selectedTable.name,
-        total,
-        paymentMethod,
-        closedAt: Date.now(),
+        id: `sale-${Date.now()}`,
+        tableName: table.name,
+        total: total(table),
+        paymentMethod: paidOrder.method,
+        closedAt: new Date().toISOString(),
       },
+      ...current,
     ]);
-    updateTable(selectedTable.id, (table) => ({
-      ...table,
-      customer: "",
-      people: 0,
-      note: "",
-      openedAt: null,
-      items: [],
-      discount: null,
-      courtesy: null,
-    }));
+    setTables((current) =>
+      current.map((item) =>
+        item.id === paidOrder.tableId
+          ? {
+              ...item,
+              customer: "",
+              people: 0,
+              openedAt: null,
+              items: [],
+              discount: null,
+              courtesy: null,
+              readyToPay: false,
+              quickType: undefined,
+            }
+          : item,
+      ),
+    );
     setModal(null);
-    setSuccessMessage(`Venta finalizada en ${selectedTable.name}. Mesa libre.`);
+    setPaidOrder(null);
+    setSelectedTableId(paidOrder.tableId);
+    showToast("Mesa liberada");
   }
 
-  function quickSale() {
-    updateTable("barra", (table) => ({
-      ...table,
-      customer: table.customer || "Venta rapida",
-      people: table.people || 1,
-      note: table.note || "Venta rapida",
-      openedAt: table.openedAt ?? Date.now(),
-    }));
-    setSelectedTableId("barra");
-    setSuccessMessage("Venta rapida lista en Barra.");
+  function openQuickSale(type: string) {
+    const barId = "barra";
+    setTables((current) =>
+      current.map((table) =>
+        table.id === barId
+          ? {
+              ...table,
+              customer: type,
+              people: 1,
+              openedAt: table.openedAt ?? new Date().toISOString(),
+              readyToPay: false,
+              quickType: type,
+            }
+          : table,
+      ),
+    );
+    setSelectedTableId(barId);
+    setModal(null);
+    showToast("Venta rapida abierta");
   }
 
   return (
     <div className="space-y-6">
+      {toast ? (
+        <div className="fixed right-5 top-5 z-50 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800 shadow-xl">
+          <CheckCircle2 size={20} />
+          {toast}
+        </div>
+      ) : null}
+
       <SectionHeader
-        eyebrow="Restaurante"
+        eyebrow="POS"
         title="Punto de Venta"
-        description="Mesas, productos y cobro en una pantalla simple para operar desde tablet."
+        description="Mesas, orden y cobro en un flujo claro para operar desde tablet."
         actions={
           <>
             <button
               type="button"
-              onClick={() => setModal("open")}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800"
+              onClick={() => beginOpenTable()}
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-stone-800"
             >
-              <Plus size={18} />
+              <Plus size={22} />
               Abrir mesa
             </button>
             <button
               type="button"
-              onClick={quickSale}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800 transition hover:border-stone-300"
+              onClick={() => setModal("quick")}
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-6 text-base font-semibold text-stone-900 shadow-sm transition hover:bg-stone-50"
             >
-              <Sparkles size={18} />
+              <Sparkles size={22} />
               Venta rapida
             </button>
             <button
               type="button"
               onClick={() => setModal("cashier")}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-5 text-sm font-semibold text-stone-800 transition hover:border-stone-300"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-6 text-base font-semibold text-stone-900 shadow-sm transition hover:bg-stone-50"
             >
-              <ReceiptText size={18} />
+              <ReceiptText size={22} />
               Cierre de caja
             </button>
           </>
         }
       />
 
-      {successMessage ? (
-        <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-          <CheckCircle2 size={18} />
-          {successMessage}
-        </div>
-      ) : null}
-
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-stone-900 bg-stone-950 p-5 text-white">
-          <p className="text-sm text-stone-400">Pendiente por cobrar</p>
-          <p className="mt-3 text-4xl font-semibold">{currency.format(pendingTotal)}</p>
-        </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-5">
-          <p className="text-sm text-stone-500">Mesas abiertas</p>
-          <p className="mt-3 text-4xl font-semibold text-stone-950">{openTables.length}</p>
-        </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-5">
-          <p className="text-sm text-stone-500">Ventas finalizadas</p>
-          <p className="mt-3 text-4xl font-semibold text-stone-950">{currency.format(dailySales)}</p>
-        </div>
+      <section className="grid gap-3 md:grid-cols-3">
+        <MiniMetric label="Pendiente por cobrar" value={money.format(metrics.pending)} />
+        <MiniMetric label="Mesas abiertas" value={String(metrics.open)} />
+        <MiniMetric label="Ventas finalizadas" value={String(metrics.finished)} />
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[1.25fr_0.95fr]">
-        <section className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-            {tables.map((table) => {
-              const status = getStatus(table);
-              const active = selectedTable.id === table.id;
-              return (
-                <button
-                  key={table.id}
-                  type="button"
-                  onClick={() => setSelectedTableId(table.id)}
-                  className={[
-                    "min-h-52 rounded-2xl border bg-white p-5 text-left shadow-[0_12px_40px_rgba(28,25,23,0.04)] transition hover:-translate-y-0.5 hover:border-stone-400",
-                    active ? "border-stone-950 ring-2 ring-stone-950/10" : "border-stone-200",
-                  ].join(" ")}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-2xl font-semibold text-stone-950">{table.name}</p>
-                      <p className="mt-1 text-sm text-stone-500">
-                        {table.customer || "Sin cliente"}
-                      </p>
-                    </div>
-                    <span className={["rounded-full border px-3 py-1 text-xs font-semibold", statusClass(status)].join(" ")}>
-                      {statusLabel(status)}
-                    </span>
-                  </div>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {tables.map((table) => (
+          <TableCard
+            key={table.id}
+            table={table}
+            selected={table.id === selectedTable.id}
+            onClick={() => {
+              setSelectedTableId(table.id);
+              if (!table.openedAt) beginOpenTable(table.id);
+            }}
+          />
+        ))}
+      </section>
 
-                  <div className="mt-8 grid grid-cols-3 gap-3">
-                    <div>
-                      <p className="text-xs text-stone-500">Personas</p>
-                      <p className="mt-1 text-xl font-semibold text-stone-950">{table.people || "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-stone-500">Total</p>
-                      <p className="mt-1 text-xl font-semibold text-stone-950">{currency.format(getTotal(table))}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-stone-500">Tiempo</p>
-                      <p className="mt-1 text-xl font-semibold text-stone-950">{formatElapsed(table.openedAt)}</p>
-                    </div>
-                  </div>
-
-                  {table.note ? (
-                    <p className="mt-5 rounded-xl bg-stone-50 px-3 py-2 text-sm text-stone-600">
-                      {table.note}
-                    </p>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <aside className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_12px_40px_rgba(28,25,23,0.04)]">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <section className="grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
+        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-stone-100 pb-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold text-stone-500">Detalle de mesa</p>
-              <h2 className="mt-2 text-3xl font-semibold text-stone-950">{selectedTable.name}</h2>
-              <p className="mt-1 text-sm text-stone-500">
-                {selectedTable.customer || "Cliente no asignado"} / {selectedTable.people || 0} personas
-              </p>
+              <p className="text-sm font-semibold text-stone-500">Orden abierta</p>
+              <h2 className="mt-1 text-3xl font-semibold text-stone-950">{selectedTable.name}</h2>
             </div>
-            <span className={["rounded-full border px-3 py-1 text-xs font-semibold", statusClass(getStatus(selectedTable))].join(" ")}>
-              {statusLabel(getStatus(selectedTable))}
+            <div className="flex flex-wrap gap-3 text-sm font-semibold text-stone-700">
+              <span className="inline-flex h-11 items-center gap-2 rounded-2xl bg-stone-100 px-4">
+                <Users size={18} />
+                {selectedTable.people || 0} personas
+              </span>
+              <span className="inline-flex h-11 items-center rounded-2xl bg-stone-100 px-4">
+                {selectedTable.customer || "Cliente opcional"}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-5 flex gap-3 overflow-x-auto pb-1">
+            {categories.map((category) => (
+              <button
+                type="button"
+                key={category}
+                onClick={() => setActiveCategory(category)}
+                className={[
+                  "h-14 min-w-32 rounded-2xl px-5 text-base font-semibold transition",
+                  activeCategory === category
+                    ? "bg-stone-950 text-white shadow-sm"
+                    : "border border-stone-200 bg-stone-50 text-stone-800 hover:bg-white",
+                ].join(" ")}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {categoryProducts.length ? (
+              categoryProducts.map((product) => (
+                <button
+                  type="button"
+                  key={product.id}
+                  onClick={() => addProduct(product)}
+                  className="min-h-36 rounded-3xl border border-stone-200 bg-stone-50 p-5 text-left transition hover:-translate-y-0.5 hover:border-stone-300 hover:bg-white hover:shadow-md"
+                >
+                  <span className="block text-xl font-semibold text-stone-950">{product.name}</span>
+                  <span className="mt-5 block text-3xl font-semibold text-stone-950">
+                    {money.format(product.price)}
+                  </span>
+                  <span className="mt-5 inline-flex h-10 items-center gap-2 rounded-2xl bg-stone-950 px-4 text-sm font-semibold text-white">
+                    <Plus size={18} />
+                    Agregar
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="rounded-3xl border border-dashed border-stone-300 bg-stone-50 p-8 text-center text-base font-semibold text-stone-500 sm:col-span-2 lg:col-span-3">
+                Sin promos por ahora
+              </div>
+            )}
+          </div>
+        </div>
+
+        <aside className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm xl:sticky xl:top-5 xl:self-start">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-stone-500">Cuenta</p>
+              <h2 className="mt-1 text-3xl font-semibold text-stone-950">{selectedTable.name}</h2>
+            </div>
+            <span className={["rounded-full border px-3 py-1 text-sm font-semibold", statusClasses(tableStatus(selectedTable))].join(" ")}>
+              {statusLabel(tableStatus(selectedTable))}
             </span>
           </div>
 
-          <div className="mt-5 grid gap-3">
-            <p className="text-sm font-semibold text-stone-950">Productos agregados</p>
+          <div className="mt-5 space-y-3">
             {selectedTable.items.length ? (
               selectedTable.items.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-stone-950">{item.name}</p>
-                    <p className="text-xs text-stone-500">{currency.format(item.price)}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => changeQuantity(item.id, -1)}
-                      className="inline-flex size-9 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700"
-                      aria-label={`Quitar ${item.name}`}
-                    >
-                      <Minus size={15} />
-                    </button>
-                    <span className="w-8 text-center text-lg font-semibold text-stone-950">{item.quantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => changeQuantity(item.id, 1)}
-                      className="inline-flex size-9 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700"
-                      aria-label={`Agregar ${item.name}`}
-                    >
-                      <Plus size={15} />
-                    </button>
+                <div key={item.id} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold text-stone-950">{item.name}</p>
+                      <p className="mt-1 text-sm font-medium text-stone-500">
+                        {item.sent ? "Enviado cocina" : "Nuevo"} · {money.format(item.price)}
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => removeProduct(item.id)}
-                      className="inline-flex size-9 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-700"
-                      aria-label={`Eliminar ${item.name}`}
+                      className="grid size-10 place-items-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:text-red-600"
+                      aria-label={`Quitar ${item.name}`}
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={18} />
                     </button>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => changeQuantity(item.id, -1)}
+                        className="grid size-12 place-items-center rounded-2xl border border-stone-200 bg-white text-stone-900"
+                        aria-label={`Restar ${item.name}`}
+                      >
+                        <Minus size={18} />
+                      </button>
+                      <span className="grid size-12 place-items-center rounded-2xl bg-white text-xl font-semibold text-stone-950">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => changeQuantity(item.id, 1)}
+                        className="grid size-12 place-items-center rounded-2xl border border-stone-200 bg-white text-stone-900"
+                        aria-label={`Sumar ${item.name}`}
+                      >
+                        <Plus size={18} />
+                      </button>
+                    </div>
+                    <p className="text-xl font-semibold text-stone-950">
+                      {money.format(item.price * item.quantity)}
+                    </p>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-6 text-center text-sm text-stone-500">
-                Agrega productos para iniciar la cuenta.
+              <div className="rounded-3xl border border-dashed border-stone-300 bg-stone-50 p-7 text-center text-base font-semibold text-stone-500">
+                Agrega productos para empezar
               </div>
             )}
           </div>
 
-          <div className="mt-6 grid gap-3">
-            <p className="text-sm font-semibold text-stone-950">Agregar producto</p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {products.map((product) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => addProduct(product)}
-                  className="rounded-2xl border border-stone-200 bg-white p-4 text-left transition hover:border-stone-400 hover:bg-stone-50"
-                >
-                  <p className="text-sm font-semibold text-stone-950">{product.name}</p>
-                  <p className="mt-1 text-lg font-semibold text-stone-950">{currency.format(product.price)}</p>
-                  <p className="mt-1 text-xs text-stone-500">{product.category}</p>
-                </button>
-              ))}
+          <div className="mt-5 space-y-3 rounded-3xl bg-stone-50 p-4">
+            <TotalLine label="Subtotal" value={subtotal(selectedTable)} />
+            <TotalLine label="Descuento" value={discountAmount(selectedTable)} negative />
+            <TotalLine label="Cortesia" value={courtesyAmount(selectedTable)} negative />
+            <div className="flex items-center justify-between border-t border-stone-200 pt-4">
+              <span className="text-lg font-semibold text-stone-950">Total</span>
+              <span className="text-4xl font-semibold text-stone-950">{money.format(total(selectedTable))}</span>
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-stone-200 bg-stone-50 p-4">
-            <div className="grid gap-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-stone-500">Subtotal</span>
-                <span className="font-semibold text-stone-950">{currency.format(getSubtotal(selectedTable))}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-stone-500">Descuento</span>
-                <span className="font-semibold text-stone-950">-{currency.format(getDiscountAmount(selectedTable))}</span>
-              </div>
-              {selectedTable.discount ? (
-                <p className="text-xs text-stone-500">{selectedTable.discount.reason}</p>
-              ) : null}
-              <div className="flex justify-between">
-                <span className="text-stone-500">Cortesia</span>
-                <span className="font-semibold text-stone-950">-{currency.format(getCourtesyAmount(selectedTable))}</span>
-              </div>
-              {selectedTable.courtesy ? (
-                <p className="text-xs text-stone-500">
-                  {selectedTable.courtesy.label} / {selectedTable.courtesy.reason} / {selectedTable.courtesy.authorizedBy}
-                </p>
-              ) : null}
-              <div className="mt-2 flex justify-between border-t border-stone-200 pt-3">
-                <span className="text-base font-semibold text-stone-950">Total</span>
-                <span className="text-3xl font-semibold text-stone-950">{currency.format(getTotal(selectedTable))}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setModal("discount")}
-              className="inline-flex h-12 items-center justify-center rounded-xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800"
+              className="h-14 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-900 transition hover:bg-stone-50"
             >
-              Aplicar descuento
+              Descuento
             </button>
             <button
               type="button"
               onClick={() => setModal("courtesy")}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-900 transition hover:bg-stone-50"
             >
-              <Gift size={17} />
-              Registrar cortesia
+              <Gift size={18} />
+              Cortesia
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            <button
+              type="button"
+              onClick={sendToKitchen}
+              disabled={!selectedTable.openedAt || selectedTable.items.length === 0}
+              className="inline-flex h-16 items-center justify-center gap-3 rounded-3xl bg-emerald-600 text-lg font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+            >
+              <CheckCircle2 size={24} />
+              Enviar cocina
             </button>
             <button
               type="button"
-              onClick={() => setModal("payment")}
+              onClick={markReadyToPay}
               disabled={!selectedTable.openedAt || selectedTable.items.length === 0}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-xl bg-stone-950 px-4 text-base font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300 sm:col-span-2"
+              className="inline-flex h-16 items-center justify-center gap-3 rounded-3xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
-              <Banknote size={20} />
+              <Banknote size={24} />
               Cobrar
             </button>
           </div>
-
-          <div className="mt-5 rounded-2xl border border-dashed border-stone-300 bg-white p-4 text-sm text-stone-500">
-            Venta finalizada / descontar inventario / sumar puntos / aparecer en cierre del dia.
-          </div>
         </aside>
-      </div>
+      </section>
 
       {modal === "open" ? (
-        <ModalShell title="Abrir mesa" onClose={() => setModal(null)}>
-          <form action={openTable} className="grid gap-4">
-            <select name="table_id" defaultValue={selectedTable.id} className="h-12 rounded-xl border border-stone-200 px-3 text-sm outline-none focus:border-stone-400">
-              {tableOptions.map((table) => (
-                <option key={table.id} value={table.id}>
-                  {table.name} - {statusLabel(table.status)}
-                </option>
-              ))}
-            </select>
-            <input name="customer" placeholder="Cliente opcional" className="h-12 rounded-xl border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-            <input name="people" type="number" min={1} defaultValue={2} placeholder="Personas" className="h-12 rounded-xl border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-            <textarea name="note" placeholder="Nota opcional" className="min-h-24 rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400" />
-            <button className="h-12 rounded-xl bg-stone-950 text-sm font-semibold text-white">
-              Abrir mesa
-            </button>
-          </form>
-        </ModalShell>
+        <OpenTableModal
+          table={selectedTable}
+          onClose={() => setModal(null)}
+          onOpen={(people, customer) => openTable(selectedTable.id, people, customer)}
+        />
       ) : null}
 
+      {modal === "quick" ? <QuickSaleModal onClose={() => setModal(null)} onSelect={openQuickSale} /> : null}
+
       {modal === "discount" ? (
-        <ModalShell title="Aplicar descuento" onClose={() => setModal(null)}>
-          <form action={applyDiscount} className="grid gap-4">
-            <select name="type" className="h-12 rounded-xl border border-stone-200 px-3 text-sm outline-none focus:border-stone-400">
+        <SimpleFormModal title="Aplicar descuento" onClose={() => setModal(null)} onSubmit={applyDiscount}>
+          <label className="text-sm font-semibold text-stone-700">
+            Tipo
+            <select
+              name="type"
+              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 bg-white px-4 text-base text-stone-950"
+            >
               <option value="percent">Porcentaje</option>
               <option value="fixed">Monto fijo</option>
             </select>
-            <input name="value" type="number" min={1} step="0.01" placeholder="Ej. 10" className="h-12 rounded-xl border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-            <input name="reason" required placeholder="Motivo obligatorio. Ej. 10% descuento gerente" className="h-12 rounded-xl border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-            <button className="h-12 rounded-xl bg-stone-950 text-sm font-semibold text-white">
-              Aplicar descuento
-            </button>
-          </form>
-        </ModalShell>
+          </label>
+          <label className="text-sm font-semibold text-stone-700">
+            Valor
+            <input
+              name="value"
+              type="number"
+              min="1"
+              required
+              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
+              placeholder="10"
+            />
+          </label>
+          <label className="text-sm font-semibold text-stone-700">
+            Motivo
+            <input
+              name="reason"
+              required
+              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
+              placeholder="Descuento gerente"
+            />
+          </label>
+        </SimpleFormModal>
       ) : null}
 
       {modal === "courtesy" ? (
-        <ModalShell title="Registrar cortesia" onClose={() => setModal(null)}>
-          <form action={registerCourtesy} className="grid gap-4">
-            <input name="label" required placeholder="Producto o monto" className="h-12 rounded-xl border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-            <input name="amount" required type="number" min={1} step="0.01" placeholder="Monto" className="h-12 rounded-xl border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-            <input name="reason" required placeholder="Motivo" className="h-12 rounded-xl border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-            <input name="authorized_by" required placeholder="Autorizado por" className="h-12 rounded-xl border border-stone-200 px-3 text-sm outline-none focus:border-stone-400" />
-            <button className="h-12 rounded-xl bg-stone-950 text-sm font-semibold text-white">
-              Registrar cortesia
-            </button>
-          </form>
-        </ModalShell>
+        <SimpleFormModal title="Registrar cortesia" onClose={() => setModal(null)} onSubmit={applyCourtesy}>
+          <label className="text-sm font-semibold text-stone-700">
+            Producto o monto
+            <input
+              name="label"
+              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
+              placeholder="Postre Mochi"
+            />
+          </label>
+          <label className="text-sm font-semibold text-stone-700">
+            Monto
+            <input
+              name="amount"
+              type="number"
+              min="1"
+              required
+              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
+              placeholder="140"
+            />
+          </label>
+          <label className="text-sm font-semibold text-stone-700">
+            Motivo
+            <input
+              name="reason"
+              required
+              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
+              placeholder="Cortesia de la casa"
+            />
+          </label>
+          <label className="text-sm font-semibold text-stone-700">
+            Autorizado por
+            <input
+              name="authorizedBy"
+              required
+              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
+              placeholder="Gerente"
+            />
+          </label>
+        </SimpleFormModal>
       ) : null}
 
       {modal === "payment" ? (
-        <ModalShell title="Cobrar" onClose={() => setModal(null)}>
-          <form action={chargeTable} className="grid gap-5">
-            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-              <div className="flex justify-between text-sm">
-                <span>Subtotal</span>
-                <strong>{currency.format(getSubtotal(selectedTable))}</strong>
-              </div>
-              <div className="mt-2 flex justify-between text-sm">
-                <span>Descuento</span>
-                <strong>-{currency.format(getDiscountAmount(selectedTable))}</strong>
-              </div>
-              <div className="mt-2 flex justify-between text-sm">
-                <span>Cortesia</span>
-                <strong>-{currency.format(getCourtesyAmount(selectedTable))}</strong>
-              </div>
-              <div className="mt-4 flex justify-between border-t border-stone-200 pt-4">
-                <span className="text-lg font-semibold">Total final</span>
-                <strong className="text-3xl">{currency.format(getTotal(selectedTable))}</strong>
-              </div>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {(["Efectivo", "Tarjeta", "Transferencia", "Mixto"] as PaymentMethod[]).map((method) => (
-                <label key={method} className="flex h-12 cursor-pointer items-center gap-3 rounded-xl border border-stone-200 px-4 text-sm font-semibold text-stone-800">
-                  <input name="payment_method" type="radio" value={method} defaultChecked={method === "Efectivo"} />
-                  {method === "Tarjeta" ? <CreditCard size={16} /> : <Banknote size={16} />}
-                  {method}
-                </label>
-              ))}
-            </div>
-            <button className="h-12 rounded-xl bg-stone-950 text-sm font-semibold text-white">
-              Finalizar venta
-            </button>
-          </form>
-        </ModalShell>
+        <PaymentModal table={selectedTable} onClose={() => setModal(null)} onPay={registerPayment} />
+      ) : null}
+
+      {modal === "paid" ? (
+        <PaidModal
+          table={tables.find((table) => table.id === paidOrder?.tableId) ?? selectedTable}
+          onPrint={() => showToast("Ticket listo para imprimir")}
+          onCloseOrder={closeOrder}
+        />
       ) : null}
 
       {modal === "cashier" ? (
-        <ModalShell title="Cierre de caja" onClose={() => setModal(null)}>
-          <div className="grid gap-4">
-            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-              <p className="text-sm text-stone-500">Ventas finalizadas</p>
-              <p className="mt-2 text-4xl font-semibold text-stone-950">{currency.format(dailySales)}</p>
-            </div>
-            <div className="rounded-2xl border border-stone-200 bg-white p-4">
-              <p className="text-sm font-semibold text-stone-950">Ultimas ventas</p>
-              <div className="mt-3 grid gap-2">
-                {sales.length ? sales.slice(-5).reverse().map((sale) => (
-                  <div key={sale.id} className="flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2 text-sm">
-                    <span>{sale.tableName} / {sale.paymentMethod}</span>
-                    <strong>{currency.format(sale.total)}</strong>
-                  </div>
-                )) : (
-                  <p className="text-sm text-stone-500">Aun no hay ventas finalizadas.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </ModalShell>
+        <CashierModal sales={sales} pending={metrics.pending} onClose={() => setModal(null)} />
       ) : null}
     </div>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+      <p className="text-sm font-semibold text-stone-500">{label}</p>
+      <p className="mt-2 text-3xl font-semibold text-stone-950">{value}</p>
+    </div>
+  );
+}
+
+function TableCard({
+  table,
+  selected,
+  onClick,
+}: {
+  table: PosTable;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const status = tableStatus(table);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "min-h-52 rounded-3xl border p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
+        selected ? "border-stone-950 bg-white ring-2 ring-stone-950/10" : "border-stone-200 bg-white",
+      ].join(" ")}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-3xl font-semibold text-stone-950">{table.name}</p>
+          <p className="mt-2 text-sm font-semibold text-stone-500">{table.customer || "Sin cliente"}</p>
+        </div>
+        <span className={["rounded-full border px-3 py-1 text-sm font-semibold", statusClasses(status)].join(" ")}>
+          {statusLabel(status)}
+        </span>
+      </div>
+      <div className="mt-8 grid grid-cols-3 gap-3">
+        <CardFact icon={<Users size={18} />} label="Personas" value={String(table.people || 0)} />
+        <CardFact icon={<Banknote size={18} />} label="Total" value={table.openedAt ? money.format(total(table)) : "$0"} />
+        <CardFact icon={<Clock size={18} />} label="Tiempo" value={elapsed(table.openedAt)} />
+      </div>
+    </button>
+  );
+}
+
+function CardFact({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-stone-50 p-3">
+      <div className="text-stone-500">{icon}</div>
+      <p className="mt-2 text-xs font-semibold text-stone-500">{label}</p>
+      <p className="mt-1 truncate text-base font-semibold text-stone-950">{value}</p>
+    </div>
+  );
+}
+
+function TotalLine({ label, value, negative = false }: { label: string; value: number; negative?: boolean }) {
+  return (
+    <div className="flex items-center justify-between text-base font-semibold text-stone-700">
+      <span>{label}</span>
+      <span>{negative && value > 0 ? "-" : ""}{money.format(value)}</span>
+    </div>
+  );
+}
+
+function ModalShell({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/45 p-4">
+      <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-2xl font-semibold text-stone-950">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid size-11 place-items-center rounded-full border border-stone-200 bg-white text-stone-600 transition hover:bg-stone-50"
+            aria-label="Cerrar"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <div className="mt-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function OpenTableModal({
+  table,
+  onClose,
+  onOpen,
+}: {
+  table: PosTable;
+  onClose: () => void;
+  onOpen: (people: number, customer: string) => void;
+}) {
+  const [people, setPeople] = useState(table.people || 2);
+  const [customer, setCustomer] = useState(table.customer);
+
+  return (
+    <ModalShell title={`Abrir ${table.name}`} onClose={onClose}>
+      <div className="space-y-5">
+        <div>
+          <p className="text-sm font-semibold text-stone-600">Personas</p>
+          <div className="mt-3 grid grid-cols-6 gap-2">
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button
+                type="button"
+                key={value}
+                onClick={() => setPeople(value)}
+                className={[
+                  "h-16 rounded-2xl text-xl font-semibold transition",
+                  people === value ? "bg-stone-950 text-white" : "border border-stone-200 bg-stone-50 text-stone-950",
+                ].join(" ")}
+              >
+                {value}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setPeople((value) => value + 1)}
+              className="h-16 rounded-2xl border border-stone-200 bg-stone-50 text-xl font-semibold text-stone-950"
+            >
+              +
+            </button>
+          </div>
+        </div>
+        <label className="block text-sm font-semibold text-stone-700">
+          Cliente opcional
+          <input
+            value={customer}
+            onChange={(event) => setCustomer(event.target.value)}
+            className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
+            placeholder="Nombre del cliente"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => onOpen(people, customer.trim())}
+          className="h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800"
+        >
+          Abrir mesa
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function QuickSaleModal({ onClose, onSelect }: { onClose: () => void; onSelect: (type: string) => void }) {
+  const options = ["Comer aqui", "Para llevar", "A domicilio", "Para recoger"];
+
+  return (
+    <ModalShell title="Venta rapida" onClose={onClose}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {options.map((option) => (
+          <button
+            type="button"
+            key={option}
+            onClick={() => onSelect(option)}
+            className="h-24 rounded-3xl border border-stone-200 bg-stone-50 text-xl font-semibold text-stone-950 transition hover:border-stone-300 hover:bg-white"
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </ModalShell>
+  );
+}
+
+function SimpleFormModal({
+  title,
+  children,
+  onClose,
+  onSubmit,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  onSubmit: (formData: FormData) => void;
+}) {
+  return (
+    <ModalShell title={title} onClose={onClose}>
+      <form
+        className="space-y-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit(new FormData(event.currentTarget));
+        }}
+      >
+        {children}
+        <button
+          type="submit"
+          className="h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800"
+        >
+          Guardar
+        </button>
+      </form>
+    </ModalShell>
+  );
+}
+
+function PaymentModal({
+  table,
+  onClose,
+  onPay,
+}: {
+  table: PosTable;
+  onClose: () => void;
+  onPay: (method: PaymentMethod, amountReceived: number) => void;
+}) {
+  const [method, setMethod] = useState<PaymentMethod>("Efectivo");
+  const [amountReceived, setAmountReceived] = useState(total(table));
+  const methods: PaymentMethod[] = ["Efectivo", "Tarjeta", "Transferencia", "Mixto"];
+
+  return (
+    <ModalShell title="Cobrar" onClose={onClose}>
+      <div className="space-y-5">
+        <div className="rounded-3xl bg-stone-50 p-5 text-center">
+          <p className="text-sm font-semibold text-stone-500">Total a pagar</p>
+          <p className="mt-2 text-5xl font-semibold text-stone-950">{money.format(total(table))}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {methods.map((item) => (
+            <button
+              type="button"
+              key={item}
+              onClick={() => setMethod(item)}
+              className={[
+                "inline-flex h-20 items-center justify-center gap-3 rounded-3xl border text-lg font-semibold transition",
+                method === item
+                  ? "border-stone-950 bg-stone-950 text-white"
+                  : "border-stone-200 bg-stone-50 text-stone-950 hover:bg-white",
+              ].join(" ")}
+            >
+              {item === "Efectivo" ? <Banknote size={24} /> : <CreditCard size={24} />}
+              {item}
+            </button>
+          ))}
+        </div>
+        {method === "Efectivo" ? (
+          <label className="block text-sm font-semibold text-stone-700">
+            Monto recibido
+            <input
+              type="number"
+              min={total(table)}
+              value={amountReceived}
+              onChange={(event) => setAmountReceived(Number(event.target.value))}
+              className="mt-2 h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950"
+            />
+          </label>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => onPay(method, amountReceived)}
+          className="h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800"
+        >
+          Registrar pago
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function PaidModal({
+  table,
+  onPrint,
+  onCloseOrder,
+}: {
+  table: PosTable;
+  onPrint: () => void;
+  onCloseOrder: () => void;
+}) {
+  return (
+    <ModalShell title="Pago completado" onClose={onCloseOrder}>
+      <div className="space-y-5">
+        <div className="rounded-3xl bg-emerald-50 p-6 text-center">
+          <CheckCircle2 className="mx-auto text-emerald-700" size={42} />
+          <p className="mt-3 text-sm font-semibold text-emerald-700">{table.name}</p>
+          <p className="mt-2 text-4xl font-semibold text-stone-950">{money.format(total(table))}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onPrint}
+            className="inline-flex h-16 items-center justify-center gap-2 rounded-3xl border border-stone-200 bg-white text-lg font-semibold text-stone-950 transition hover:bg-stone-50"
+          >
+            <Printer size={22} />
+            Imprimir ticket
+          </button>
+          <button
+            type="button"
+            onClick={onCloseOrder}
+            className="h-16 rounded-3xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800"
+          >
+            Cerrar orden
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function CashierModal({
+  sales,
+  pending,
+  onClose,
+}: {
+  sales: Sale[];
+  pending: number;
+  onClose: () => void;
+}) {
+  const finalized = sales.reduce((sum, sale) => sum + sale.total, 0);
+
+  return (
+    <ModalShell title="Cierre de caja" onClose={onClose}>
+      <div className="grid gap-3">
+        <MiniMetric label="Pendiente por cobrar" value={money.format(pending)} />
+        <MiniMetric label="Ventas finalizadas" value={money.format(finalized)} />
+        <MiniMetric label="Ordenes cerradas" value={String(sales.length)} />
+      </div>
+    </ModalShell>
   );
 }
