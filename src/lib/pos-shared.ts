@@ -1,14 +1,30 @@
 export type TableStatus = "free" | "occupied" | "checkout";
 export type PaymentMethod = "Efectivo" | "Tarjeta" | "Transferencia" | "Mixto";
-export type Category = "Sushi" | "Entradas" | "Bebidas" | "Postres" | "Promos";
 export type OrderItemStatus = "pending" | "sent" | "preparing" | "ready" | "served" | "paid";
+
+export type PosCategory = {
+  id: string;
+  name: string;
+  active: boolean;
+  sortOrder: number;
+};
 
 export type Product = {
   id: string;
   name: string;
   price: number;
-  category: Category;
+  categoryId: string;
+  description?: string;
+  available: boolean;
+  visible: boolean;
+  sendToKitchen: boolean;
+  recipeId?: string | null;
   tone: string;
+};
+
+export type PosCatalog = {
+  categories: PosCategory[];
+  products: Product[];
 };
 
 export type OrderItem = Product & {
@@ -70,19 +86,32 @@ export type Sale = {
 
 export const posStorageKey = "royalty-pos-state-v1";
 export const posSalesStorageKey = "royalty-pos-sales-v1";
+export const posCatalogStorageKey = "royalty-pos-catalog-v1";
 export const posStateEvent = "royalty-pos-state-updated";
+export const posCatalogEvent = "royalty-pos-catalog-updated";
 
-export const categories: Category[] = ["Sushi", "Entradas", "Bebidas", "Postres", "Promos"];
+export const initialCategories: PosCategory[] = [
+  { id: "sushi", name: "Sushi", active: true, sortOrder: 0 },
+  { id: "entradas", name: "Entradas", active: true, sortOrder: 1 },
+  { id: "bebidas", name: "Bebidas", active: true, sortOrder: 2 },
+  { id: "postres", name: "Postres", active: true, sortOrder: 3 },
+  { id: "promos", name: "Promos", active: true, sortOrder: 4 },
+];
 
 export const products: Product[] = [
-  { id: "california", name: "Rollo California", price: 180, category: "Sushi", tone: "from-rose-100 to-orange-100" },
-  { id: "salmon", name: "Rollo Salmon", price: 220, category: "Sushi", tone: "from-orange-100 to-pink-100" },
-  { id: "ramen", name: "Ramen", price: 190, category: "Entradas", tone: "from-amber-100 to-yellow-100" },
-  { id: "edamame", name: "Edamame", price: 120, category: "Entradas", tone: "from-emerald-100 to-lime-100" },
-  { id: "agua", name: "Agua mineral", price: 60, category: "Bebidas", tone: "from-sky-100 to-cyan-100" },
-  { id: "sake", name: "Sake", price: 250, category: "Bebidas", tone: "from-indigo-100 to-slate-100" },
-  { id: "mochi", name: "Postre Mochi", price: 140, category: "Postres", tone: "from-violet-100 to-fuchsia-100" },
+  { id: "california", name: "Rollo California", price: 180, categoryId: "sushi", description: "Rollo clásico de cangrejo y aguacate", available: true, visible: true, sendToKitchen: true, recipeId: null, tone: "from-rose-100 to-orange-100" },
+  { id: "salmon", name: "Rollo Salmón", price: 220, categoryId: "sushi", description: "Rollo de salmón fresco", available: true, visible: true, sendToKitchen: true, recipeId: null, tone: "from-orange-100 to-pink-100" },
+  { id: "ramen", name: "Ramen", price: 190, categoryId: "entradas", description: "Caldo caliente con fideos", available: true, visible: true, sendToKitchen: true, recipeId: null, tone: "from-amber-100 to-yellow-100" },
+  { id: "edamame", name: "Edamame", price: 120, categoryId: "entradas", available: true, visible: true, sendToKitchen: true, recipeId: null, tone: "from-emerald-100 to-lime-100" },
+  { id: "agua", name: "Agua mineral", price: 60, categoryId: "bebidas", available: true, visible: true, sendToKitchen: false, recipeId: null, tone: "from-sky-100 to-cyan-100" },
+  { id: "sake", name: "Sake", price: 250, categoryId: "bebidas", available: true, visible: true, sendToKitchen: false, recipeId: null, tone: "from-indigo-100 to-slate-100" },
+  { id: "mochi", name: "Postre Mochi", price: 140, categoryId: "postres", available: true, visible: true, sendToKitchen: true, recipeId: null, tone: "from-violet-100 to-fuchsia-100" },
 ];
+
+export const initialPosCatalog: PosCatalog = {
+  categories: initialCategories,
+  products,
+};
 
 export const initialTables: PosTable[] = [
   {
@@ -187,6 +216,51 @@ export function writePosSales(sales: Sale[]) {
   window.localStorage.setItem(posSalesStorageKey, JSON.stringify(sales));
 }
 
+export function readPosCatalog(): PosCatalog {
+  if (typeof window === "undefined") return initialPosCatalog;
+
+  try {
+    const value = window.localStorage.getItem(posCatalogStorageKey);
+    if (!value) return initialPosCatalog;
+    return normalizeCatalog(JSON.parse(value) as PosCatalog);
+  } catch {
+    return initialPosCatalog;
+  }
+}
+
+export function writePosCatalog(catalog: PosCatalog) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(posCatalogStorageKey, JSON.stringify(catalog));
+  window.dispatchEvent(new CustomEvent(posCatalogEvent));
+}
+
+export function makeCatalogId(prefix: "category" | "product") {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function normalizeCatalog(catalog: PosCatalog): PosCatalog {
+  const categories = (catalog.categories?.length ? catalog.categories : initialCategories)
+    .map((category, index) => ({
+      ...category,
+      active: category.active ?? true,
+      sortOrder: category.sortOrder ?? index,
+    }))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return {
+    categories,
+    products: (catalog.products?.length ? catalog.products : products).map((product) => ({
+      ...product,
+      categoryId: product.categoryId ?? "entradas",
+      available: product.available ?? true,
+      visible: product.visible ?? true,
+      sendToKitchen: product.sendToKitchen ?? true,
+      recipeId: product.recipeId ?? null,
+      tone: product.tone ?? "from-stone-100 to-stone-200",
+    })),
+  };
+}
+
 function normalizeTables(tables: PosTable[]) {
   return tables
     .filter((table) => table.id !== "barra")
@@ -200,6 +274,12 @@ function normalizeTables(tables: PosTable[]) {
         : null,
       items: table.items.map((item, index) => ({
         ...item,
+        categoryId: item.categoryId ?? products.find((product) => product.id === item.id)?.categoryId ?? "entradas",
+        available: item.available ?? true,
+        visible: item.visible ?? true,
+        sendToKitchen: item.sendToKitchen ?? products.find((product) => product.id === item.id)?.sendToKitchen ?? true,
+        recipeId: item.recipeId ?? null,
+        tone: item.tone ?? "from-stone-100 to-stone-200",
         lineId: item.lineId ?? `${table.id}-${item.id}-${index}`,
         status: item.status === ("kitchen" as OrderItemStatus) ? "sent" : item.status,
       })),

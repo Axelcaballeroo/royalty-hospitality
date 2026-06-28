@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import {
   ArrowLeft,
   Banknote,
@@ -11,6 +12,7 @@ import {
   Gift,
   Minus,
   Percent,
+  Package,
   Plus,
   Printer,
   ReceiptText,
@@ -21,21 +23,23 @@ import {
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
 import {
-  categories,
+  initialPosCatalog,
   initialTables,
   makeLineId,
+  posCatalogEvent,
   posStateEvent,
-  products,
+  readPosCatalog,
   readPosSales,
   readPosTables,
   writePosSales,
   writePosTables,
 } from "@/lib/pos-shared";
 import type {
-  Category,
   OrderItemStatus,
   PaymentPart,
   PaymentMethod,
+  PosCatalog,
+  PosCategory,
   PosTable,
   Product,
   Sale,
@@ -106,7 +110,8 @@ function statusClasses(status: TableStatus) {
 export function PosClient() {
   const [tables, setTables] = useState<PosTable[]>(initialTables);
   const [selectedTableId, setSelectedTableId] = useState(initialTables[1].id);
-  const [activeCategory, setActiveCategory] = useState<Category>("Sushi");
+  const [catalog, setCatalog] = useState<PosCatalog>(initialPosCatalog);
+  const [activeCategory, setActiveCategory] = useState(initialPosCatalog.categories[0].id);
   const [modal, setModal] = useState<ModalType>(null);
   const [posStep, setPosStep] = useState<PosStep>("order");
   const [toast, setToast] = useState("");
@@ -115,23 +120,34 @@ export function PosClient() {
   const [completedPayment, setCompletedPayment] = useState<CompletedPayment | null>(null);
 
   const selectedTable = tables.find((table) => table.id === selectedTableId) ?? tables[0];
-  const categoryProducts = products.filter((product) => product.category === activeCategory);
+  const posCategories = catalog.categories
+    .filter((category) => category.active)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const selectedCategory = posCategories.some((category) => category.id === activeCategory)
+    ? activeCategory
+    : posCategories[0]?.id ?? "";
+  const categoryProducts = catalog.products.filter(
+    (product) => product.categoryId === selectedCategory && product.visible && product.available,
+  );
 
   useEffect(() => {
     const syncTables = () => {
       setTables(readPosTables());
       setSales(readPosSales());
+      setCatalog(readPosCatalog());
     };
 
     syncTables();
     const interval = window.setInterval(syncTables, 1000);
     window.addEventListener("storage", syncTables);
     window.addEventListener(posStateEvent, syncTables);
+    window.addEventListener(posCatalogEvent, syncTables);
 
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("storage", syncTables);
       window.removeEventListener(posStateEvent, syncTables);
+      window.removeEventListener(posCatalogEvent, syncTables);
     };
   }, []);
 
@@ -198,15 +214,15 @@ export function PosClient() {
   }
 
   function addProduct(product: Product) {
-    const pendingStatus: OrderItemStatus = "pending";
+    const nextStatus: OrderItemStatus = product.sendToKitchen ? "pending" : "served";
     updateTables((current) =>
       current.map((table) => {
         if (table.id !== selectedTable.id || !table.openedAt) return table;
-        const existing = table.items.find((item) => item.id === product.id && item.status === "pending");
+        const existing = table.items.find((item) => item.id === product.id && item.status === nextStatus);
         const items = existing
           ? table.items.map((item) =>
               item.lineId === existing.lineId
-                ? { ...item, quantity: item.quantity + 1, status: pendingStatus, updatedAt: new Date().toISOString() }
+                ? { ...item, quantity: item.quantity + 1, status: nextStatus, updatedAt: new Date().toISOString() }
                 : item,
             )
           : [
@@ -215,7 +231,7 @@ export function PosClient() {
                 ...product,
                 lineId: makeLineId(table.id, product.id),
                 quantity: 1,
-                status: pendingStatus,
+                status: nextStatus,
                 updatedAt: new Date().toISOString(),
               },
             ];
@@ -226,16 +242,20 @@ export function PosClient() {
   }
 
   function changeQuantity(productId: string, change: number) {
-    const pendingStatus: OrderItemStatus = "pending";
     updateTables((current) =>
       current.map((table) => {
         if (table.id !== selectedTable.id) return table;
         const items = table.items
-          .map((item) =>
-            item.lineId === productId
-              ? { ...item, quantity: item.quantity + change, status: pendingStatus, updatedAt: new Date().toISOString() }
-              : item,
-          )
+          .map((item) => {
+            if (item.lineId !== productId) return item;
+            const status: OrderItemStatus = item.sendToKitchen ? "pending" : "served";
+            return {
+              ...item,
+              quantity: item.quantity + change,
+              status,
+              updatedAt: new Date().toISOString(),
+            };
+          })
           .filter((item) => item.quantity > 0);
         return { ...table, items, readyToPay: false };
       }),
@@ -290,6 +310,10 @@ export function PosClient() {
 
   function startPayment() {
     if (!selectedTable.openedAt || selectedTable.items.length === 0) return;
+    if (selectedTable.items.some((item) => item.sendToKitchen && item.status === "pending")) {
+      showToast("Envía los productos pendientes a cocina antes de cobrar");
+      return;
+    }
     updateTables((current) =>
       current.map((table) => (table.id === selectedTable.id ? { ...table, readyToPay: true } : table)),
     );
@@ -441,6 +465,13 @@ export function PosClient() {
             <ActionButton onClick={() => setModal("cashier")} icon={<ReceiptText size={22} />} light>
               Cierre de caja
             </ActionButton>
+            <Link
+              href="/app/pos/products"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-6 text-base font-semibold text-stone-900 shadow-sm transition hover:bg-stone-50"
+            >
+              <Package size={22} />
+              Configurar productos
+            </Link>
           </>
         }
       />
@@ -471,7 +502,8 @@ export function PosClient() {
         <FullscreenPos
           table={selectedTable}
           step={posStep}
-          activeCategory={activeCategory}
+          activeCategory={selectedCategory}
+          posCategories={posCategories}
           categoryProducts={categoryProducts}
           onCategoryChange={setActiveCategory}
           onBack={() => {
@@ -637,6 +669,7 @@ function FullscreenPos({
   table,
   step,
   activeCategory,
+  posCategories,
   categoryProducts,
   onCategoryChange,
   onBack,
@@ -654,9 +687,10 @@ function FullscreenPos({
 }: {
   table: PosTable;
   step: PosStep;
-  activeCategory: Category;
+  activeCategory: string;
+  posCategories: PosCategory[];
   categoryProducts: Product[];
-  onCategoryChange: (category: Category) => void;
+  onCategoryChange: (categoryId: string) => void;
   onBack: () => void;
   onAddProduct: (product: Product) => void;
   onChangeQuantity: (productId: string, change: number) => void;
@@ -707,6 +741,7 @@ function FullscreenPos({
           <OrderStep
             table={table}
             activeCategory={activeCategory}
+            posCategories={posCategories}
             categoryProducts={categoryProducts}
             onCategoryChange={onCategoryChange}
             onAddProduct={onAddProduct}
@@ -731,6 +766,7 @@ function FullscreenPos({
 function OrderStep({
   table,
   activeCategory,
+  posCategories,
   categoryProducts,
   onCategoryChange,
   onAddProduct,
@@ -743,9 +779,10 @@ function OrderStep({
   onOpenCourtesy,
 }: {
   table: PosTable;
-  activeCategory: Category;
+  activeCategory: string;
+  posCategories: PosCategory[];
   categoryProducts: Product[];
-  onCategoryChange: (category: Category) => void;
+  onCategoryChange: (categoryId: string) => void;
   onAddProduct: (product: Product) => void;
   onChangeQuantity: (productId: string, change: number) => void;
   onRemoveProduct: (productId: string) => void;
@@ -755,23 +792,27 @@ function OrderStep({
   onOpenDiscount: () => void;
   onOpenCourtesy: () => void;
 }) {
+  const hasPendingKitchenItems = table.items.some(
+    (item) => item.sendToKitchen && item.status === "pending",
+  );
+
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[7fr_3fr]">
       <main className="min-h-0 overflow-y-auto bg-stone-50 p-5">
         <div className="flex gap-3 overflow-x-auto pb-2">
-          {categories.map((category) => (
+          {posCategories.map((category) => (
             <button
               type="button"
-              key={category}
-              onClick={() => onCategoryChange(category)}
+              key={category.id}
+              onClick={() => onCategoryChange(category.id)}
               className={[
                 "h-16 min-w-36 rounded-2xl px-5 text-lg font-semibold transition",
-                activeCategory === category
+                activeCategory === category.id
                   ? "bg-stone-950 text-white shadow-sm"
                   : "border border-stone-200 bg-white text-stone-900 hover:border-stone-300",
               ].join(" ")}
             >
-              {category}
+              {category.name}
             </button>
           ))}
         </div>
@@ -904,7 +945,7 @@ function OrderStep({
           <button
             type="button"
             onClick={onSendKitchen}
-            disabled={!table.openedAt || table.items.length === 0}
+            disabled={!table.openedAt || !hasPendingKitchenItems}
             className="h-20 rounded-3xl bg-emerald-600 text-xl font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
           >
             Enviar cocina
