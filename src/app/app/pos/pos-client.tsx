@@ -18,25 +18,31 @@ import {
   Plus,
   Printer,
   ReceiptText,
+  Save,
+  Lock,
   Sparkles,
   Trash2,
   Users,
   X,
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
+import { buildCashOrders, buildCashSnapshot } from "@/lib/pos-cash-closing";
 import {
   initialPosCatalog,
   initialTables,
   makeLineId,
   posCatalogEvent,
   posStateEvent,
+  readCashClosing,
   readPosCatalog,
   readPosSales,
   readPosTables,
   writePosSales,
+  writeCashClosing,
   writePosTables,
 } from "@/lib/pos-shared";
 import type {
+  CashClosing,
   OrderItemStatus,
   PaymentPart,
   PaymentMethod,
@@ -394,7 +400,9 @@ export function PosClient() {
         : completedPayment.payments[0]?.method ?? "Mixto";
     const sale: Sale = {
       id: `sale-${Date.now()}`,
-      tableName: table.name,
+      tableName: table.quickType ? "Venta rápida" : table.name,
+      isQuickSale: Boolean(table.quickType),
+      orderType: table.quickType,
       items: table.items.map((item) => ({ ...item, status: "paid" })),
       gross: subtotal(table),
       discount: discountAmount(table),
@@ -558,7 +566,7 @@ export function PosClient() {
       ) : null}
 
       {modal === "cashier" ? (
-        <CashierModal sales={sales} pending={metrics.pending} onClose={() => setModal(null)} />
+        <CashierModal sales={sales} tables={tables} onClose={() => setModal(null)} />
       ) : null}
     </div>
   );
@@ -1508,38 +1516,171 @@ function QuickSaleModal({ onClose, onSelect }: { onClose: () => void; onSelect: 
 
 function CashierModal({
   sales,
-  pending,
+  tables,
   onClose,
 }: {
   sales: Sale[];
-  pending: number;
+  tables: PosTable[];
   onClose: () => void;
 }) {
-  const gross = sales.reduce((sum, sale) => sum + (sale.gross ?? sale.total), 0);
-  const discounts = sales.reduce((sum, sale) => sum + (sale.discount ?? 0), 0);
-  const courtesies = sales.reduce((sum, sale) => sum + (sale.courtesy ?? 0), 0);
-  const net = sales.reduce((sum, sale) => sum + sale.total, 0);
-  const byMethod = (method: PaymentPart["method"]) =>
-    sales.reduce(
-      (sum, sale) => sum + (sale.payments ?? []).filter((payment) => payment.method === method).reduce((paymentSum, payment) => paymentSum + payment.amount, 0),
-      0,
-    );
-  const collected = byMethod("Efectivo") + byMethod("Tarjeta") + byMethod("Transferencia");
+  const [closing, setClosing] = useState<CashClosing | null>(null);
+  const [countedCash, setCountedCash] = useState(0);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const loadClosing = () => {
+      const saved = readCashClosing();
+      setClosing(saved);
+      setCountedCash(saved?.countedCash ?? 0);
+    };
+    loadClosing();
+  }, []);
+
+  const liveSnapshot = buildCashSnapshot(sales, tables);
+  const liveOrders = buildCashOrders(sales, tables);
+  const locked = closing?.status === "closed";
+  const snapshot = locked ? closing.snapshot : liveSnapshot;
+  const orders = locked ? closing.orders ?? [] : liveOrders;
+  const difference = countedCash - snapshot.cash;
+  const differenceCopy = difference === 0 ? "Cuadra" : difference > 0 ? "Sobra" : "Falta";
+
+  function persistClosing(status: CashClosing["status"]) {
+    const now = new Date().toISOString();
+    const next: CashClosing = {
+      id: closing?.id ?? `cash-closing-${globalThis.crypto.randomUUID()}`,
+      status,
+      countedCash,
+      expectedCash: liveSnapshot.cash,
+      difference: countedCash - liveSnapshot.cash,
+      snapshot: liveSnapshot,
+      orders: liveOrders,
+      savedAt: now,
+      closedAt: status === "closed" ? now : undefined,
+    };
+    writeCashClosing(next);
+    setClosing(next);
+    setMessage(status === "closed" ? "Caja cerrada correctamente" : "Corte guardado");
+  }
 
   return (
     <ModalShell title="Cierre de caja" onClose={onClose} wide>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <MiniMetric label="Ventas brutas" value={money.format(gross)} />
-        <MiniMetric label="Descuentos" value={money.format(discounts)} />
-        <MiniMetric label="Cortesías" value={money.format(courtesies)} />
-        <MiniMetric label="Ventas netas" value={money.format(net)} />
-        <MiniMetric label="Efectivo" value={money.format(byMethod("Efectivo"))} />
-        <MiniMetric label="Tarjeta" value={money.format(byMethod("Tarjeta"))} />
-        <MiniMetric label="Transferencia" value={money.format(byMethod("Transferencia"))} />
-        <MiniMetric label="Total cobrado" value={money.format(collected)} />
-        <MiniMetric label="Pendiente por cobrar" value={money.format(pending)} />
-        <MiniMetric label="Ordenes cerradas" value={String(sales.length)} />
+      <div className="space-y-7">
+        {message || locked ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-base font-semibold text-emerald-800">
+            {locked ? <Lock size={21} /> : <CheckCircle2 size={21} />}
+            {message || "Caja cerrada correctamente"}
+          </div>
+        ) : null}
+
+        <section>
+          <p className="text-sm font-semibold text-stone-500">Resumen operativo</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <CashMetric label="Ventas brutas" value={money.format(snapshot.gross)} />
+            <CashMetric label="Descuentos" value={money.format(snapshot.discounts)} />
+            <CashMetric label="Cortesías" value={money.format(snapshot.courtesies)} />
+            <CashMetric label="Ventas netas" value={money.format(snapshot.net)} strong />
+            <CashMetric label="Pendiente por cobrar" value={money.format(snapshot.pending)} />
+            <CashMetric label="Órdenes cerradas" value={String(snapshot.closedOrders)} />
+            <CashMetric label="Órdenes abiertas" value={String(snapshot.openOrders)} />
+          </div>
+        </section>
+
+        <section>
+          <p className="text-sm font-semibold text-stone-500">Métodos de pago</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <PaymentMethodCard icon={<Banknote size={25} />} label="Efectivo" value={snapshot.cash} />
+            <PaymentMethodCard icon={<CreditCard size={25} />} label="Tarjeta" value={snapshot.card} />
+            <PaymentMethodCard icon={<ReceiptText size={25} />} label="Transferencia" value={snapshot.transfer} />
+            <PaymentMethodCard icon={<Sparkles size={25} />} label="Mixto" value={snapshot.mixed} detail="Órdenes con pago mixto" />
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-stone-200 bg-stone-50 p-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-stone-500">Conteo de efectivo</p>
+              <h3 className="mt-1 text-2xl font-semibold text-stone-950">Arqueo de caja</h3>
+            </div>
+            <span className={[
+              "inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold",
+              difference === 0 ? "bg-emerald-100 text-emerald-800" : difference > 0 ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800",
+            ].join(" ")}>
+              {differenceCopy} {difference === 0 ? "" : money.format(Math.abs(difference))}
+            </span>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <CashMetric label="Efectivo esperado" value={money.format(snapshot.cash)} />
+            <label className="rounded-2xl border border-stone-200 bg-white p-4">
+              <span className="text-sm font-semibold text-stone-500">Efectivo contado</span>
+              <input
+                type="number"
+                min={0}
+                disabled={locked}
+                value={countedCash}
+                onChange={(event) => { setCountedCash(Number(event.target.value)); setMessage(""); }}
+                className="mt-2 h-12 w-full rounded-xl border border-stone-200 px-3 text-2xl font-semibold text-stone-950 disabled:bg-stone-100"
+              />
+            </label>
+            <CashMetric label="Diferencia" value={money.format(difference)} />
+          </div>
+        </section>
+
+        <section>
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-stone-500">Actividad</p>
+              <h3 className="mt-1 text-2xl font-semibold text-stone-950">Resumen de órdenes</h3>
+            </div>
+            <span className="text-sm font-semibold text-stone-500">{orders.length} órdenes</span>
+          </div>
+          <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+            {orders.length ? orders.map((order) => (
+              <div key={order.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3">
+                <span className="min-w-40 text-base font-semibold text-stone-950">{order.label}</span>
+                <span className="text-base font-semibold text-stone-950">{money.format(order.total)}</span>
+                <span className="text-sm font-semibold text-stone-600">{order.method}</span>
+                <span className={["rounded-full px-3 py-1 text-xs font-semibold", order.status === "Cerrada" ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"].join(" ")}>{order.status}</span>
+              </div>
+            )) : (
+              <div className="rounded-2xl border border-dashed border-stone-300 p-8 text-center text-base font-semibold text-stone-500">Sin órdenes en este corte</div>
+            )}
+          </div>
+        </section>
+
+        <div className="sticky bottom-0 grid gap-3 border-t border-stone-200 bg-white pt-4 sm:grid-cols-3">
+          <button type="button" onClick={() => window.print()} className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-900">
+            <Printer size={21} />
+            Imprimir corte
+          </button>
+          <button type="button" disabled={locked} onClick={() => persistClosing("draft")} className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-stone-100 text-base font-semibold text-stone-900 disabled:opacity-50">
+            <Save size={21} />
+            Guardar corte
+          </button>
+          <button type="button" disabled={locked} onClick={() => persistClosing("closed")} className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-stone-950 text-base font-semibold text-white disabled:opacity-50">
+            <Lock size={21} />
+            {locked ? "Caja cerrada" : "Cerrar caja"}
+          </button>
+        </div>
       </div>
     </ModalShell>
+  );
+}
+
+function CashMetric({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={["rounded-2xl border p-4", strong ? "border-stone-950 bg-stone-950 text-white" : "border-stone-200 bg-white"].join(" ")}>
+      <p className={["text-sm font-semibold", strong ? "text-stone-300" : "text-stone-500"].join(" ")}>{label}</p>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function PaymentMethodCard({ icon, label, value, detail }: { icon: ReactNode; label: string; value: number; detail?: string }) {
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-white p-5">
+      <div className="flex items-center gap-3 text-stone-600">{icon}<span className="text-base font-semibold">{label}</span></div>
+      <p className="mt-4 text-3xl font-semibold text-stone-950">{money.format(value)}</p>
+      {detail ? <p className="mt-1 text-xs font-semibold text-stone-500">{detail}</p> : null}
+    </div>
   );
 }

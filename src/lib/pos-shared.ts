@@ -76,6 +76,8 @@ export type PosTable = {
 export type Sale = {
   id: string;
   tableName: string;
+  isQuickSale?: boolean;
+  orderType?: string;
   items: OrderItem[];
   gross: number;
   discount: number;
@@ -87,9 +89,44 @@ export type Sale = {
   closedAt: string;
 };
 
+export type CashClosingSnapshot = {
+  gross: number;
+  discounts: number;
+  courtesies: number;
+  net: number;
+  cash: number;
+  card: number;
+  transfer: number;
+  mixed: number;
+  pending: number;
+  closedOrders: number;
+  openOrders: number;
+};
+
+export type CashClosing = {
+  id: string;
+  status: "draft" | "closed";
+  countedCash: number;
+  expectedCash: number;
+  difference: number;
+  snapshot: CashClosingSnapshot;
+  orders: CashClosingOrder[];
+  savedAt: string;
+  closedAt?: string;
+};
+
+export type CashClosingOrder = {
+  id: string;
+  label: string;
+  total: number;
+  method: string;
+  status: "Cerrada" | "Pendiente";
+};
+
 export const posStorageKey = "royalty-pos-state-v1";
 export const posSalesStorageKey = "royalty-pos-sales-v1";
 export const posCatalogStorageKey = "royalty-pos-catalog-v1";
+export const posCashClosingStorageKey = "royalty-pos-cash-closing-v1";
 export const posStateEvent = "royalty-pos-state-updated";
 export const posCatalogEvent = "royalty-pos-catalog-updated";
 
@@ -217,6 +254,21 @@ export function readPosSales() {
 export function writePosSales(sales: Sale[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(posSalesStorageKey, JSON.stringify(sales));
+}
+
+export function readCashClosing() {
+  if (typeof window === "undefined") return null as CashClosing | null;
+  try {
+    const value = window.localStorage.getItem(posCashClosingStorageKey);
+    return value ? JSON.parse(value) as CashClosing : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeCashClosing(closing: CashClosing) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(posCashClosingStorageKey, JSON.stringify(closing));
 }
 
 export function readPosCatalog(): PosCatalog {
