@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -21,6 +21,8 @@ import { SectionHeader } from "@/components/ui";
 import {
   initialPosCatalog,
   makeCatalogId,
+  normalizeCatalogName,
+  normalizePosCatalog,
   posCatalogEvent,
   readPosCatalog,
   writePosCatalog,
@@ -32,6 +34,8 @@ type Editor =
   | { type: "product"; product?: Product }
   | null;
 
+type SaveResult = { ok: true } | { ok: false; error: string };
+
 const money = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
@@ -40,11 +44,16 @@ const money = new Intl.NumberFormat("es-MX", {
 
 export function PosCatalogClient() {
   const [catalog, setCatalog] = useState<PosCatalog>(initialPosCatalog);
+  const catalogRef = useRef<PosCatalog>(initialPosCatalog);
   const [editor, setEditor] = useState<Editor>(null);
   const [toast, setToast] = useState("");
 
   useEffect(() => {
-    const syncCatalog = () => setCatalog(readPosCatalog());
+    const syncCatalog = () => {
+      const next = readPosCatalog();
+      catalogRef.current = next;
+      setCatalog(next);
+    };
     syncCatalog();
     window.addEventListener("storage", syncCatalog);
     window.addEventListener(posCatalogEvent, syncCatalog);
@@ -65,17 +74,27 @@ export function PosCatalogClient() {
   }
 
   function updateCatalog(updater: (current: PosCatalog) => PosCatalog, message: string) {
-    setCatalog((current) => {
-      const next = updater(current);
-      writePosCatalog(next);
-      return next;
-    });
-    showToast(message);
+    try {
+      const next = normalizePosCatalog(updater(catalogRef.current));
+      const saved = writePosCatalog(next);
+      catalogRef.current = saved;
+      setCatalog(saved);
+      showToast(message);
+      return true;
+    } catch {
+      showToast("No se pudo guardar. Intenta de nuevo.");
+      return false;
+    }
   }
 
-  function saveCategory(name: string) {
+  function saveCategory(name: string): SaveResult {
     const editing = editor?.type === "category" ? editor.category : undefined;
-    updateCatalog(
+    const normalizedName = normalizeCatalogName(name);
+    const duplicate = catalogRef.current.categories.some(
+      (category) => category.id !== editing?.id && normalizeCatalogName(category.name) === normalizedName,
+    );
+    if (duplicate) return { ok: false, error: "Esa categoría ya existe." };
+    const saved = updateCatalog(
       (current) => ({
         ...current,
         categories: editing
@@ -92,7 +111,9 @@ export function PosCatalogClient() {
       }),
       editing ? "Categoría actualizada" : "Categoría creada",
     );
+    if (!saved) return { ok: false, error: "No se pudo guardar. Intenta de nuevo." };
     setEditor(null);
+    return { ok: true };
   }
 
   function toggleCategory(categoryId: string) {
@@ -125,8 +146,8 @@ export function PosCatalogClient() {
   }
 
   function saveProduct(product: Product) {
-    const exists = catalog.products.some((item) => item.id === product.id);
-    updateCatalog(
+    const exists = catalogRef.current.products.some((item) => item.id === product.id);
+    const saved = updateCatalog(
       (current) => ({
         ...current,
         products: exists
@@ -135,7 +156,8 @@ export function PosCatalogClient() {
       }),
       exists ? "Producto actualizado" : "Producto creado",
     );
-    setEditor(null);
+    if (saved) setEditor(null);
+    return saved;
   }
 
   function toggleProduct(productId: string) {
@@ -241,7 +263,11 @@ export function PosCatalogClient() {
       </section>
 
       {editor?.type === "category" ? (
-        <CategoryModal category={editor.category} onClose={() => setEditor(null)} onSave={saveCategory} />
+        <CategoryModal
+          category={editor.category}
+          onClose={() => setEditor(null)}
+          onSave={saveCategory}
+        />
       ) : null}
       {editor?.type === "product" ? (
         <ProductModal product={editor.product} categories={sortedCategories} onClose={() => setEditor(null)} onSave={saveProduct} />
@@ -280,7 +306,7 @@ function ProductCard({ product, onEdit, onToggle }: { product: Product; onEdit: 
   );
 }
 
-function ProductModal({ product, categories, onClose, onSave }: { product?: Product; categories: PosCategory[]; onClose: () => void; onSave: (product: Product) => void }) {
+function ProductModal({ product, categories, onClose, onSave }: { product?: Product; categories: PosCategory[]; onClose: () => void; onSave: (product: Product) => boolean }) {
   const [name, setName] = useState(product?.name ?? "");
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? "");
   const [price, setPrice] = useState(product?.price ?? 0);
@@ -288,14 +314,20 @@ function ProductModal({ product, categories, onClose, onSave }: { product?: Prod
   const [available, setAvailable] = useState(product?.available ?? true);
   const [visible, setVisible] = useState(product?.visible ?? true);
   const [sendToKitchen, setSendToKitchen] = useState(product?.sendToKitchen ?? true);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const valid = name.trim().length > 0 && categoryId.length > 0 && price > 0;
 
-  function save() {
-    if (!valid) return;
-    onSave({
+  async function save() {
+    if (!valid || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    await Promise.resolve();
+    const saved = onSave({
       id: product?.id ?? makeCatalogId("product"),
       name: name.trim(),
       categoryId,
+      createdAt: product?.createdAt ?? new Date().toISOString(),
       price,
       description: description.trim() || undefined,
       available,
@@ -304,6 +336,10 @@ function ProductModal({ product, categories, onClose, onSave }: { product?: Prod
       recipeId: product?.recipeId ?? null,
       tone: product?.tone ?? "from-stone-100 to-emerald-100",
     });
+    if (!saved) {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   return (
@@ -319,17 +355,25 @@ function ProductModal({ product, categories, onClose, onSave }: { product?: Prod
         <SettingToggle label="Visible en POS" description="Aparece en el catálogo de venta" active={visible} onChange={setVisible} />
         <SettingToggle label="Enviar a cocina" description="Debe entrar en la comanda antes de cobrar" active={sendToKitchen} onChange={setSendToKitchen} />
       </div>
-      <button type="button" disabled={!valid} onClick={save} className="mt-6 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">Guardar producto</button>
+      <button type="button" disabled={!valid || saving} onClick={save} className="mt-6 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">{saving ? "Guardando..." : "Guardar producto"}</button>
     </Modal>
   );
 }
 
-function CategoryModal({ category, onClose, onSave }: { category?: PosCategory; onClose: () => void; onSave: (name: string) => void }) {
+function CategoryModal({ category, onClose, onSave }: { category?: PosCategory; onClose: () => void; onSave: (name: string) => SaveResult }) {
   const [name, setName] = useState(category?.name ?? "");
+  const [error, setError] = useState("");
+
+  function save() {
+    const result = onSave(name.trim());
+    if (!result.ok) setError(result.error);
+  }
+
   return (
     <Modal title={category ? "Editar categoría" : "Nueva categoría"} onClose={onClose}>
-      <Field label="Nombre"><input autoFocus value={name} onChange={(event) => setName(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950" /></Field>
-      <button type="button" disabled={!name.trim()} onClick={() => onSave(name.trim())} className="mt-6 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">Guardar categoría</button>
+      <Field label="Nombre"><input autoFocus value={name} onChange={(event) => { setName(event.target.value); setError(""); }} className="h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950" /></Field>
+      {error ? <p className="mt-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</p> : null}
+      <button type="button" disabled={!name.trim()} onClick={save} className="mt-6 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">Guardar categoría</button>
     </Modal>
   );
 }

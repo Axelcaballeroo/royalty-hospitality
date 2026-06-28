@@ -14,6 +14,7 @@ export type Product = {
   name: string;
   price: number;
   categoryId: string;
+  createdAt?: string;
   description?: string;
   available: boolean;
   visible: boolean;
@@ -221,25 +222,45 @@ export function readPosCatalog(): PosCatalog {
 
   try {
     const value = window.localStorage.getItem(posCatalogStorageKey);
-    if (!value) return initialPosCatalog;
-    return normalizeCatalog(JSON.parse(value) as PosCatalog);
+    if (!value) {
+      window.localStorage.setItem(posCatalogStorageKey, JSON.stringify(initialPosCatalog));
+      return initialPosCatalog;
+    }
+    const stored = JSON.parse(value) as PosCatalog;
+    const normalized = normalizePosCatalog(stored);
+    if (JSON.stringify(stored) !== JSON.stringify(normalized)) {
+      window.localStorage.setItem(posCatalogStorageKey, JSON.stringify(normalized));
+    }
+    return normalized;
   } catch {
     return initialPosCatalog;
   }
 }
 
 export function writePosCatalog(catalog: PosCatalog) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(posCatalogStorageKey, JSON.stringify(catalog));
+  if (typeof window === "undefined") return catalog;
+  const normalized = normalizePosCatalog(catalog);
+  window.localStorage.setItem(posCatalogStorageKey, JSON.stringify(normalized));
   window.dispatchEvent(new CustomEvent(posCatalogEvent));
+  return normalized;
 }
 
 export function makeCatalogId(prefix: "category" | "product") {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return `${prefix}-${globalThis.crypto.randomUUID()}`;
 }
 
-function normalizeCatalog(catalog: PosCatalog): PosCatalog {
-  const categories = (catalog.categories?.length ? catalog.categories : initialCategories)
+export function normalizeCatalogName(value: string) {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("es-MX");
+}
+
+export function normalizePosCatalog(catalog: PosCatalog): PosCatalog {
+  const sourceCategories = Array.isArray(catalog.categories) ? catalog.categories : initialCategories;
+  const orderedCategories = sourceCategories
     .map((category, index) => ({
       ...category,
       active: category.active ?? true,
@@ -247,18 +268,77 @@ function normalizeCatalog(catalog: PosCatalog): PosCatalog {
     }))
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
-  return {
-    categories,
-    products: (catalog.products?.length ? catalog.products : products).map((product) => ({
+  const categories: PosCategory[] = [];
+  const categoryAliases = new Map<string, string>();
+  const categoryById = new Map<string, PosCategory>();
+  const categoryByName = new Map<string, PosCategory>();
+
+  for (const category of orderedCategories) {
+    const normalizedName = normalizeCatalogName(category.name);
+    if (!normalizedName) continue;
+    const canonical = categoryById.get(category.id) ?? categoryByName.get(normalizedName);
+    if (canonical) {
+      categoryAliases.set(category.id, canonical.id);
+      continue;
+    }
+    const next = { ...category, name: category.name.trim(), sortOrder: categories.length };
+    categories.push(next);
+    categoryById.set(next.id, next);
+    categoryByName.set(normalizedName, next);
+    categoryAliases.set(next.id, next.id);
+  }
+
+  const sourceProducts = Array.isArray(catalog.products) ? catalog.products : products;
+  const normalizedProducts: Product[] = [];
+  const productIds = new Set<string>();
+  const recentProducts = new Map<string, number>();
+
+  for (const product of sourceProducts) {
+    if (productIds.has(product.id)) continue;
+    const originalCategoryId = product.categoryId ?? "entradas";
+    const categoryId = categoryAliases.get(originalCategoryId) ?? originalCategoryId;
+    const normalizedProduct: Product = {
       ...product,
-      categoryId: product.categoryId ?? "entradas",
+      name: product.name.trim(),
+      categoryId,
       available: product.available ?? true,
       visible: product.visible ?? true,
       sendToKitchen: product.sendToKitchen ?? true,
       recipeId: product.recipeId ?? null,
       tone: product.tone ?? "from-stone-100 to-stone-200",
-    })),
+    };
+    const timestamp = productCreatedAt(normalizedProduct);
+    const fingerprint = [
+      normalizeCatalogName(normalizedProduct.name),
+      normalizedProduct.price,
+      normalizedProduct.categoryId,
+    ].join("|");
+    const previousTimestamp = recentProducts.get(fingerprint);
+    if (
+      timestamp !== null &&
+      previousTimestamp !== undefined &&
+      Math.abs(timestamp - previousTimestamp) <= 5000
+    ) {
+      continue;
+    }
+    productIds.add(normalizedProduct.id);
+    if (timestamp !== null) recentProducts.set(fingerprint, timestamp);
+    normalizedProducts.push(normalizedProduct);
+  }
+
+  return {
+    categories,
+    products: normalizedProducts,
   };
+}
+
+function productCreatedAt(product: Product) {
+  if (product.createdAt) {
+    const timestamp = new Date(product.createdAt).getTime();
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  const legacyTimestamp = product.id.match(/^product-(\d{10,})-/)?.[1];
+  return legacyTimestamp ? Number(legacyTimestamp) : null;
 }
 
 function normalizeTables(tables: PosTable[]) {
