@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleDollarSign,
+  Coffee,
   Eye,
   EyeOff,
   Pencil,
@@ -27,7 +28,7 @@ import {
   readPosCatalog,
   writePosCatalog,
 } from "@/lib/pos-shared";
-import type { PosCatalog, PosCategory, Product } from "@/lib/pos-shared";
+import type { PosCatalog, PosCategory, Product, ProductStation } from "@/lib/pos-shared";
 
 type Editor =
   | { type: "category"; category?: PosCategory }
@@ -296,7 +297,7 @@ function ProductCard({ product, onEdit, onToggle }: { product: Product; onEdit: 
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <SmallFact icon={product.visible ? <Eye size={16} /> : <EyeOff size={16} />} text={product.visible ? "Visible en POS" : "Oculto en POS"} />
-        <SmallFact icon={product.sendToKitchen ? <ChefHat size={16} /> : <CircleDollarSign size={16} />} text={product.sendToKitchen ? "Va a cocina" : "Cobro directo"} />
+        <StationFact station={product.station} />
       </div>
       <div className="mt-5 grid grid-cols-2 gap-3">
         <button type="button" onClick={onEdit} className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-900"><Pencil size={19} /> Editar</button>
@@ -313,7 +314,7 @@ function ProductModal({ product, categories, onClose, onSave }: { product?: Prod
   const [description, setDescription] = useState(product?.description ?? "");
   const [available, setAvailable] = useState(product?.available ?? true);
   const [visible, setVisible] = useState(product?.visible ?? true);
-  const [sendToKitchen, setSendToKitchen] = useState(product?.sendToKitchen ?? true);
+  const [station, setStation] = useState<ProductStation>(product?.station ?? "kitchen");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const valid = name.trim().length > 0 && categoryId.length > 0 && price > 0;
@@ -332,7 +333,7 @@ function ProductModal({ product, categories, onClose, onSave }: { product?: Prod
       description: description.trim() || undefined,
       available,
       visible,
-      sendToKitchen,
+      station,
       recipeId: product?.recipeId ?? null,
       tone: product?.tone ?? "from-stone-100 to-emerald-100",
     });
@@ -351,9 +352,16 @@ function ProductModal({ product, categories, onClose, onSave }: { product?: Prod
         <Field label="Descripción corta (opcional)"><input value={description} onChange={(event) => setDescription(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950" /></Field>
       </div>
       <div className="mt-5 space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-stone-700">Estación</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <StationChoice station="kitchen" active={station === "kitchen"} onClick={() => setStation("kitchen")} />
+            <StationChoice station="bar" active={station === "bar"} onClick={() => setStation("bar")} />
+            <StationChoice station="direct" active={station === "direct"} onClick={() => setStation("direct")} />
+          </div>
+        </div>
         <SettingToggle label="Disponible" description="Se puede vender ahora" active={available} onChange={setAvailable} />
         <SettingToggle label="Visible en POS" description="Aparece en el catálogo de venta" active={visible} onChange={setVisible} />
-        <SettingToggle label="Enviar a cocina" description="Debe entrar en la comanda antes de cobrar" active={sendToKitchen} onChange={setSendToKitchen} />
       </div>
       <button type="button" disabled={!valid || saving} onClick={save} className="mt-6 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">{saving ? "Guardando..." : "Guardar producto"}</button>
     </Modal>
@@ -404,6 +412,18 @@ function StatusPill({ active, activeText, inactiveText }: { active: boolean; act
 
 function SmallFact({ icon, text }: { icon: ReactNode; text: string }) {
   return <span className="inline-flex h-9 items-center gap-2 rounded-full bg-stone-100 px-3 text-xs font-semibold text-stone-600">{icon}{text}</span>;
+}
+
+function StationFact({ station }: { station: ProductStation }) {
+  if (station === "kitchen") return <SmallFact icon={<ChefHat size={16} />} text="Va a cocina" />;
+  if (station === "bar") return <SmallFact icon={<Coffee size={16} />} text="Va a barra" />;
+  return <SmallFact icon={<CircleDollarSign size={16} />} text="Cobro directo" />;
+}
+
+function StationChoice({ station, active, onClick }: { station: ProductStation; active: boolean; onClick: () => void }) {
+  const copy = station === "kitchen" ? "Cocina" : station === "bar" ? "Barra" : "Cobro directo";
+  const icon = station === "kitchen" ? <ChefHat size={20} /> : station === "bar" ? <Coffee size={20} /> : <CircleDollarSign size={20} />;
+  return <button type="button" onClick={onClick} className={["flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl border px-2 text-sm font-semibold", active ? "border-stone-950 bg-stone-950 text-white" : "border-stone-200 bg-stone-50 text-stone-800"].join(" ")}>{icon}{copy}</button>;
 }
 
 function IconButton({ children, label, onClick, disabled = false }: { children: ReactNode; label: string; onClick: () => void; disabled?: boolean }) {

@@ -7,7 +7,9 @@ import {
   ArrowLeft,
   Banknote,
   CheckCircle2,
+  ChefHat,
   Clock,
+  Coffee,
   CreditCard,
   Gift,
   Minus,
@@ -42,6 +44,7 @@ import type {
   PosCategory,
   PosTable,
   Product,
+  ProductStation,
   Sale,
   TableStatus,
 } from "@/lib/pos-shared";
@@ -214,7 +217,7 @@ export function PosClient() {
   }
 
   function addProduct(product: Product) {
-    const nextStatus: OrderItemStatus = product.sendToKitchen ? "pending" : "served";
+    const nextStatus: OrderItemStatus = product.station === "direct" ? "served" : "pending";
     updateTables((current) =>
       current.map((table) => {
         if (table.id !== selectedTable.id || !table.openedAt) return table;
@@ -248,7 +251,7 @@ export function PosClient() {
         const items = table.items
           .map((item) => {
             if (item.lineId !== productId) return item;
-            const status: OrderItemStatus = item.sendToKitchen ? "pending" : "served";
+            const status: OrderItemStatus = item.station === "direct" ? "served" : "pending";
             return {
               ...item,
               quantity: item.quantity + change,
@@ -272,8 +275,14 @@ export function PosClient() {
     );
   }
 
-  function sendToKitchen() {
+  function sendCommand() {
     if (!selectedTable.openedAt || selectedTable.items.length === 0) return;
+    const pending = selectedTable.items.filter(
+      (item) => item.status === "pending" && item.station !== "direct",
+    );
+    const hasKitchen = pending.some((item) => item.station === "kitchen");
+    const hasBar = pending.some((item) => item.station === "bar");
+    if (!hasKitchen && !hasBar) return;
     updateTables((current) =>
       current.map((table) =>
         table.id === selectedTable.id
@@ -281,8 +290,8 @@ export function PosClient() {
               ...table,
               items: table.items.map((item) => ({
                 ...item,
-                status: item.status === "pending" ? "sent" : item.status,
-                sentAt: item.status === "pending" ? new Date().toISOString() : item.sentAt,
+                status: item.status === "pending" && item.station !== "direct" ? "sent" : item.status,
+                sentAt: item.status === "pending" && item.station !== "direct" ? new Date().toISOString() : item.sentAt,
                 updatedAt: new Date().toISOString(),
               })),
               readyToPay: false,
@@ -290,7 +299,13 @@ export function PosClient() {
           : table,
       ),
     );
-    showToast("Orden enviada a cocina");
+    showToast(
+      hasKitchen && hasBar
+        ? "Comanda enviada a cocina y barra"
+        : hasKitchen
+          ? "Comanda enviada a cocina"
+          : "Comanda enviada a barra",
+    );
   }
 
   function markServed(productId: string) {
@@ -310,8 +325,8 @@ export function PosClient() {
 
   function startPayment() {
     if (!selectedTable.openedAt || selectedTable.items.length === 0) return;
-    if (selectedTable.items.some((item) => item.sendToKitchen && item.status === "pending")) {
-      showToast("Envía los productos pendientes a cocina antes de cobrar");
+    if (selectedTable.items.some((item) => item.station !== "direct" && item.status === "pending")) {
+      showToast("Envía la comanda pendiente antes de cobrar");
       return;
     }
     updateTables((current) =>
@@ -465,16 +480,15 @@ export function PosClient() {
             <ActionButton onClick={() => setModal("cashier")} icon={<ReceiptText size={22} />} light>
               Cierre de caja
             </ActionButton>
-            <Link
-              href="/app/pos/products"
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-6 text-base font-semibold text-stone-900 shadow-sm transition hover:bg-stone-50"
-            >
-              <Package size={22} />
-              Configurar productos
-            </Link>
           </>
         }
       />
+
+      <nav className="flex flex-wrap gap-3 rounded-2xl border border-stone-200 bg-white p-3" aria-label="Accesos del punto de venta">
+        <SecondaryLink href="/app/kitchen" icon={<ChefHat size={20} />}>Ver cocina</SecondaryLink>
+        <SecondaryLink href="/app/bar" icon={<Coffee size={20} />}>Ver barra</SecondaryLink>
+        <SecondaryLink href="/app/pos/products" icon={<Package size={20} />}>Configurar productos</SecondaryLink>
+      </nav>
 
       <section className="grid gap-3 md:grid-cols-3">
         <MiniMetric label="Pendiente por cobrar" value={money.format(metrics.pending)} />
@@ -517,7 +531,7 @@ export function PosClient() {
           onChangeQuantity={changeQuantity}
           onRemoveProduct={removeProduct}
           onMarkServed={markServed}
-          onSendKitchen={sendToKitchen}
+          onSendCommand={sendCommand}
           onStartPayment={startPayment}
           onOpenDiscount={() => setAccountModal("discount")}
           onOpenCourtesy={() => setAccountModal("courtesy")}
@@ -575,6 +589,18 @@ function ActionButton({
       {icon}
       {children}
     </button>
+  );
+}
+
+function SecondaryLink({ href, icon, children }: { href: string; icon: ReactNode; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 hover:text-stone-950"
+    >
+      {icon}
+      {children}
+    </Link>
   );
 }
 
@@ -640,15 +666,21 @@ function ProductImage({ product }: { product: Product }) {
   );
 }
 
-function OrderStatusBadge({ status }: { status: OrderItemStatus }) {
-  const labels: Record<OrderItemStatus, string> = {
-    pending: "🟡 Pendiente",
-    sent: "🔵 En cocina",
-    preparing: "🟣 Preparando",
-    ready: "🟢 Listo para servir",
-    served: "✅ Servido",
-    paid: "⚫ Cobrado",
-  };
+function OrderStatusBadge({ status, station }: { status: OrderItemStatus; station: ProductStation }) {
+  const stationName = station === "kitchen" ? "Cocina" : station === "bar" ? "Barra" : "Cobro directo";
+  const label = station === "direct" && status !== "paid"
+    ? "Cobro directo"
+    : status === "pending"
+      ? `${stationName} · Pendiente`
+      : status === "sent"
+        ? station === "bar" ? "En barra" : "En cocina"
+        : status === "preparing"
+          ? `${stationName} · Preparando`
+          : status === "ready"
+            ? `${stationName} · Listo`
+            : status === "served"
+              ? "Servido"
+              : "Cobrado";
   const classes: Record<OrderItemStatus, string> = {
     pending: "border-amber-200 bg-amber-50 text-amber-800",
     sent: "border-sky-200 bg-sky-50 text-sky-800",
@@ -660,7 +692,7 @@ function OrderStatusBadge({ status }: { status: OrderItemStatus }) {
 
   return (
     <span className={["mt-2 inline-flex h-8 items-center rounded-full border px-3 text-sm font-semibold", classes[status]].join(" ")}>
-      {labels[status]}
+      {label}
     </span>
   );
 }
@@ -677,7 +709,7 @@ function FullscreenPos({
   onChangeQuantity,
   onRemoveProduct,
   onMarkServed,
-  onSendKitchen,
+  onSendCommand,
   onStartPayment,
   onOpenDiscount,
   onOpenCourtesy,
@@ -696,7 +728,7 @@ function FullscreenPos({
   onChangeQuantity: (productId: string, change: number) => void;
   onRemoveProduct: (productId: string) => void;
   onMarkServed: (productId: string) => void;
-  onSendKitchen: () => void;
+  onSendCommand: () => void;
   onStartPayment: () => void;
   onOpenDiscount: () => void;
   onOpenCourtesy: () => void;
@@ -748,7 +780,7 @@ function FullscreenPos({
             onChangeQuantity={onChangeQuantity}
             onRemoveProduct={onRemoveProduct}
             onMarkServed={onMarkServed}
-            onSendKitchen={onSendKitchen}
+            onSendCommand={onSendCommand}
             onStartPayment={onStartPayment}
             onOpenDiscount={onOpenDiscount}
             onOpenCourtesy={onOpenCourtesy}
@@ -773,7 +805,7 @@ function OrderStep({
   onChangeQuantity,
   onRemoveProduct,
   onMarkServed,
-  onSendKitchen,
+  onSendCommand,
   onStartPayment,
   onOpenDiscount,
   onOpenCourtesy,
@@ -787,13 +819,13 @@ function OrderStep({
   onChangeQuantity: (productId: string, change: number) => void;
   onRemoveProduct: (productId: string) => void;
   onMarkServed: (productId: string) => void;
-  onSendKitchen: () => void;
+  onSendCommand: () => void;
   onStartPayment: () => void;
   onOpenDiscount: () => void;
   onOpenCourtesy: () => void;
 }) {
-  const hasPendingKitchenItems = table.items.some(
-    (item) => item.sendToKitchen && item.status === "pending",
+  const hasPendingCommandItems = table.items.some(
+    (item) => item.station !== "direct" && item.status === "pending",
   );
 
   return (
@@ -865,7 +897,7 @@ function OrderStep({
                       <p className="text-lg font-semibold text-stone-950">
                         {item.quantity}x {item.name}
                       </p>
-                      <OrderStatusBadge status={item.status} />
+                      <OrderStatusBadge status={item.status} station={item.station} />
                     </div>
                     <p className="text-xl font-semibold text-stone-950">
                       {money.format(item.price * item.quantity)}
@@ -944,11 +976,11 @@ function OrderStep({
         <div className="grid gap-3 border-t border-stone-200 bg-white p-5 sm:grid-cols-2">
           <button
             type="button"
-            onClick={onSendKitchen}
-            disabled={!table.openedAt || !hasPendingKitchenItems}
+            onClick={onSendCommand}
+            disabled={!table.openedAt || !hasPendingCommandItems}
             className="h-20 rounded-3xl bg-emerald-600 text-xl font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
           >
-            Enviar cocina
+            Enviar comanda
           </button>
           <button
             type="button"
@@ -1159,7 +1191,7 @@ function ReceiptPanel({ table }: { table: PosTable }) {
               <span>{item.quantity}x {item.name}</span>
               <span>{money.format(item.price * item.quantity)}</span>
             </div>
-            <OrderStatusBadge status={item.status} />
+            <OrderStatusBadge status={item.status} station={item.station} />
           </div>
         ))}
       </div>

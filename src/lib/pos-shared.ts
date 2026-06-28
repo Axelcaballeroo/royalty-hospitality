@@ -1,6 +1,7 @@
 export type TableStatus = "free" | "occupied" | "checkout";
 export type PaymentMethod = "Efectivo" | "Tarjeta" | "Transferencia" | "Mixto";
 export type OrderItemStatus = "pending" | "sent" | "preparing" | "ready" | "served" | "paid";
+export type ProductStation = "kitchen" | "bar" | "direct";
 
 export type PosCategory = {
   id: string;
@@ -18,7 +19,8 @@ export type Product = {
   description?: string;
   available: boolean;
   visible: boolean;
-  sendToKitchen: boolean;
+  station: ProductStation;
+  sendToKitchen?: boolean;
   recipeId?: string | null;
   tone: string;
 };
@@ -100,13 +102,13 @@ export const initialCategories: PosCategory[] = [
 ];
 
 export const products: Product[] = [
-  { id: "california", name: "Rollo California", price: 180, categoryId: "sushi", description: "Rollo clásico de cangrejo y aguacate", available: true, visible: true, sendToKitchen: true, recipeId: null, tone: "from-rose-100 to-orange-100" },
-  { id: "salmon", name: "Rollo Salmón", price: 220, categoryId: "sushi", description: "Rollo de salmón fresco", available: true, visible: true, sendToKitchen: true, recipeId: null, tone: "from-orange-100 to-pink-100" },
-  { id: "ramen", name: "Ramen", price: 190, categoryId: "entradas", description: "Caldo caliente con fideos", available: true, visible: true, sendToKitchen: true, recipeId: null, tone: "from-amber-100 to-yellow-100" },
-  { id: "edamame", name: "Edamame", price: 120, categoryId: "entradas", available: true, visible: true, sendToKitchen: true, recipeId: null, tone: "from-emerald-100 to-lime-100" },
-  { id: "agua", name: "Agua mineral", price: 60, categoryId: "bebidas", available: true, visible: true, sendToKitchen: false, recipeId: null, tone: "from-sky-100 to-cyan-100" },
-  { id: "sake", name: "Sake", price: 250, categoryId: "bebidas", available: true, visible: true, sendToKitchen: false, recipeId: null, tone: "from-indigo-100 to-slate-100" },
-  { id: "mochi", name: "Postre Mochi", price: 140, categoryId: "postres", available: true, visible: true, sendToKitchen: true, recipeId: null, tone: "from-violet-100 to-fuchsia-100" },
+  { id: "california", name: "Rollo California", price: 180, categoryId: "sushi", description: "Rollo clásico de cangrejo y aguacate", available: true, visible: true, station: "kitchen", recipeId: null, tone: "from-rose-100 to-orange-100" },
+  { id: "salmon", name: "Rollo Salmón", price: 220, categoryId: "sushi", description: "Rollo de salmón fresco", available: true, visible: true, station: "kitchen", recipeId: null, tone: "from-orange-100 to-pink-100" },
+  { id: "ramen", name: "Ramen", price: 190, categoryId: "entradas", description: "Caldo caliente con fideos", available: true, visible: true, station: "kitchen", recipeId: null, tone: "from-amber-100 to-yellow-100" },
+  { id: "edamame", name: "Edamame", price: 120, categoryId: "entradas", available: true, visible: true, station: "kitchen", recipeId: null, tone: "from-emerald-100 to-lime-100" },
+  { id: "agua", name: "Agua mineral", price: 60, categoryId: "bebidas", available: true, visible: true, station: "bar", recipeId: null, tone: "from-sky-100 to-cyan-100" },
+  { id: "sake", name: "Sake", price: 250, categoryId: "bebidas", available: true, visible: true, station: "bar", recipeId: null, tone: "from-indigo-100 to-slate-100" },
+  { id: "mochi", name: "Postre Mochi", price: 140, categoryId: "postres", available: true, visible: true, station: "kitchen", recipeId: null, tone: "from-violet-100 to-fuchsia-100" },
 ];
 
 export const initialPosCatalog: PosCatalog = {
@@ -303,7 +305,7 @@ export function normalizePosCatalog(catalog: PosCatalog): PosCatalog {
       categoryId,
       available: product.available ?? true,
       visible: product.visible ?? true,
-      sendToKitchen: product.sendToKitchen ?? true,
+      station: productStation(product),
       recipeId: product.recipeId ?? null,
       tone: product.tone ?? "from-stone-100 to-stone-200",
     };
@@ -341,6 +343,13 @@ function productCreatedAt(product: Product) {
   return legacyTimestamp ? Number(legacyTimestamp) : null;
 }
 
+function productStation(product: Product): ProductStation {
+  if (product.station) return product.station;
+  if (product.id === "agua" || product.id === "sake") return "bar";
+  if (["clase de salsa", "clases de salsa"].includes(normalizeCatalogName(product.name))) return "direct";
+  return product.sendToKitchen === false ? "direct" : "kitchen";
+}
+
 function normalizeTables(tables: PosTable[]) {
   return tables
     .filter((table) => table.id !== "barra")
@@ -357,7 +366,7 @@ function normalizeTables(tables: PosTable[]) {
         categoryId: item.categoryId ?? products.find((product) => product.id === item.id)?.categoryId ?? "entradas",
         available: item.available ?? true,
         visible: item.visible ?? true,
-        sendToKitchen: item.sendToKitchen ?? products.find((product) => product.id === item.id)?.sendToKitchen ?? true,
+        station: productStation(item),
         recipeId: item.recipeId ?? null,
         tone: item.tone ?? "from-stone-100 to-stone-200",
         lineId: item.lineId ?? `${table.id}-${item.id}-${index}`,

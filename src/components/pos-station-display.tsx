@@ -1,23 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChefHat, Clock, Flame, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, CheckCircle2, ChefHat, Clock, Coffee, Flame, RefreshCw } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
-import {
-  posStateEvent,
-  readPosTables,
-  writePosTables,
-} from "@/lib/pos-shared";
-import type { OrderItemStatus, PosTable } from "@/lib/pos-shared";
+import { posStateEvent, readPosTables, writePosTables } from "@/lib/pos-shared";
+import type { OrderItemStatus, PosTable, ProductStation } from "@/lib/pos-shared";
 
 type KitchenTicket = {
   tableId: string;
   tableName: string;
+  isQuickSale: boolean;
   openedAt: string;
   items: PosTable["items"];
 };
 
-const kitchenStatuses: OrderItemStatus[] = ["sent", "preparing", "ready"];
+const activeStatuses: OrderItemStatus[] = ["sent", "preparing", "ready"];
 
 function ticketTime(value: string) {
   return new Intl.DateTimeFormat("es-MX", {
@@ -26,32 +24,24 @@ function ticketTime(value: string) {
   }).format(new Date(value));
 }
 
-function statusCopy(status: OrderItemStatus) {
-  if (status === "sent") return "En cocina";
-  if (status === "preparing") return "Preparando";
-  if (status === "ready") return "Listo";
-  return "Pendiente";
-}
-
 function statusClasses(status: OrderItemStatus) {
   if (status === "sent") return "border-sky-200 bg-sky-50 text-sky-800";
   if (status === "preparing") return "border-indigo-200 bg-indigo-50 text-indigo-800";
-  if (status === "ready") return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-emerald-200 bg-emerald-50 text-emerald-800";
 }
 
-export function KitchenClient() {
+export function PosStationDisplay({ station }: { station: Exclude<ProductStation, "direct"> }) {
   const [tables, setTables] = useState<PosTable[]>([]);
   const [toast, setToast] = useState("");
+  const isKitchen = station === "kitchen";
+  const title = isKitchen ? "Cocina" : "Barra";
 
   useEffect(() => {
     const syncTables = () => setTables(readPosTables());
-
     syncTables();
     const interval = window.setInterval(syncTables, 1000);
     window.addEventListener("storage", syncTables);
     window.addEventListener(posStateEvent, syncTables);
-
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("storage", syncTables);
@@ -64,12 +54,15 @@ export function KitchenClient() {
       .filter((table) => table.openedAt)
       .map((table) => ({
         tableId: table.id,
-        tableName: table.name,
+        tableName: table.quickType ? `Venta rápida · ${table.quickType}` : table.name,
+        isQuickSale: Boolean(table.quickType),
         openedAt: table.openedAt ?? new Date().toISOString(),
-        items: table.items.filter((item) => kitchenStatuses.includes(item.status)),
+        items: table.items.filter(
+          (item) => item.station === station && activeStatuses.includes(item.status),
+        ),
       }))
       .filter((ticket) => ticket.items.length > 0);
-  }, [tables]);
+  }, [station, tables]);
 
   function showToast(message: string) {
     setToast(message);
@@ -89,10 +82,9 @@ export function KitchenClient() {
           }
         : table,
     );
-
     setTables(next);
     writePosTables(next);
-    showToast(status === "ready" ? "Producto listo para servir" : "Producto en preparacion");
+    showToast(status === "ready" ? "Producto listo" : "Producto en preparación");
   }
 
   return (
@@ -105,32 +97,31 @@ export function KitchenClient() {
       ) : null}
 
       <SectionHeader
-        eyebrow="KDS"
-        title="Cocina"
-        description="Comandas activas para preparar y marcar listas desde tablet."
+        eyebrow="Comandas"
+        title={title}
+        description={`Productos enviados a ${title.toLocaleLowerCase("es-MX")} y listos para trabajar desde tablet.`}
         actions={
-          <button
-            type="button"
-            onClick={() => setTables(readPosTables())}
-            className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-6 text-base font-semibold text-stone-900 shadow-sm transition hover:bg-stone-50"
-          >
-            <RefreshCw size={22} />
-            Actualizar
-          </button>
+          <>
+            <Link href="/app/pos" className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 text-base font-semibold text-stone-900">
+              <ArrowLeft size={21} />
+              Volver al POS
+            </Link>
+            <button type="button" onClick={() => setTables(readPosTables())} className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 text-base font-semibold text-white">
+              <RefreshCw size={21} />
+              Actualizar
+            </button>
+          </>
         }
       />
 
       {tickets.length ? (
         <section className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
           {tickets.map((ticket) => (
-            <article
-              key={ticket.tableId}
-              className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm"
-            >
+            <article key={ticket.tableId} className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-semibold text-stone-500">Mesa</p>
-                  <h2 className="mt-1 text-4xl font-semibold text-stone-950">{ticket.tableName}</h2>
+                  <p className="text-sm font-semibold text-stone-500">{ticket.isQuickSale ? "Orden" : "Mesa"}</p>
+                  <h2 className="mt-1 text-3xl font-semibold text-stone-950">{ticket.tableName}</h2>
                 </div>
                 <span className="inline-flex h-12 items-center gap-2 rounded-2xl bg-stone-100 px-4 text-base font-semibold text-stone-800">
                   <Clock size={20} />
@@ -143,39 +134,29 @@ export function KitchenClient() {
                   <div key={item.lineId} className="rounded-3xl bg-stone-50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-2xl font-semibold text-stone-950">
-                          {item.quantity}x {item.name}
-                        </p>
+                        <p className="text-2xl font-semibold text-stone-950">{item.quantity}x {item.name}</p>
                         <span className={["mt-3 inline-flex h-9 items-center rounded-full border px-3 text-sm font-semibold", statusClasses(item.status)].join(" ")}>
-                          {statusCopy(item.status)}
+                          {item.status === "sent" ? `En ${title.toLocaleLowerCase("es-MX")}` : item.status === "preparing" ? "Preparando" : "Listo"}
                         </span>
                       </div>
-                      <ChefHat className="text-stone-400" size={32} />
+                      {isKitchen ? <ChefHat className="text-stone-400" size={32} /> : <Coffee className="text-stone-400" size={32} />}
                     </div>
 
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-5">
                       {item.status === "sent" ? (
-                        <button
-                          type="button"
-                          onClick={() => updateItemStatus(ticket.tableId, item.lineId, "preparing")}
-                          className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800"
-                        >
+                        <button type="button" onClick={() => updateItemStatus(ticket.tableId, item.lineId, "preparing")} className="inline-flex h-16 w-full items-center justify-center gap-2 rounded-2xl bg-stone-950 text-lg font-semibold text-white">
                           <Flame size={22} />
                           Preparando
                         </button>
                       ) : null}
                       {item.status === "preparing" ? (
-                        <button
-                          type="button"
-                          onClick={() => updateItemStatus(ticket.tableId, item.lineId, "ready")}
-                          className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-lg font-semibold text-white transition hover:bg-emerald-700"
-                        >
+                        <button type="button" onClick={() => updateItemStatus(ticket.tableId, item.lineId, "ready")} className="inline-flex h-16 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-lg font-semibold text-white">
                           <CheckCircle2 size={22} />
                           Listo
                         </button>
                       ) : null}
                       {item.status === "ready" ? (
-                        <div className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 text-lg font-semibold text-emerald-800 sm:col-span-2">
+                        <div className="inline-flex h-16 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 text-lg font-semibold text-emerald-800">
                           <CheckCircle2 size={22} />
                           Esperando servicio
                         </div>
@@ -188,13 +169,11 @@ export function KitchenClient() {
           ))}
         </section>
       ) : (
-        <section className="rounded-3xl border border-dashed border-stone-300 bg-white p-12 text-center">
-          <ChefHat className="mx-auto text-stone-400" size={48} />
-          <h2 className="mt-5 text-3xl font-semibold text-stone-950">Sin comandas activas</h2>
-          <p className="mt-3 text-base font-semibold text-stone-500">
-            Las ordenes enviadas desde POS apareceran aqui.
-          </p>
-        </section>
+        <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-12 text-center">
+          {isKitchen ? <ChefHat className="mx-auto text-stone-300" size={54} /> : <Coffee className="mx-auto text-stone-300" size={54} />}
+          <h2 className="mt-4 text-2xl font-semibold text-stone-950">Sin comandas pendientes</h2>
+          <p className="mt-2 text-base font-medium text-stone-500">Las nuevas partidas aparecerán aquí al enviar la comanda.</p>
+        </div>
       )}
     </div>
   );

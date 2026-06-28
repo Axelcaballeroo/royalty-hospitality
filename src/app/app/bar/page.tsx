@@ -2,6 +2,6 @@ import { PosStationDisplay } from "@/components/pos-station-display";
 
 export const dynamic = "force-dynamic";
 
-export default function KitchenPage() {
-  return <PosStationDisplay station="kitchen" />;
+export default function BarPage() {
+  return <PosStationDisplay station="bar" />;
 }
