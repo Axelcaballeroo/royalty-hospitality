@@ -23,13 +23,22 @@ export type Discount = {
   type: "percent" | "fixed";
   value: number;
   reason: string;
+  authorizedBy?: string;
 };
 
 export type Courtesy = {
+  type: "product" | "amount" | "full";
   label: string;
   amount: number;
   reason: string;
   authorizedBy: string;
+  customer?: string;
+  productLineId?: string;
+};
+
+export type PaymentPart = {
+  method: Exclude<PaymentMethod, "Mixto">;
+  amount: number;
 };
 
 export type PosTable = {
@@ -48,12 +57,19 @@ export type PosTable = {
 export type Sale = {
   id: string;
   tableName: string;
+  items: OrderItem[];
+  gross: number;
+  discount: number;
+  courtesy: number;
   total: number;
   paymentMethod: PaymentMethod;
+  payments: PaymentPart[];
+  isCourtesy: boolean;
   closedAt: string;
 };
 
 export const posStorageKey = "royalty-pos-state-v1";
+export const posSalesStorageKey = "royalty-pos-sales-v1";
 export const posStateEvent = "royalty-pos-state-updated";
 
 export const categories: Category[] = ["Sushi", "Entradas", "Bebidas", "Postres", "Promos"];
@@ -166,9 +182,32 @@ export function writePosTables(tables: PosTable[]) {
   window.dispatchEvent(new CustomEvent(posStateEvent));
 }
 
+export function readPosSales() {
+  if (typeof window === "undefined") return [] as Sale[];
+
+  try {
+    const value = window.localStorage.getItem(posSalesStorageKey);
+    if (!value) return [] as Sale[];
+    return JSON.parse(value) as Sale[];
+  } catch {
+    return [] as Sale[];
+  }
+}
+
+export function writePosSales(sales: Sale[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(posSalesStorageKey, JSON.stringify(sales));
+}
+
 function normalizeTables(tables: PosTable[]) {
   return tables.map((table) => ({
     ...table,
+    courtesy: table.courtesy
+      ? {
+          ...table.courtesy,
+          type: table.courtesy.type ?? "amount",
+        }
+      : null,
     items: table.items.map((item, index) => ({
       ...item,
       lineId: item.lineId ?? `${table.id}-${item.id}-${index}`,

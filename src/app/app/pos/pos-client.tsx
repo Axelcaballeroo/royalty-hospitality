@@ -8,8 +8,11 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
+  Gift,
   Minus,
+  Percent,
   Plus,
+  Printer,
   ReceiptText,
   Sparkles,
   Trash2,
@@ -23,12 +26,15 @@ import {
   makeLineId,
   posStateEvent,
   products,
+  readPosSales,
   readPosTables,
+  writePosSales,
   writePosTables,
 } from "@/lib/pos-shared";
 import type {
   Category,
   OrderItemStatus,
+  PaymentPart,
   PaymentMethod,
   PosTable,
   Product,
@@ -38,6 +44,8 @@ import type {
 
 type ModalType = "open" | "quick" | "order" | "cashier" | null;
 type PosStep = "order" | "payment";
+type AccountModal = "discount" | "courtesy" | null;
+type CompletedPayment = { payments: PaymentPart[]; isCourtesy: boolean };
 
 const money = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -52,13 +60,16 @@ function subtotal(table: PosTable) {
 function discountAmount(table: PosTable) {
   if (!table.discount) return 0;
   const base = subtotal(table);
-  return table.discount.type === "percent"
+  const calculated = table.discount.type === "percent"
     ? Math.round((base * table.discount.value) / 100)
     : table.discount.value;
+  return Math.min(base, Math.max(0, calculated));
 }
 
 function courtesyAmount(table: PosTable) {
-  return table.courtesy?.amount ?? 0;
+  if (!table.courtesy) return 0;
+  if (table.courtesy.type === "full") return Math.max(0, subtotal(table) - discountAmount(table));
+  return Math.min(table.courtesy.amount, Math.max(0, subtotal(table) - discountAmount(table)));
 }
 
 function total(table: PosTable) {
@@ -100,12 +111,17 @@ export function PosClient() {
   const [posStep, setPosStep] = useState<PosStep>("order");
   const [toast, setToast] = useState("");
   const [sales, setSales] = useState<Sale[]>([]);
+  const [accountModal, setAccountModal] = useState<AccountModal>(null);
+  const [completedPayment, setCompletedPayment] = useState<CompletedPayment | null>(null);
 
   const selectedTable = tables.find((table) => table.id === selectedTableId) ?? tables[0];
   const categoryProducts = products.filter((product) => product.category === activeCategory);
 
   useEffect(() => {
-    const syncTables = () => setTables(readPosTables());
+    const syncTables = () => {
+      setTables(readPosTables());
+      setSales(readPosSales());
+    };
 
     syncTables();
     const interval = window.setInterval(syncTables, 1000);
@@ -280,20 +296,81 @@ export function PosClient() {
     setPosStep("payment");
   }
 
-  function registerPayment(method: PaymentMethod) {
-    const table = selectedTable;
-    if (!table) return;
+  function applyDiscount(type: "percent" | "fixed", value: number, reason: string, authorizedBy: string) {
+    updateTables((current) =>
+      current.map((table) =>
+        table.id === selectedTable.id
+          ? { ...table, discount: { type, value, reason, authorizedBy: authorizedBy || undefined } }
+          : table,
+      ),
+    );
+    setAccountModal(null);
+    showToast("Descuento aplicado");
+  }
 
-    setSales((current) => [
-      {
-        id: `sale-${Date.now()}`,
-        tableName: table.name,
-        total: total(table),
-        paymentMethod: method,
-        closedAt: new Date().toISOString(),
-      },
-      ...current,
-    ]);
+  function applyCourtesy(courtesy: NonNullable<PosTable["courtesy"]>) {
+    updateTables((current) =>
+      current.map((table) => (table.id === selectedTable.id ? { ...table, courtesy } : table)),
+    );
+    setAccountModal(null);
+    showToast(courtesy.type === "full" ? "Cuenta marcada como cortesía" : "Cortesía aplicada");
+  }
+
+  function registerPayment(payments: PaymentPart[]) {
+    updateTables((current) =>
+      current.map((table) =>
+        table.id === selectedTable.id
+          ? {
+              ...table,
+              items: table.items.map((item) => ({ ...item, status: "paid", updatedAt: new Date().toISOString() })),
+            }
+          : table,
+      ),
+    );
+    setCompletedPayment({ payments, isCourtesy: false });
+    showToast("Pago registrado");
+  }
+
+  function prepareCourtesyClose() {
+    updateTables((current) =>
+      current.map((table) =>
+        table.id === selectedTable.id
+          ? {
+              ...table,
+              items: table.items.map((item) => ({ ...item, status: "paid", updatedAt: new Date().toISOString() })),
+            }
+          : table,
+      ),
+    );
+    setCompletedPayment({ payments: [], isCourtesy: true });
+  }
+
+  function closeOrder() {
+    if (!completedPayment) return;
+    const table = selectedTable;
+    const paymentMethod: PaymentMethod = completedPayment.isCourtesy
+      ? "Mixto"
+      : completedPayment.payments.length > 1
+        ? "Mixto"
+        : completedPayment.payments[0]?.method ?? "Mixto";
+    const sale: Sale = {
+      id: `sale-${Date.now()}`,
+      tableName: table.name,
+      items: table.items.map((item) => ({ ...item, status: "paid" })),
+      gross: subtotal(table),
+      discount: discountAmount(table),
+      courtesy: courtesyAmount(table),
+      total: total(table),
+      paymentMethod,
+      payments: completedPayment.payments,
+      isCourtesy: completedPayment.isCourtesy,
+      closedAt: new Date().toISOString(),
+    };
+    setSales((current) => {
+      const next = [sale, ...current];
+      writePosSales(next);
+      return next;
+    });
     updateTables((current) =>
       current.map((item) =>
         item.id === table.id
@@ -311,9 +388,10 @@ export function PosClient() {
           : item,
       ),
     );
+    setCompletedPayment(null);
     setPosStep("order");
     setModal(null);
-    showToast("Pago registrado. Mesa liberada");
+    showToast("Mesa liberada");
   }
 
   function openQuickSale(type: string) {
@@ -405,9 +483,24 @@ export function PosClient() {
           onMarkServed={markServed}
           onSendKitchen={sendToKitchen}
           onStartPayment={startPayment}
+          onOpenDiscount={() => setAccountModal("discount")}
+          onOpenCourtesy={() => setAccountModal("courtesy")}
           onBackToOrder={() => setPosStep("order")}
           onPay={registerPayment}
+          onCourtesyClose={prepareCourtesyClose}
         />
+      ) : null}
+
+      {accountModal === "discount" ? (
+        <DiscountModal table={selectedTable} onClose={() => setAccountModal(null)} onApply={applyDiscount} />
+      ) : null}
+
+      {accountModal === "courtesy" ? (
+        <CourtesyModal table={selectedTable} onClose={() => setAccountModal(null)} onApply={applyCourtesy} />
+      ) : null}
+
+      {completedPayment ? (
+        <PaymentCompleteModal isCourtesy={completedPayment.isCourtesy} onCloseOrder={closeOrder} />
       ) : null}
 
       {modal === "cashier" ? (
@@ -545,8 +638,11 @@ function FullscreenPos({
   onMarkServed,
   onSendKitchen,
   onStartPayment,
+  onOpenDiscount,
+  onOpenCourtesy,
   onBackToOrder,
   onPay,
+  onCourtesyClose,
 }: {
   table: PosTable;
   step: PosStep;
@@ -560,8 +656,11 @@ function FullscreenPos({
   onMarkServed: (productId: string) => void;
   onSendKitchen: () => void;
   onStartPayment: () => void;
+  onOpenDiscount: () => void;
+  onOpenCourtesy: () => void;
   onBackToOrder: () => void;
-  onPay: (method: PaymentMethod) => void;
+  onPay: (payments: PaymentPart[]) => void;
+  onCourtesyClose: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 p-3 transition-opacity">
@@ -583,7 +682,7 @@ function FullscreenPos({
           </div>
           <div className="flex flex-wrap gap-3">
             <span className={["inline-flex h-12 items-center rounded-2xl border px-4 text-base font-semibold", statusClasses(tableStatus(table))].join(" ")}>
-              {statusLabel(tableStatus(table))}
+              {table.courtesy?.type === "full" ? "Cortesía" : statusLabel(tableStatus(table))}
             </span>
             <span className="inline-flex h-12 items-center gap-2 rounded-2xl bg-stone-100 px-4 text-base font-semibold text-stone-800">
               <Users size={20} />
@@ -608,10 +707,14 @@ function FullscreenPos({
             onMarkServed={onMarkServed}
             onSendKitchen={onSendKitchen}
             onStartPayment={onStartPayment}
+            onOpenDiscount={onOpenDiscount}
+            onOpenCourtesy={onOpenCourtesy}
           />
         ) : null}
 
-        {step === "payment" ? <PaymentStep table={table} onBack={onBackToOrder} onPay={onPay} /> : null}
+        {step === "payment" ? (
+          <PaymentStep table={table} onBack={onBackToOrder} onPay={onPay} onCourtesyClose={onCourtesyClose} />
+        ) : null}
       </div>
     </div>
   );
@@ -628,6 +731,8 @@ function OrderStep({
   onMarkServed,
   onSendKitchen,
   onStartPayment,
+  onOpenDiscount,
+  onOpenCourtesy,
 }: {
   table: PosTable;
   activeCategory: Category;
@@ -639,6 +744,8 @@ function OrderStep({
   onMarkServed: (productId: string) => void;
   onSendKitchen: () => void;
   onStartPayment: () => void;
+  onOpenDiscount: () => void;
+  onOpenCourtesy: () => void;
 }) {
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[7fr_3fr]">
@@ -754,6 +861,34 @@ function OrderStep({
               <span className="text-xl font-semibold text-stone-950">TOTAL</span>
               <span className="text-5xl font-semibold text-stone-950">{money.format(total(table))}</span>
             </div>
+            {table.discount ? (
+              <p className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-stone-600">
+                Descuento: {table.discount.reason}
+              </p>
+            ) : null}
+            {table.courtesy ? (
+              <p className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-stone-600">
+                Cortesía: {table.courtesy.label} · {table.courtesy.reason}
+              </p>
+            ) : null}
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <button
+                type="button"
+                onClick={onOpenDiscount}
+                className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-950"
+              >
+                <Percent size={21} />
+                Descuento
+              </button>
+              <button
+                type="button"
+                onClick={onOpenCourtesy}
+                className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-950"
+              >
+                <Gift size={21} />
+                Cortesía
+              </button>
+            </div>
           </div>
         </div>
 
@@ -784,14 +919,44 @@ function PaymentStep({
   table,
   onBack,
   onPay,
+  onCourtesyClose,
 }: {
   table: PosTable;
   onBack: () => void;
-  onPay: (method: PaymentMethod) => void;
+  onPay: (payments: PaymentPart[]) => void;
+  onCourtesyClose: () => void;
 }) {
   const [method, setMethod] = useState<PaymentMethod>("Efectivo");
   const [amountReceived, setAmountReceived] = useState(total(table));
+  const [partialMethod, setPartialMethod] = useState<PaymentPart["method"]>("Efectivo");
+  const [partialAmount, setPartialAmount] = useState(total(table));
+  const [payments, setPayments] = useState<PaymentPart[]>([]);
   const methods: PaymentMethod[] = ["Efectivo", "Tarjeta", "Transferencia", "Mixto"];
+  const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const remaining = Math.max(0, total(table) - paid);
+  const change = Math.max(0, amountReceived - total(table));
+
+  function chooseMethod(nextMethod: PaymentMethod) {
+    setMethod(nextMethod);
+    setPayments([]);
+    setPartialAmount(total(table));
+  }
+
+  function addPartialPayment() {
+    const amount = Math.min(Math.max(0, partialAmount), remaining);
+    if (!amount) return;
+    setPayments((current) => [...current, { method: partialMethod, amount }]);
+    setPartialAmount(Math.max(0, remaining - amount));
+  }
+
+  function register() {
+    if (method === "Mixto") {
+      if (remaining === 0 && payments.length > 0) onPay(payments);
+      return;
+    }
+    if (method === "Efectivo" && amountReceived < total(table)) return;
+    onPay([{ method, amount: total(table) }]);
+  }
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 bg-stone-50 p-5 lg:grid-cols-[7fr_3fr]">
@@ -814,7 +979,7 @@ function PaymentStep({
               <button
                 type="button"
                 key={item}
-                onClick={() => setMethod(item)}
+                onClick={() => chooseMethod(item)}
                 className={[
                   "inline-flex h-24 items-center justify-center gap-3 rounded-3xl border text-xl font-semibold transition",
                   method === item
@@ -828,23 +993,93 @@ function PaymentStep({
             ))}
           </div>
           {method === "Efectivo" ? (
-            <label className="mt-5 block text-base font-semibold text-stone-700">
-              Monto recibido
-              <input
-                type="number"
-                min={total(table)}
-                value={amountReceived}
-                onChange={(event) => setAmountReceived(Number(event.target.value))}
-                className="mt-2 h-16 w-full rounded-2xl border border-stone-200 px-5 text-xl text-stone-950"
-              />
-            </label>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <label className="block text-base font-semibold text-stone-700">
+                Monto recibido
+                <input
+                  type="number"
+                  min={0}
+                  value={amountReceived}
+                  onChange={(event) => setAmountReceived(Number(event.target.value))}
+                  className="mt-2 h-16 w-full rounded-2xl border border-stone-200 px-5 text-xl text-stone-950"
+                />
+              </label>
+              <div className="rounded-2xl bg-emerald-50 p-4">
+                <p className="text-sm font-semibold text-emerald-700">Cambio</p>
+                <p className="mt-2 text-3xl font-semibold text-emerald-900">{money.format(change)}</p>
+              </div>
+            </div>
+          ) : null}
+          {method === "Mixto" ? (
+            <div className="mt-5 rounded-3xl border border-stone-200 p-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {(["Efectivo", "Tarjeta", "Transferencia"] as PaymentPart["method"][]).map((item) => (
+                  <button
+                    type="button"
+                    key={item}
+                    onClick={() => setPartialMethod(item)}
+                    className={[
+                      "h-14 rounded-2xl border text-base font-semibold",
+                      partialMethod === item
+                        ? "border-stone-950 bg-stone-950 text-white"
+                        : "border-stone-200 bg-stone-50 text-stone-950",
+                    ].join(" ")}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <input
+                  type="number"
+                  min={0}
+                  max={remaining}
+                  value={partialAmount}
+                  onChange={(event) => setPartialAmount(Number(event.target.value))}
+                  className="h-16 rounded-2xl border border-stone-200 px-5 text-xl text-stone-950"
+                  aria-label="Monto del pago parcial"
+                />
+                <button
+                  type="button"
+                  onClick={addPartialPayment}
+                  disabled={remaining === 0 || partialAmount <= 0}
+                  className="h-16 rounded-2xl bg-stone-950 px-6 text-base font-semibold text-white disabled:bg-stone-300"
+                >
+                  Agregar pago
+                </button>
+              </div>
+              {payments.length ? (
+                <div className="mt-4 space-y-2">
+                  {payments.map((payment, index) => (
+                    <div key={`${payment.method}-${index}`} className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-base font-semibold text-stone-800">
+                      <span>{payment.method}</span>
+                      <span className="flex items-center gap-3">
+                        {money.format(payment.amount)}
+                        <button type="button" onClick={() => setPayments((current) => current.filter((_, paymentIndex) => paymentIndex !== index))} className="grid size-10 place-items-center rounded-xl bg-white text-stone-600" aria-label={`Quitar pago de ${payment.method}`}><Trash2 size={18} /></button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-emerald-50 p-4">
+                  <p className="text-sm font-semibold text-emerald-700">Total pagado</p>
+                  <p className="mt-1 text-2xl font-semibold text-emerald-900">{money.format(paid)}</p>
+                </div>
+                <div className="rounded-2xl bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-700">Faltante</p>
+                  <p className="mt-1 text-2xl font-semibold text-amber-900">{money.format(remaining)}</p>
+                </div>
+              </div>
+            </div>
           ) : null}
           <button
             type="button"
-            onClick={() => onPay(method)}
-            className="mt-6 h-20 w-full rounded-3xl bg-stone-950 text-2xl font-semibold text-white transition hover:bg-stone-800"
+            onClick={total(table) === 0 ? onCourtesyClose : register}
+            disabled={total(table) > 0 && (method === "Mixto" ? remaining > 0 : method === "Efectivo" && amountReceived < total(table))}
+            className="mt-6 h-20 w-full rounded-3xl bg-stone-950 text-2xl font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
           >
-            Registrar pago
+            {total(table) === 0 ? "Cerrar como cortesía" : "Registrar pago"}
           </button>
         </div>
       </main>
@@ -920,14 +1155,16 @@ function ModalShell({
   title,
   children,
   onClose,
+  wide = false,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  wide?: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/55 p-4">
-      <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-stone-950/65 p-4">
+      <div className={["max-h-[92vh] w-full overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl", wide ? "max-w-5xl" : "max-w-xl"].join(" ")}>
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-2xl font-semibold text-stone-950">{title}</h2>
           <button
@@ -942,6 +1179,130 @@ function ModalShell({
         <div className="mt-5">{children}</div>
       </div>
     </div>
+  );
+}
+
+function DiscountModal({
+  table,
+  onClose,
+  onApply,
+}: {
+  table: PosTable;
+  onClose: () => void;
+  onApply: (type: "percent" | "fixed", value: number, reason: string, authorizedBy: string) => void;
+}) {
+  const [type, setType] = useState<"percent" | "fixed">(table.discount?.type ?? "percent");
+  const [value, setValue] = useState(table.discount?.value ?? 10);
+  const [reason, setReason] = useState(table.discount?.reason ?? "");
+  const [authorizedBy, setAuthorizedBy] = useState(table.discount?.authorizedBy ?? "");
+  const valid = value > 0 && reason.trim().length > 0;
+
+  return (
+    <ModalShell title="Aplicar descuento" onClose={onClose}>
+      <div className="grid grid-cols-2 gap-3">
+        <ChoiceButton active={type === "percent"} onClick={() => setType("percent")}>Porcentaje</ChoiceButton>
+        <ChoiceButton active={type === "fixed"} onClick={() => setType("fixed")}>Monto fijo</ChoiceButton>
+      </div>
+      <div className="mt-5 space-y-4">
+        <FormField label={type === "percent" ? "Porcentaje" : "Monto"}>
+          <input
+            type="number"
+            min={0}
+            max={type === "percent" ? 100 : subtotal(table)}
+            value={value}
+            onChange={(event) => setValue(Number(event.target.value))}
+            className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-xl text-stone-950"
+          />
+        </FormField>
+        <FormField label="Motivo obligatorio">
+          <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ej. 10% gerente" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" />
+        </FormField>
+        <FormField label="Autorizado por (opcional)">
+          <input value={authorizedBy} onChange={(event) => setAuthorizedBy(event.target.value)} placeholder="Nombre" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" />
+        </FormField>
+      </div>
+      <button type="button" disabled={!valid} onClick={() => onApply(type, value, reason.trim(), authorizedBy.trim())} className="mt-6 h-18 w-full rounded-3xl bg-stone-950 text-xl font-semibold text-white disabled:bg-stone-300">
+        Aplicar descuento
+      </button>
+    </ModalShell>
+  );
+}
+
+function CourtesyModal({
+  table,
+  onClose,
+  onApply,
+}: {
+  table: PosTable;
+  onClose: () => void;
+  onApply: (courtesy: NonNullable<PosTable["courtesy"]>) => void;
+}) {
+  const [type, setType] = useState<"product" | "amount" | "full">(table.courtesy?.type ?? "product");
+  const [productLineId, setProductLineId] = useState(table.courtesy?.productLineId ?? table.items[0]?.lineId ?? "");
+  const [amount, setAmount] = useState(table.courtesy?.amount ?? 0);
+  const [reason, setReason] = useState(table.courtesy?.reason ?? "");
+  const [authorizedBy, setAuthorizedBy] = useState(table.courtesy?.authorizedBy ?? "");
+  const [customer, setCustomer] = useState(table.courtesy?.customer ?? table.customer);
+  const product = table.items.find((item) => item.lineId === productLineId);
+  const valid = reason.trim().length > 0 && authorizedBy.trim().length > 0 && (type !== "product" || Boolean(product)) && (type !== "amount" || amount > 0);
+
+  function apply() {
+    if (!valid) return;
+    const courtesyAmountValue = type === "full" ? Math.max(0, subtotal(table) - discountAmount(table)) : type === "product" ? (product?.price ?? 0) * (product?.quantity ?? 0) : amount;
+    const label = type === "full" ? "Cuenta completa" : type === "product" ? product?.name ?? "Producto" : money.format(amount);
+    onApply({ type, label, amount: courtesyAmountValue, reason: reason.trim(), authorizedBy: authorizedBy.trim(), customer: customer.trim() || undefined, productLineId: type === "product" ? productLineId : undefined });
+  }
+
+  return (
+    <ModalShell title="Registrar cortesía" onClose={onClose}>
+      <div className="grid grid-cols-3 gap-2">
+        <ChoiceButton active={type === "product"} onClick={() => setType("product")}>Producto</ChoiceButton>
+        <ChoiceButton active={type === "amount"} onClick={() => setType("amount")}>Monto</ChoiceButton>
+        <ChoiceButton active={type === "full"} onClick={() => setType("full")}>Cuenta completa</ChoiceButton>
+      </div>
+      <div className="mt-5 space-y-4">
+        {type === "product" ? (
+          <FormField label="Producto">
+            <select value={productLineId} onChange={(event) => setProductLineId(event.target.value)} className="h-16 w-full rounded-2xl border border-stone-200 bg-white px-5 text-lg text-stone-950">
+              {table.items.map((item) => <option key={item.lineId} value={item.lineId}>{item.quantity}x {item.name} · {money.format(item.price * item.quantity)}</option>)}
+            </select>
+          </FormField>
+        ) : null}
+        {type === "amount" ? (
+          <FormField label="Monto">
+            <input type="number" min={0} max={subtotal(table)} value={amount} onChange={(event) => setAmount(Number(event.target.value))} className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-xl text-stone-950" />
+          </FormField>
+        ) : null}
+        {type === "full" ? <div className="rounded-2xl bg-emerald-50 p-5 text-lg font-semibold text-emerald-900">El total final será $0.</div> : null}
+        <FormField label="Motivo obligatorio"><input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ej. Atención al cliente" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" /></FormField>
+        <FormField label="Autorizado por obligatorio"><input value={authorizedBy} onChange={(event) => setAuthorizedBy(event.target.value)} placeholder="Nombre" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" /></FormField>
+        <FormField label="Cliente opcional"><input value={customer} onChange={(event) => setCustomer(event.target.value)} placeholder="Nombre del cliente" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" /></FormField>
+      </div>
+      <button type="button" disabled={!valid} onClick={apply} className="mt-6 h-18 w-full rounded-3xl bg-stone-950 text-xl font-semibold text-white disabled:bg-stone-300">Aplicar cortesía</button>
+    </ModalShell>
+  );
+}
+
+function ChoiceButton({ children, active, onClick }: { children: ReactNode; active: boolean; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className={["min-h-16 rounded-2xl border px-3 text-base font-semibold", active ? "border-stone-950 bg-stone-950 text-white" : "border-stone-200 bg-stone-50 text-stone-950"].join(" ")}>{children}</button>;
+}
+
+function FormField({ label, children }: { label: string; children: ReactNode }) {
+  return <label className="block text-base font-semibold text-stone-700">{label}<span className="mt-2 block">{children}</span></label>;
+}
+
+function PaymentCompleteModal({ isCourtesy, onCloseOrder }: { isCourtesy: boolean; onCloseOrder: () => void }) {
+  return (
+    <ModalShell title={isCourtesy ? "Cortesía registrada" : "Pago completado"} onClose={onCloseOrder}>
+      <div className="rounded-3xl bg-emerald-50 p-7 text-center">
+        <CheckCircle2 className="mx-auto text-emerald-700" size={54} />
+        <p className="mt-4 text-xl font-semibold text-emerald-950">La cuenta está lista para cerrar.</p>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <button type="button" onClick={() => window.print()} className="inline-flex h-18 items-center justify-center gap-2 rounded-3xl border border-stone-200 bg-white text-lg font-semibold text-stone-950"><Printer size={23} /> Imprimir ticket</button>
+        <button type="button" onClick={onCloseOrder} className="h-18 rounded-3xl bg-stone-950 text-lg font-semibold text-white">Cerrar mesa</button>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -1036,13 +1397,29 @@ function CashierModal({
   pending: number;
   onClose: () => void;
 }) {
-  const finalized = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const gross = sales.reduce((sum, sale) => sum + (sale.gross ?? sale.total), 0);
+  const discounts = sales.reduce((sum, sale) => sum + (sale.discount ?? 0), 0);
+  const courtesies = sales.reduce((sum, sale) => sum + (sale.courtesy ?? 0), 0);
+  const net = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const byMethod = (method: PaymentPart["method"]) =>
+    sales.reduce(
+      (sum, sale) => sum + (sale.payments ?? []).filter((payment) => payment.method === method).reduce((paymentSum, payment) => paymentSum + payment.amount, 0),
+      0,
+    );
+  const collected = byMethod("Efectivo") + byMethod("Tarjeta") + byMethod("Transferencia");
 
   return (
-    <ModalShell title="Cierre de caja" onClose={onClose}>
-      <div className="grid gap-3">
+    <ModalShell title="Cierre de caja" onClose={onClose} wide>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <MiniMetric label="Ventas brutas" value={money.format(gross)} />
+        <MiniMetric label="Descuentos" value={money.format(discounts)} />
+        <MiniMetric label="Cortesías" value={money.format(courtesies)} />
+        <MiniMetric label="Ventas netas" value={money.format(net)} />
+        <MiniMetric label="Efectivo" value={money.format(byMethod("Efectivo"))} />
+        <MiniMetric label="Tarjeta" value={money.format(byMethod("Tarjeta"))} />
+        <MiniMetric label="Transferencia" value={money.format(byMethod("Transferencia"))} />
+        <MiniMetric label="Total cobrado" value={money.format(collected)} />
         <MiniMetric label="Pendiente por cobrar" value={money.format(pending)} />
-        <MiniMetric label="Ventas finalizadas" value={money.format(finalized)} />
         <MiniMetric label="Ordenes cerradas" value={String(sales.length)} />
       </div>
     </ModalShell>
