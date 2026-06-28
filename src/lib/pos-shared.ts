@@ -136,18 +136,6 @@ export const initialTables: PosTable[] = [
     readyToPay: true,
   },
   {
-    id: "barra",
-    name: "Barra",
-    customer: "Venta rapida",
-    people: 1,
-    openedAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-    items: [{ ...products[2], lineId: "barra-ramen", quantity: 1, status: "pending" }],
-    discount: null,
-    courtesy: null,
-    readyToPay: false,
-    quickType: "Comer aqui",
-  },
-  {
     id: "terraza",
     name: "Terraza",
     customer: "",
@@ -200,18 +188,20 @@ export function writePosSales(sales: Sale[]) {
 }
 
 function normalizeTables(tables: PosTable[]) {
-  return tables.map((table) => ({
-    ...table,
-    courtesy: table.courtesy
-      ? {
-          ...table.courtesy,
-          type: table.courtesy.type ?? "amount",
-        }
-      : null,
-    items: table.items.map((item, index) => ({
-      ...item,
-      lineId: item.lineId ?? `${table.id}-${item.id}-${index}`,
-      status: item.status === ("kitchen" as OrderItemStatus) ? "sent" : item.status,
-    })),
-  }));
+  return tables
+    .filter((table) => table.id !== "barra")
+    .map((table) => ({
+      ...table,
+      courtesy: table.courtesy
+        ? {
+            ...table.courtesy,
+            type: table.courtesy.type ?? "amount",
+          }
+        : null,
+      items: table.items.map((item, index) => ({
+        ...item,
+        lineId: item.lineId ?? `${table.id}-${item.id}-${index}`,
+        status: item.status === ("kitchen" as OrderItemStatus) ? "sent" : item.status,
+      })),
+    }));
 }

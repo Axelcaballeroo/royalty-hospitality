@@ -139,7 +139,7 @@ export function PosClient() {
     const openTables = tables.filter((table) => table.openedAt);
     return {
       pending: openTables.reduce((sum, table) => sum + total(table), 0),
-      open: openTables.length,
+      open: openTables.filter((table) => !table.quickType).length,
       finished: sales.length,
     };
   }, [sales.length, tables]);
@@ -372,21 +372,23 @@ export function PosClient() {
       return next;
     });
     updateTables((current) =>
-      current.map((item) =>
-        item.id === table.id
-          ? {
-              ...item,
-              customer: "",
-              people: 0,
-              openedAt: null,
-              items: [],
-              discount: null,
-              courtesy: null,
-              readyToPay: false,
-              quickType: undefined,
-            }
-          : item,
-      ),
+      table.quickType
+        ? current.filter((item) => item.id !== table.id)
+        : current.map((item) =>
+            item.id === table.id
+              ? {
+                  ...item,
+                  customer: "",
+                  people: 0,
+                  openedAt: null,
+                  items: [],
+                  discount: null,
+                  courtesy: null,
+                  readyToPay: false,
+                  quickType: undefined,
+                }
+              : item,
+          ),
     );
     setCompletedPayment(null);
     setPosStep("order");
@@ -395,25 +397,24 @@ export function PosClient() {
   }
 
   function openQuickSale(type: string) {
-    const barId = "barra";
-    updateTables((current) =>
-      current.map((table) =>
-        table.id === barId
-          ? {
-              ...table,
-              customer: type,
-              people: 1,
-              openedAt: table.openedAt ?? new Date().toISOString(),
-              readyToPay: false,
-              quickType: type,
-            }
-          : table,
-      ),
-    );
-    setSelectedTableId(barId);
+    const quickId = `quick-${Date.now()}`;
+    const quickOrder: PosTable = {
+      id: quickId,
+      name: type,
+      customer: "Venta rápida",
+      people: type === "Comer aquí" ? 1 : 0,
+      openedAt: new Date().toISOString(),
+      items: [],
+      discount: null,
+      courtesy: null,
+      readyToPay: false,
+      quickType: type,
+    };
+    updateTables((current) => [...current.filter((table) => !table.quickType), quickOrder]);
+    setSelectedTableId(quickId);
     setPosStep("order");
     setModal("order");
-    showToast("Venta rapida abierta");
+    showToast("Venta rápida abierta");
   }
 
   return (
@@ -435,7 +436,7 @@ export function PosClient() {
               Abrir mesa
             </ActionButton>
             <ActionButton onClick={() => setModal("quick")} icon={<Sparkles size={22} />} light>
-              Venta rapida
+              Venta rápida
             </ActionButton>
             <ActionButton onClick={() => setModal("cashier")} icon={<ReceiptText size={22} />} light>
               Cierre de caja
@@ -451,7 +452,7 @@ export function PosClient() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {tables.map((table) => (
+        {tables.filter((table) => !table.quickType).map((table) => (
           <TableCard key={table.id} table={table} onClick={() => openTableMap(table)} />
         ))}
       </section>
@@ -474,6 +475,9 @@ export function PosClient() {
           categoryProducts={categoryProducts}
           onCategoryChange={setActiveCategory}
           onBack={() => {
+            if (selectedTable.quickType) {
+              updateTables((current) => current.filter((table) => table.id !== selectedTable.id));
+            }
             setPosStep("order");
             setModal(null);
           }}
@@ -500,7 +504,11 @@ export function PosClient() {
       ) : null}
 
       {completedPayment ? (
-        <PaymentCompleteModal isCourtesy={completedPayment.isCourtesy} onCloseOrder={closeOrder} />
+        <PaymentCompleteModal
+          isCourtesy={completedPayment.isCourtesy}
+          isQuickSale={Boolean(selectedTable.quickType)}
+          onCloseOrder={closeOrder}
+        />
       ) : null}
 
       {modal === "cashier" ? (
@@ -664,7 +672,7 @@ function FullscreenPos({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 p-3 transition-opacity">
-      <div className="flex h-[95vh] w-[95vw] flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+      <div className="flex h-[95vh] max-h-[95vh] w-[95vw] flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl">
         <header className="flex flex-col gap-4 border-b border-stone-200 bg-white p-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -935,6 +943,13 @@ function PaymentStep({
   const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const remaining = Math.max(0, total(table) - paid);
   const change = Math.max(0, amountReceived - total(table));
+  const visiblePaid = method === "Mixto"
+    ? paid
+    : method === "Efectivo"
+      ? Math.min(Math.max(0, amountReceived), total(table))
+      : total(table);
+  const visibleRemaining = Math.max(0, total(table) - visiblePaid);
+  const canFinish = total(table) === 0 || (visibleRemaining === 0 && (method !== "Mixto" || payments.length > 0));
 
   function chooseMethod(nextMethod: PaymentMethod) {
     setMethod(nextMethod);
@@ -959,39 +974,42 @@ function PaymentStep({
   }
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 bg-stone-50 p-5 lg:grid-cols-[7fr_3fr]">
-      <main className="flex min-h-0 items-center justify-center">
-        <div className="w-full max-w-3xl rounded-[2rem] bg-white p-8 shadow-sm">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex h-14 items-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 text-base font-semibold text-stone-950"
-          >
-            <ArrowLeft size={22} />
-            Volver a orden
-          </button>
-          <div className="mt-8 rounded-3xl bg-stone-50 p-8 text-center">
-            <p className="text-lg font-semibold text-stone-500">Total a pagar</p>
-            <p className="mt-3 text-7xl font-semibold text-stone-950">{money.format(total(table))}</p>
+    <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden bg-stone-50 p-3 md:p-5 lg:grid-cols-[7fr_3fr]">
+      <main className="min-h-0 overflow-hidden">
+        <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-sm">
+          <div className="shrink-0 border-b border-stone-100 p-4 md:p-5">
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex h-14 items-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 text-base font-semibold text-stone-950"
+            >
+              <ArrowLeft size={22} />
+              Volver a orden
+            </button>
           </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {methods.map((item) => (
-              <button
-                type="button"
-                key={item}
-                onClick={() => chooseMethod(item)}
-                className={[
-                  "inline-flex h-24 items-center justify-center gap-3 rounded-3xl border text-xl font-semibold transition",
-                  method === item
-                    ? "border-stone-950 bg-stone-950 text-white"
-                    : "border-stone-200 bg-stone-50 text-stone-950 hover:bg-white",
-                ].join(" ")}
-              >
-                {item === "Efectivo" ? <Banknote size={28} /> : <CreditCard size={28} />}
-                {item}
-              </button>
-            ))}
-          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
+            <div className="rounded-3xl bg-stone-50 p-5 text-center md:p-6">
+              <p className="text-lg font-semibold text-stone-500">Total a pagar</p>
+              <p className="mt-2 text-5xl font-semibold text-stone-950 md:text-6xl">{money.format(total(table))}</p>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {methods.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  onClick={() => chooseMethod(item)}
+                  className={[
+                    "inline-flex h-20 items-center justify-center gap-3 rounded-3xl border text-lg font-semibold transition",
+                    method === item
+                      ? "border-stone-950 bg-stone-950 text-white"
+                      : "border-stone-200 bg-stone-50 text-stone-950 hover:bg-white",
+                  ].join(" ")}
+                >
+                  {item === "Efectivo" ? <Banknote size={28} /> : <CreditCard size={28} />}
+                  {item}
+                </button>
+              ))}
+            </div>
           {method === "Efectivo" ? (
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <label className="block text-base font-semibold text-stone-700">
@@ -1011,7 +1029,7 @@ function PaymentStep({
             </div>
           ) : null}
           {method === "Mixto" ? (
-            <div className="mt-5 rounded-3xl border border-stone-200 p-5">
+            <div className="mt-4 rounded-3xl border border-stone-200 p-4">
               <div className="grid gap-3 sm:grid-cols-3">
                 {(["Efectivo", "Tarjeta", "Transferencia"] as PaymentPart["method"][]).map((item) => (
                   <button
@@ -1049,7 +1067,7 @@ function PaymentStep({
                 </button>
               </div>
               {payments.length ? (
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 max-h-36 space-y-2 overflow-y-auto pr-1">
                   {payments.map((payment, index) => (
                     <div key={`${payment.method}-${index}`} className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-base font-semibold text-stone-800">
                       <span>{payment.method}</span>
@@ -1061,26 +1079,24 @@ function PaymentStep({
                   ))}
                 </div>
               ) : null}
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-emerald-50 p-4">
-                  <p className="text-sm font-semibold text-emerald-700">Total pagado</p>
-                  <p className="mt-1 text-2xl font-semibold text-emerald-900">{money.format(paid)}</p>
-                </div>
-                <div className="rounded-2xl bg-amber-50 p-4">
-                  <p className="text-sm font-semibold text-amber-700">Faltante</p>
-                  <p className="mt-1 text-2xl font-semibold text-amber-900">{money.format(remaining)}</p>
-                </div>
-              </div>
             </div>
           ) : null}
-          <button
-            type="button"
-            onClick={total(table) === 0 ? onCourtesyClose : register}
-            disabled={total(table) > 0 && (method === "Mixto" ? remaining > 0 : method === "Efectivo" && amountReceived < total(table))}
-            className="mt-6 h-20 w-full rounded-3xl bg-stone-950 text-2xl font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
-          >
-            {total(table) === 0 ? "Cerrar como cortesía" : "Registrar pago"}
-          </button>
+          </div>
+          <div className="shrink-0 border-t border-stone-200 bg-white p-4 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] md:p-5">
+            <div className="grid grid-cols-3 gap-2 md:gap-3">
+              <CheckoutTotal label="Total a pagar" value={total(table)} />
+              <CheckoutTotal label="Total pagado" value={visiblePaid} positive />
+              <CheckoutTotal label="Faltante" value={visibleRemaining} warning={visibleRemaining > 0} />
+            </div>
+            <button
+              type="button"
+              onClick={total(table) === 0 ? onCourtesyClose : register}
+              disabled={!canFinish}
+              className="mt-3 h-16 w-full rounded-3xl bg-stone-950 text-xl font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300 md:h-18 md:text-2xl"
+            >
+              {total(table) === 0 ? "Cerrar como cortesía" : canFinish ? "Finalizar venta" : "Completa el pago"}
+            </button>
+          </div>
         </div>
       </main>
       <ReceiptPanel table={table} />
@@ -1090,10 +1106,12 @@ function PaymentStep({
 
 function ReceiptPanel({ table }: { table: PosTable }) {
   return (
-    <aside className="hidden min-h-0 flex-col overflow-y-auto rounded-[2rem] bg-white p-5 shadow-sm lg:flex">
-      <p className="text-base font-semibold text-stone-500">Cuenta actual</p>
-      <h3 className="mt-1 text-3xl font-semibold text-stone-950">{table.name}</h3>
-      <div className="mt-5 space-y-3">
+    <aside className="hidden min-h-0 flex-col overflow-hidden rounded-[2rem] bg-white shadow-sm lg:flex">
+      <div className="shrink-0 border-b border-stone-100 p-5">
+        <p className="text-base font-semibold text-stone-500">Cuenta actual</p>
+        <h3 className="mt-1 text-3xl font-semibold text-stone-950">{table.name}</h3>
+      </div>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
         {table.items.map((item) => (
           <div key={item.lineId} className="rounded-2xl bg-stone-50 p-4 text-base font-semibold text-stone-950">
             <div className="flex justify-between gap-4">
@@ -1104,7 +1122,7 @@ function ReceiptPanel({ table }: { table: PosTable }) {
           </div>
         ))}
       </div>
-      <div className="mt-auto space-y-3 pt-5">
+      <div className="shrink-0 space-y-3 border-t border-stone-200 bg-white p-5">
         <TotalLine label="Subtotal" value={subtotal(table)} />
         <TotalLine label="Descuento" value={discountAmount(table)} negative />
         <TotalLine label="Cortesia" value={courtesyAmount(table)} negative />
@@ -1178,6 +1196,25 @@ function ModalShell({
         </div>
         <div className="mt-5">{children}</div>
       </div>
+    </div>
+  );
+}
+
+function CheckoutTotal({
+  label,
+  value,
+  positive = false,
+  warning = false,
+}: {
+  label: string;
+  value: number;
+  positive?: boolean;
+  warning?: boolean;
+}) {
+  return (
+    <div className={["min-w-0 rounded-2xl p-3", positive ? "bg-emerald-50" : warning ? "bg-amber-50" : "bg-stone-100"].join(" ")}>
+      <p className={["truncate text-xs font-semibold md:text-sm", positive ? "text-emerald-700" : warning ? "text-amber-700" : "text-stone-500"].join(" ")}>{label}</p>
+      <p className={["mt-1 truncate text-lg font-semibold md:text-2xl", positive ? "text-emerald-900" : warning ? "text-amber-900" : "text-stone-950"].join(" ")}>{money.format(value)}</p>
     </div>
   );
 }
@@ -1291,7 +1328,15 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
   return <label className="block text-base font-semibold text-stone-700">{label}<span className="mt-2 block">{children}</span></label>;
 }
 
-function PaymentCompleteModal({ isCourtesy, onCloseOrder }: { isCourtesy: boolean; onCloseOrder: () => void }) {
+function PaymentCompleteModal({
+  isCourtesy,
+  isQuickSale,
+  onCloseOrder,
+}: {
+  isCourtesy: boolean;
+  isQuickSale: boolean;
+  onCloseOrder: () => void;
+}) {
   return (
     <ModalShell title={isCourtesy ? "Cortesía registrada" : "Pago completado"} onClose={onCloseOrder}>
       <div className="rounded-3xl bg-emerald-50 p-7 text-center">
@@ -1300,7 +1345,7 @@ function PaymentCompleteModal({ isCourtesy, onCloseOrder }: { isCourtesy: boolea
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <button type="button" onClick={() => window.print()} className="inline-flex h-18 items-center justify-center gap-2 rounded-3xl border border-stone-200 bg-white text-lg font-semibold text-stone-950"><Printer size={23} /> Imprimir ticket</button>
-        <button type="button" onClick={onCloseOrder} className="h-18 rounded-3xl bg-stone-950 text-lg font-semibold text-white">Cerrar mesa</button>
+        <button type="button" onClick={onCloseOrder} className="h-18 rounded-3xl bg-stone-950 text-lg font-semibold text-white">{isQuickSale ? "Cerrar orden" : "Cerrar mesa"}</button>
       </div>
     </ModalShell>
   );
@@ -1368,10 +1413,10 @@ function OpenTableModal({
 }
 
 function QuickSaleModal({ onClose, onSelect }: { onClose: () => void; onSelect: (type: string) => void }) {
-  const options = ["Comer aqui", "Para llevar", "A domicilio", "Para recoger"];
+  const options = ["Comer aquí", "Para llevar", "A domicilio", "Para recoger"];
 
   return (
-    <ModalShell title="Venta rapida" onClose={onClose}>
+    <ModalShell title="Venta rápida" onClose={onClose}>
       <div className="grid gap-3 sm:grid-cols-2">
         {options.map((option) => (
           <button
