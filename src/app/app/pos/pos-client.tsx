@@ -35,6 +35,7 @@ import { buildCashOrders, buildCashSnapshot } from "@/lib/pos-cash-closing";
 import {
   initialPosCatalog,
   initialTables,
+  authorizePosPin,
   currentPosUser,
   demoStaff,
   makeAuditEvent,
@@ -57,6 +58,7 @@ import type {
   PosCatalog,
   PosCategory,
   PosTable,
+  PosPermission,
   Product,
   ProductStation,
   Sale,
@@ -69,6 +71,11 @@ type PosStep = "order" | "payment";
 type AccountModal = "discount" | "courtesy" | null;
 type OrderActionModal = "menu" | "waiter" | "rename" | "move" | "cancel" | "history" | null;
 type CompletedPayment = { payments: PaymentPart[]; isCourtesy: boolean };
+type AuthorizationRequest = {
+  permission: PosPermission;
+  description: string;
+  onAuthorized: (staff: StaffMember) => void;
+};
 
 const money = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -152,6 +159,7 @@ export function PosClient() {
   const [cancelLineId, setCancelLineId] = useState<string | null>(null);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [reopenSale, setReopenSale] = useState<Sale | null>(null);
+  const [authorizationRequest, setAuthorizationRequest] = useState<AuthorizationRequest | null>(null);
 
   const selectedTable = tables.find((table) => table.id === selectedTableId) ?? tables[0];
   const posCategories = catalog.categories
@@ -205,6 +213,14 @@ export function PosClient() {
       writePosTables(next);
       return next;
     });
+  }
+
+  function requireAuthorization(
+    permission: PosPermission,
+    description: string,
+    onAuthorized: (staff: StaffMember) => void,
+  ) {
+    setAuthorizationRequest({ permission, description, onAuthorized });
   }
 
   function openTableMap(table: PosTable) {
@@ -370,12 +386,14 @@ export function PosClient() {
     setPosStep("payment");
   }
 
-  function applyDiscount(type: "percent" | "fixed", value: number, reason: string, authorizedBy: string) {
-    const event = makeAuditEvent("discount_applied", `Descuento aplicado: ${reason}`);
+  function applyDiscount(type: "percent" | "fixed", value: number, reason: string, authorizer: StaffMember) {
+    const event = makeAuditEvent("discount_applied", `Descuento aplicado: ${reason} · autorizó: ${authorizer.name}`, currentPosUser.name, {
+      requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role, reason,
+    });
     updateTables((current) =>
       current.map((table) =>
         table.id === selectedTable.id
-          ? { ...table, discount: { type, value, reason, authorizedBy: authorizedBy || undefined }, history: [...(table.history ?? []), event] }
+          ? { ...table, discount: { type, value, reason, authorizedBy: authorizer.name }, history: [...(table.history ?? []), event] }
           : table,
       ),
     );
@@ -383,12 +401,14 @@ export function PosClient() {
     showToast("Descuento aplicado");
   }
 
-  function cancelProduct(lineId: string, reason: string, authorizedBy: string) {
+  function cancelProduct(lineId: string, reason: string, authorizer: StaffMember) {
     const product = selectedTable.items.find((item) => item.lineId === lineId);
     if (!product) return;
     const event = makeAuditEvent(
       "product_cancelled",
-      `Producto cancelado: ${product.name} · motivo: ${reason}`,
+      `Producto cancelado: ${product.name} · motivo: ${reason} · autorizó: ${authorizer.name}`,
+      currentPosUser.name,
+      { requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role, reason },
     );
     updateTables((current) => current.map((table) => table.id === selectedTable.id
       ? {
@@ -398,7 +418,7 @@ export function PosClient() {
                 ...item,
                 status: "cancelled",
                 cancellationReason: reason,
-                authorizedBy: authorizedBy || undefined,
+                authorizedBy: authorizer.name,
                 cancelledBy: currentPosUser.name,
                 cancelledAt: new Date().toISOString(),
               }
@@ -411,9 +431,11 @@ export function PosClient() {
     showToast("Producto cancelado");
   }
 
-  function changeWaiter(waiter: StaffMember) {
+  function changeWaiter(waiter: StaffMember, authorizer: StaffMember) {
     const previous = selectedTable.waiter?.name ?? "Sin mesero";
-    const event = makeAuditEvent("waiter_changed", `Mesero cambiado: ${previous} → ${waiter.name}`);
+    const event = makeAuditEvent("waiter_changed", `Mesero cambiado: ${previous} → ${waiter.name} · autorizó: ${authorizer.name}`, currentPosUser.name, {
+      requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role,
+    });
     updateTables((current) => current.map((table) => table.id === selectedTable.id
       ? { ...table, waiter, history: [...(table.history ?? []), event] }
       : table));
@@ -430,11 +452,13 @@ export function PosClient() {
     showToast("Mesa renombrada");
   }
 
-  function moveOrder(targetId: string) {
+  function moveOrder(targetId: string, authorizer: StaffMember) {
     const target = tables.find((table) => table.id === targetId);
     if (!target || target.openedAt) return;
     const source = selectedTable;
-    const event = makeAuditEvent("table_moved", `${orderLabel(source)} movida a ${target.name}`);
+    const event = makeAuditEvent("table_moved", `${orderLabel(source)} movida a ${target.name} · autorizó: ${authorizer.name}`, currentPosUser.name, {
+      requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role,
+    });
     updateTables((current) => current.map((table) => {
       if (table.id === targetId) {
         return {
@@ -465,8 +489,10 @@ export function PosClient() {
     showToast(`Orden movida a ${target.name}`);
   }
 
-  function reopenClosedSale(sale: Sale, reason: string, authorizedBy: string, targetId: string) {
-    const event = makeAuditEvent("order_reopened", `Cuenta reabierta · motivo: ${reason} · autorizó: ${authorizedBy}`);
+  function reopenClosedSale(sale: Sale, reason: string, authorizer: StaffMember, targetId: string) {
+    const event = makeAuditEvent("order_reopened", `Cuenta reabierta · motivo: ${reason} · autorizó: ${authorizer.name}`, currentPosUser.name, {
+      requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role, reason,
+    });
     const target = targetId === "separate" ? null : tables.find((table) => table.id === targetId && !table.openedAt);
     const orderId = target?.id ?? `reopened-${globalThis.crypto.randomUUID()}`;
     const reopened: PosTable = {
@@ -503,8 +529,11 @@ export function PosClient() {
     showToast("Cuenta reabierta");
   }
 
-  function applyCourtesy(courtesy: NonNullable<PosTable["courtesy"]>) {
-    const event = makeAuditEvent("courtesy_applied", `Cortesía registrada: ${courtesy.reason}`);
+  function applyCourtesy(courtesy: NonNullable<PosTable["courtesy"]>, authorizer: StaffMember) {
+    courtesy = { ...courtesy, authorizedBy: authorizer.name };
+    const event = makeAuditEvent("courtesy_applied", `Cortesía registrada: ${courtesy.reason} · autorizó: ${authorizer.name}`, currentPosUser.name, {
+      requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role, reason: courtesy.reason,
+    });
     updateTables((current) =>
       current.map((table) => (table.id === selectedTable.id ? { ...table, courtesy, history: [...(table.history ?? []), event] } : table)),
     );
@@ -531,8 +560,10 @@ export function PosClient() {
     showToast("Pago registrado");
   }
 
-  function prepareCourtesyClose() {
-    const event = makeAuditEvent("payment_registered", "Cuenta cerrada como cortesía");
+  function prepareCourtesyClose(authorizer: StaffMember) {
+    const event = makeAuditEvent("payment_registered", `Cuenta cerrada como cortesía · autorizó: ${authorizer.name}`, currentPosUser.name, {
+      requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role,
+    });
     updateTables((current) =>
       current.map((table) =>
         table.id === selectedTable.id
@@ -642,6 +673,29 @@ export function PosClient() {
     showToast("Venta rápida abierta");
   }
 
+  function reprintActiveTicket(authorizer: StaffMember) {
+    const event = makeAuditEvent("ticket_reprinted", `Ticket reimpreso · autorizó: ${authorizer.name}`, currentPosUser.name, {
+      requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role,
+    });
+    updateTables((current) => current.map((table) => table.id === selectedTable.id
+      ? { ...table, history: [...(table.history ?? []), event] }
+      : table));
+    window.print();
+  }
+
+  function reprintSaleTicket(sale: Sale, authorizer: StaffMember) {
+    const event = makeAuditEvent("ticket_reprinted", `Ticket reimpreso · autorizó: ${authorizer.name}`, currentPosUser.name, {
+      requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role,
+    });
+    setSales((current) => {
+      const next = current.map((item) => item.id === sale.id ? { ...item, history: [...(item.history ?? []), event] } : item);
+      writePosSales(next);
+      return next;
+    });
+    setSelectedSale((current) => current?.id === sale.id ? { ...current, history: [...(current.history ?? []), event] } : current);
+    window.print();
+  }
+
   return (
     <div className="space-y-6">
       {toast ? (
@@ -724,17 +778,21 @@ export function PosClient() {
           onStartPayment={startPayment}
           onBackToOrder={() => setPosStep("order")}
           onPay={registerPayment}
-          onCourtesyClose={prepareCourtesyClose}
+          onCourtesyClose={() => requireAuthorization("close_courtesy", "Cerrar esta cuenta como cortesía", prepareCourtesyClose)}
           onActions={() => setOrderAction("menu")}
         />
       ) : null}
 
       {accountModal === "discount" ? (
-        <DiscountModal table={selectedTable} onClose={() => setAccountModal(null)} onApply={applyDiscount} />
+        <DiscountModal table={selectedTable} onClose={() => setAccountModal(null)} onApply={(type, value, reason) => {
+          requireAuthorization("apply_discount", "Aplicar descuento", (staff) => applyDiscount(type, value, reason, staff));
+        }} />
       ) : null}
 
       {accountModal === "courtesy" ? (
-        <CourtesyModal table={selectedTable} onClose={() => setAccountModal(null)} onApply={applyCourtesy} />
+        <CourtesyModal table={selectedTable} onClose={() => setAccountModal(null)} onApply={(courtesy) => {
+          requireAuthorization("apply_courtesy", "Registrar cortesía", (staff) => applyCourtesy(courtesy, staff));
+        }} />
       ) : null}
 
       {completedPayment ? (
@@ -742,11 +800,12 @@ export function PosClient() {
           isCourtesy={completedPayment.isCourtesy}
           isQuickSale={Boolean(selectedTable.quickType)}
           onCloseOrder={closeOrder}
+          onPrint={() => requireAuthorization("reprint_ticket", "Reimprimir ticket", reprintActiveTicket)}
         />
       ) : null}
 
       {modal === "cashier" ? (
-        <CashierModal sales={sales} tables={tables} onClose={() => setModal(null)} />
+        <CashierModal sales={sales} tables={tables} onClose={() => setModal(null)} onAuthorize={requireAuthorization} />
       ) : null}
 
       {modal === "sales" ? (
@@ -755,6 +814,7 @@ export function PosClient() {
           onClose={() => setModal(null)}
           onDetail={setSelectedSale}
           onReopen={setReopenSale}
+          onPrint={(sale) => requireAuthorization("reprint_ticket", "Reimprimir ticket", (staff) => reprintSaleTicket(sale, staff))}
         />
       ) : null}
 
@@ -768,15 +828,21 @@ export function PosClient() {
           }}
           onDiscount={() => { setOrderAction(null); setAccountModal("discount"); }}
           onCourtesy={() => { setOrderAction(null); setAccountModal("courtesy"); }}
+          onPrint={() => requireAuthorization("reprint_ticket", "Reimprimir ticket", reprintActiveTicket)}
         />
       ) : null}
-      {orderAction === "waiter" ? <ChangeWaiterModal current={selectedTable.waiter} onClose={() => setOrderAction(null)} onSave={changeWaiter} /> : null}
+      {orderAction === "waiter" ? <ChangeWaiterModal current={selectedTable.waiter} onClose={() => setOrderAction(null)} onSave={(waiter) => requireAuthorization("change_waiter", "Cambiar mesero", (staff) => changeWaiter(waiter, staff))} /> : null}
       {orderAction === "rename" ? <RenameOrderModal table={selectedTable} onClose={() => setOrderAction(null)} onSave={renameOrder} /> : null}
-      {orderAction === "move" ? <MoveOrderModal tables={tables} currentId={selectedTable.id} onClose={() => setOrderAction(null)} onMove={moveOrder} /> : null}
-      {orderAction === "cancel" && cancelLineId ? <CancelProductModal table={selectedTable} lineId={cancelLineId} onSelectLine={setCancelLineId} onClose={() => setOrderAction(null)} onCancel={cancelProduct} /> : null}
+      {orderAction === "move" ? <MoveOrderModal tables={tables} currentId={selectedTable.id} onClose={() => setOrderAction(null)} onMove={(targetId) => requireAuthorization("move_table", "Mover mesa", (staff) => moveOrder(targetId, staff))} /> : null}
+      {orderAction === "cancel" && cancelLineId ? <CancelProductModal table={selectedTable} lineId={cancelLineId} onSelectLine={setCancelLineId} onClose={() => setOrderAction(null)} onCancel={(lineId, reason) => requireAuthorization("cancel_product", "Cancelar producto", (staff) => cancelProduct(lineId, reason, staff))} /> : null}
       {orderAction === "history" ? <OrderHistoryModal title={orderLabel(selectedTable)} history={selectedTable.history ?? []} onClose={() => setOrderAction(null)} /> : null}
-      {selectedSale ? <SaleDetailModal sale={selectedSale} onClose={() => setSelectedSale(null)} onReopen={() => setReopenSale(selectedSale)} /> : null}
-      {reopenSale ? <ReopenAccountModal sale={reopenSale} tables={tables} onClose={() => setReopenSale(null)} onReopen={reopenClosedSale} /> : null}
+      {selectedSale ? <SaleDetailModal sale={selectedSale} onClose={() => setSelectedSale(null)} onReopen={() => setReopenSale(selectedSale)} onPrint={() => requireAuthorization("reprint_ticket", "Reimprimir ticket", (staff) => reprintSaleTicket(selectedSale, staff))} /> : null}
+      {reopenSale ? <ReopenAccountModal sale={reopenSale} tables={tables} onClose={() => setReopenSale(null)} onReopen={(sale, reason, targetId) => requireAuthorization("reopen_account", "Reabrir cuenta", (staff) => reopenClosedSale(sale, reason, staff, targetId))} /> : null}
+      {authorizationRequest ? <AuthorizationModal request={authorizationRequest} onClose={() => setAuthorizationRequest(null)} onAuthorized={(staff) => {
+        const action = authorizationRequest.onAuthorized;
+        setAuthorizationRequest(null);
+        action(staff);
+      }} /> : null}
     </div>
   );
 }
@@ -1472,6 +1538,59 @@ function ModalShell({
   );
 }
 
+function AuthorizationModal({
+  request,
+  onClose,
+  onAuthorized,
+}: {
+  request: AuthorizationRequest;
+  onClose: () => void;
+  onAuthorized: (staff: StaffMember) => void;
+}) {
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  function authorize() {
+    const staff = authorizePosPin(pin, request.permission);
+    if (!staff) {
+      setError("PIN sin permiso para esta acción.");
+      return;
+    }
+    onAuthorized(staff);
+  }
+
+  return (
+    <ModalShell title="Autorización requerida" onClose={onClose}>
+      <p className="text-base font-semibold text-stone-600">
+        {request.permission === "reprint_ticket"
+          ? "Esta acción requiere autorización de caja."
+          : "Esta acción requiere autorización de gerente."}
+      </p>
+      <p className="mt-2 text-xl font-semibold text-stone-950">{request.description}</p>
+      <div className="mt-5">
+        <FormField label="PIN">
+          <input
+            autoFocus
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            value={pin}
+            onChange={(event) => { setPin(event.target.value.replace(/\D/g, "").slice(0, 8)); setError(""); }}
+            onKeyDown={(event) => { if (event.key === "Enter" && pin) authorize(); }}
+            className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-center text-3xl tracking-[0.3em] text-stone-950"
+            aria-describedby={error ? "authorization-error" : undefined}
+          />
+        </FormField>
+      </div>
+      {error ? <p id="authorization-error" className="mt-3 rounded-2xl bg-rose-50 p-4 text-sm font-semibold text-rose-800">{error}</p> : null}
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <button type="button" onClick={onClose} className="h-16 rounded-2xl border border-stone-200 bg-white text-lg font-semibold text-stone-950">Cancelar</button>
+        <button type="button" disabled={!pin} onClick={authorize} className="h-16 rounded-2xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">Autorizar</button>
+      </div>
+    </ModalShell>
+  );
+}
+
 function CheckoutTotal({
   label,
   value,
@@ -1498,14 +1617,12 @@ function DiscountModal({
 }: {
   table: PosTable;
   onClose: () => void;
-  onApply: (type: "percent" | "fixed", value: number, reason: string, authorizedBy: string) => void;
+  onApply: (type: "percent" | "fixed", value: number, reason: string) => void;
 }) {
   const [type, setType] = useState<"percent" | "fixed">(table.discount?.type ?? "percent");
   const [value, setValue] = useState(table.discount?.value ?? 10);
   const [reason, setReason] = useState(table.discount?.reason ?? "");
-  const [authorizedBy, setAuthorizedBy] = useState(table.discount?.authorizedBy ?? "");
-  const requiresAuthorization = type === "percent" ? value > 20 : value > subtotal(table) * 0.2;
-  const valid = value > 0 && reason.trim().length > 0 && (!requiresAuthorization || authorizedBy.trim().length > 0);
+  const valid = value > 0 && reason.trim().length > 0;
 
   return (
     <ModalShell title="Aplicar descuento" onClose={onClose}>
@@ -1527,11 +1644,8 @@ function DiscountModal({
         <FormField label="Motivo obligatorio">
           <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ej. 10% gerente" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" />
         </FormField>
-        <FormField label={requiresAuthorization ? "Autorizado por (obligatorio)" : "Autorizado por (opcional)"}>
-          <input value={authorizedBy} onChange={(event) => setAuthorizedBy(event.target.value)} placeholder="Nombre" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" />
-        </FormField>
       </div>
-      <button type="button" disabled={!valid} onClick={() => onApply(type, value, reason.trim(), authorizedBy.trim())} className="mt-6 h-18 w-full rounded-3xl bg-stone-950 text-xl font-semibold text-white disabled:bg-stone-300">
+      <button type="button" disabled={!valid} onClick={() => onApply(type, value, reason.trim())} className="mt-6 h-18 w-full rounded-3xl bg-stone-950 text-xl font-semibold text-white disabled:bg-stone-300">
         Aplicar descuento
       </button>
     </ModalShell>
@@ -1551,16 +1665,15 @@ function CourtesyModal({
   const [productLineId, setProductLineId] = useState(table.courtesy?.productLineId ?? table.items[0]?.lineId ?? "");
   const [amount, setAmount] = useState(table.courtesy?.amount ?? 0);
   const [reason, setReason] = useState(table.courtesy?.reason ?? "");
-  const [authorizedBy, setAuthorizedBy] = useState(table.courtesy?.authorizedBy ?? "");
   const [customer, setCustomer] = useState(table.courtesy?.customer ?? table.customer);
   const product = table.items.find((item) => item.lineId === productLineId);
-  const valid = reason.trim().length > 0 && authorizedBy.trim().length > 0 && (type !== "product" || Boolean(product)) && (type !== "amount" || amount > 0);
+  const valid = reason.trim().length > 0 && (type !== "product" || Boolean(product)) && (type !== "amount" || amount > 0);
 
   function apply() {
     if (!valid) return;
     const courtesyAmountValue = type === "full" ? Math.max(0, subtotal(table) - discountAmount(table)) : type === "product" ? (product?.price ?? 0) * (product?.quantity ?? 0) : amount;
     const label = type === "full" ? "Cuenta completa" : type === "product" ? product?.name ?? "Producto" : money.format(amount);
-    onApply({ type, label, amount: courtesyAmountValue, reason: reason.trim(), authorizedBy: authorizedBy.trim(), customer: customer.trim() || undefined, productLineId: type === "product" ? productLineId : undefined });
+    onApply({ type, label, amount: courtesyAmountValue, reason: reason.trim(), authorizedBy: "", customer: customer.trim() || undefined, productLineId: type === "product" ? productLineId : undefined });
   }
 
   return (
@@ -1585,7 +1698,6 @@ function CourtesyModal({
         ) : null}
         {type === "full" ? <div className="rounded-2xl bg-emerald-50 p-5 text-lg font-semibold text-emerald-900">El total final será $0.</div> : null}
         <FormField label="Motivo obligatorio"><input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ej. Atención al cliente" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" /></FormField>
-        <FormField label="Autorizado por obligatorio"><input value={authorizedBy} onChange={(event) => setAuthorizedBy(event.target.value)} placeholder="Nombre" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" /></FormField>
         <FormField label="Cliente opcional"><input value={customer} onChange={(event) => setCustomer(event.target.value)} placeholder="Nombre del cliente" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" /></FormField>
       </div>
       <button type="button" disabled={!valid} onClick={apply} className="mt-6 h-18 w-full rounded-3xl bg-stone-950 text-xl font-semibold text-white disabled:bg-stone-300">Aplicar cortesía</button>
@@ -1605,10 +1717,12 @@ function PaymentCompleteModal({
   isCourtesy,
   isQuickSale,
   onCloseOrder,
+  onPrint,
 }: {
   isCourtesy: boolean;
   isQuickSale: boolean;
   onCloseOrder: () => void;
+  onPrint: () => void;
 }) {
   return (
     <ModalShell title={isCourtesy ? "Cortesía registrada" : "Pago completado"} onClose={onCloseOrder}>
@@ -1617,14 +1731,14 @@ function PaymentCompleteModal({
         <p className="mt-4 text-xl font-semibold text-emerald-950">La cuenta está lista para cerrar.</p>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <button type="button" onClick={() => window.print()} className="inline-flex h-18 items-center justify-center gap-2 rounded-3xl border border-stone-200 bg-white text-lg font-semibold text-stone-950"><Printer size={23} /> Imprimir ticket</button>
+        <button type="button" onClick={onPrint} className="inline-flex h-18 items-center justify-center gap-2 rounded-3xl border border-stone-200 bg-white text-lg font-semibold text-stone-950"><Printer size={23} /> Imprimir ticket</button>
         <button type="button" onClick={onCloseOrder} className="h-18 rounded-3xl bg-stone-950 text-lg font-semibold text-white">{isQuickSale ? "Cerrar orden" : "Cerrar mesa"}</button>
       </div>
     </ModalShell>
   );
 }
 
-function OrderActionsModal({ table, onClose, onAction, onDiscount, onCourtesy }: { table: PosTable; onClose: () => void; onAction: (action: Exclude<OrderActionModal, "menu" | null>) => void; onDiscount: () => void; onCourtesy: () => void }) {
+function OrderActionsModal({ table, onClose, onAction, onDiscount, onCourtesy, onPrint }: { table: PosTable; onClose: () => void; onAction: (action: Exclude<OrderActionModal, "menu" | null>) => void; onDiscount: () => void; onCourtesy: () => void; onPrint: () => void }) {
   const actions = [
     { label: "Cambiar mesero", icon: <UserRound size={22} />, run: () => onAction("waiter") },
     { label: "Renombrar mesa", icon: <Pencil size={22} />, run: () => onAction("rename") },
@@ -1632,7 +1746,7 @@ function OrderActionsModal({ table, onClose, onAction, onDiscount, onCourtesy }:
     { label: "Cancelar producto", icon: <Ban size={22} />, run: () => onAction("cancel"), sensitive: true, disabled: !table.items.some((item) => item.status !== "cancelled") },
     { label: "Aplicar descuento", icon: <ReceiptText size={22} />, run: onDiscount, sensitive: true },
     { label: "Registrar cortesía", icon: <Sparkles size={22} />, run: onCourtesy, sensitive: true },
-    { label: "Reimprimir ticket", icon: <Printer size={22} />, run: () => window.print() },
+    { label: "Reimprimir ticket", icon: <Printer size={22} />, run: onPrint, sensitive: true },
     { label: "Reabrir cuenta", icon: <RotateCcw size={22} />, run: () => undefined, sensitive: true, disabled: true },
     { label: "Ver historial", icon: <History size={22} />, run: () => onAction("history") },
   ];
@@ -1664,17 +1778,13 @@ function MoveOrderModal({ tables, currentId, onClose, onMove }: { tables: PosTab
   return <ModalShell title="Mover mesa" onClose={onClose}>{available.length ? <div className="grid gap-3 sm:grid-cols-2">{available.map((table) => <button type="button" key={table.id} onClick={() => onMove(table.id)} className="h-20 rounded-2xl border border-stone-200 bg-stone-50 text-lg font-semibold text-stone-950">{table.name}</button>)}</div> : <p className="rounded-2xl bg-amber-50 p-5 text-base font-semibold text-amber-800">No hay mesas libres.</p>}</ModalShell>;
 }
 
-function CancelProductModal({ table, lineId, onSelectLine, onClose, onCancel }: { table: PosTable; lineId: string; onSelectLine: (lineId: string) => void; onClose: () => void; onCancel: (lineId: string, reason: string, authorizedBy: string) => void }) {
+function CancelProductModal({ table, lineId, onSelectLine, onClose, onCancel }: { table: PosTable; lineId: string; onSelectLine: (lineId: string) => void; onClose: () => void; onCancel: (lineId: string, reason: string) => void }) {
   const [reason, setReason] = useState("");
-  const [authorizedBy, setAuthorizedBy] = useState("");
-  const item = table.items.find((product) => product.lineId === lineId);
-  const requiresAuthorization = Boolean(item?.sentAt) || ["sent", "preparing", "ready"].includes(item?.status ?? "");
-  const valid = reason.trim() && (!requiresAuthorization || authorizedBy.trim());
+  const valid = reason.trim();
   return <ModalShell title="Cancelar producto" onClose={onClose}>
     <FormField label="Producto"><select value={lineId} onChange={(event) => onSelectLine(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 bg-white px-4 text-base text-stone-950">{table.items.filter((product) => product.status !== "cancelled").map((product) => <option key={product.lineId} value={product.lineId}>{product.quantity}x {product.name}</option>)}</select></FormField>
     <div className="mt-4"><FormField label="Motivo obligatorio"><input value={reason} onChange={(event) => setReason(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950" placeholder="Ej. cliente cambió de opinión" /></FormField></div>
-    {requiresAuthorization ? <div className="mt-4"><FormField label="Autorizado por"><input value={authorizedBy} onChange={(event) => setAuthorizedBy(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950" placeholder="Gerente" /></FormField></div> : null}
-    <button type="button" disabled={!valid} onClick={() => onCancel(lineId, reason.trim(), authorizedBy.trim())} className="mt-5 h-16 w-full rounded-3xl bg-rose-700 text-lg font-semibold text-white disabled:bg-stone-300">Cancelar producto</button>
+    <button type="button" disabled={!valid} onClick={() => onCancel(lineId, reason.trim())} className="mt-5 h-16 w-full rounded-3xl bg-rose-700 text-lg font-semibold text-white disabled:bg-stone-300">Cancelar producto</button>
   </ModalShell>;
 }
 
@@ -1682,28 +1792,27 @@ function OrderHistoryModal({ title, history, onClose }: { title: string; history
   return <ModalShell title={`Historial · ${title}`} onClose={onClose}><div className="max-h-[60vh] space-y-3 overflow-y-auto">{history.length ? [...history].reverse().map((event) => <div key={event.id} className="flex gap-4 rounded-2xl bg-stone-50 p-4"><span className="shrink-0 text-sm font-semibold text-stone-500">{new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(event.createdAt))}</span><div><p className="text-base font-semibold text-stone-950">{event.message}</p><p className="mt-1 text-xs font-semibold text-stone-500">{event.actor}</p></div></div>) : <p className="p-8 text-center text-stone-500">Sin eventos todavía</p>}</div></ModalShell>;
 }
 
-function PaidAccountsModal({ sales, onClose, onDetail, onReopen }: { sales: Sale[]; onClose: () => void; onDetail: (sale: Sale) => void; onReopen: (sale: Sale) => void }) {
-  return <ModalShell title="Cuentas cobradas" onClose={onClose} wide><div className="max-h-[70vh] space-y-3 overflow-y-auto">{sales.length ? sales.map((sale) => <article key={sale.id} className="rounded-2xl border border-stone-200 bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold text-stone-500">{sale.folio}</p><h3 className="mt-1 text-lg font-semibold text-stone-950">{sale.isQuickSale ? `Venta rápida · ${sale.orderType ?? ""}` : sale.orderName || sale.tableName}</h3><p className="mt-1 text-sm font-semibold text-stone-500">Mesero: {sale.waiter?.name ?? "Sin asignar"} · {new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(sale.closedAt))}</p></div><div className="text-right"><p className="text-2xl font-semibold text-stone-950">{money.format(sale.total)}</p><p className="text-sm font-semibold text-emerald-700">{sale.paymentMethod} · Cerrada</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => onDetail(sale)} className="h-11 rounded-xl border border-stone-200 px-4 text-sm font-semibold">Ver detalle</button><button type="button" onClick={() => window.print()} className="h-11 rounded-xl border border-stone-200 px-4 text-sm font-semibold">Reimprimir ticket</button><button type="button" onClick={() => onReopen(sale)} className="h-11 rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">Reabrir cuenta</button></div></article>) : <p className="p-10 text-center text-stone-500">No hay cuentas cobradas.</p>}</div></ModalShell>;
+function PaidAccountsModal({ sales, onClose, onDetail, onReopen, onPrint }: { sales: Sale[]; onClose: () => void; onDetail: (sale: Sale) => void; onReopen: (sale: Sale) => void; onPrint: (sale: Sale) => void }) {
+  return <ModalShell title="Cuentas cobradas" onClose={onClose} wide><div className="max-h-[70vh] space-y-3 overflow-y-auto">{sales.length ? sales.map((sale) => <article key={sale.id} className="rounded-2xl border border-stone-200 bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold text-stone-500">{sale.folio}</p><h3 className="mt-1 text-lg font-semibold text-stone-950">{sale.isQuickSale ? `Venta rápida · ${sale.orderType ?? ""}` : sale.orderName || sale.tableName}</h3><p className="mt-1 text-sm font-semibold text-stone-500">Mesero: {sale.waiter?.name ?? "Sin asignar"} · {new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(sale.closedAt))}</p></div><div className="text-right"><p className="text-2xl font-semibold text-stone-950">{money.format(sale.total)}</p><p className="text-sm font-semibold text-emerald-700">{sale.paymentMethod} · Cerrada</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => onDetail(sale)} className="h-11 rounded-xl border border-stone-200 px-4 text-sm font-semibold">Ver detalle</button><button type="button" onClick={() => onPrint(sale)} className="h-11 rounded-xl border border-stone-200 px-4 text-sm font-semibold">Reimprimir ticket</button><button type="button" onClick={() => onReopen(sale)} className="h-11 rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">Reabrir cuenta</button></div></article>) : <p className="p-10 text-center text-stone-500">No hay cuentas cobradas.</p>}</div></ModalShell>;
 }
 
-function SaleDetailModal({ sale, onClose, onReopen }: { sale: Sale; onClose: () => void; onReopen: () => void }) {
+function SaleDetailModal({ sale, onClose, onReopen, onPrint }: { sale: Sale; onClose: () => void; onReopen: () => void; onPrint: () => void }) {
   return <ModalShell title={`Detalle · ${sale.folio}`} onClose={onClose}>
     <div className="space-y-3">{sale.items.map((item) => <div key={item.lineId} className="flex justify-between rounded-2xl bg-stone-50 p-4"><span className={item.status === "cancelled" ? "text-rose-700 line-through" : "text-stone-950"}>{item.quantity}x {item.name}</span><span className="font-semibold">{item.status === "cancelled" ? "Cancelado" : money.format(item.price * item.quantity)}</span></div>)}</div>
     <div className="mt-4 flex justify-between border-t pt-4 text-xl font-semibold"><span>Total</span><span>{money.format(sale.total)}</span></div>
     <div className="mt-5"><p className="text-sm font-semibold text-stone-500">Historial</p><div className="mt-2 max-h-48 space-y-2 overflow-y-auto">{(sale.history ?? []).map((event) => <div key={event.id} className="rounded-xl bg-stone-50 px-3 py-2 text-sm"><span className="font-semibold text-stone-950">{new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(event.createdAt))} · {event.message}</span></div>)}</div></div>
-    <div className="mt-5 grid grid-cols-2 gap-3"><button type="button" onClick={() => window.print()} className="h-14 rounded-2xl border border-stone-200 font-semibold">Reimprimir</button><button type="button" onClick={onReopen} className="h-14 rounded-2xl bg-stone-950 font-semibold text-white">Reabrir cuenta</button></div>
+    <div className="mt-5 grid grid-cols-2 gap-3"><button type="button" onClick={onPrint} className="h-14 rounded-2xl border border-stone-200 font-semibold">Reimprimir</button><button type="button" onClick={onReopen} className="h-14 rounded-2xl bg-stone-950 font-semibold text-white">Reabrir cuenta</button></div>
   </ModalShell>;
 }
 
-function ReopenAccountModal({ sale, tables, onClose, onReopen }: { sale: Sale; tables: PosTable[]; onClose: () => void; onReopen: (sale: Sale, reason: string, authorizedBy: string, targetId: string) => void }) {
+function ReopenAccountModal({ sale, tables, onClose, onReopen }: { sale: Sale; tables: PosTable[]; onClose: () => void; onReopen: (sale: Sale, reason: string, targetId: string) => void }) {
   const original = tables.find((table) => table.id === sale.tableId);
   const occupied = Boolean(original?.openedAt);
   const freeTables = tables.filter((table) => !table.openedAt && !table.quickType);
   const [reason, setReason] = useState("");
-  const [authorizedBy, setAuthorizedBy] = useState("");
   const [targetId, setTargetId] = useState(!occupied && original ? original.id : "separate");
-  const valid = reason.trim() && authorizedBy.trim() && (targetId === "separate" || freeTables.some((table) => table.id === targetId));
-  return <ModalShell title="Reabrir cuenta" onClose={onClose}>{occupied ? <p className="mb-4 rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-800">Esta mesa ya está ocupada. Puedes reabrir como venta separada o moverla a otra mesa.</p> : null}<FormField label="Destino"><select value={targetId} onChange={(event) => setTargetId(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 bg-white px-4"><option value="separate">Venta separada</option>{freeTables.map((table) => <option key={table.id} value={table.id}>{table.name}</option>)}</select></FormField><div className="mt-4"><FormField label="Motivo obligatorio"><input value={reason} onChange={(event) => setReason(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4" /></FormField></div><div className="mt-4"><FormField label="Autorizado por"><input value={authorizedBy} onChange={(event) => setAuthorizedBy(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4" placeholder="Gerente" /></FormField></div><button type="button" disabled={!valid} onClick={() => onReopen(sale, reason.trim(), authorizedBy.trim(), targetId)} className="mt-5 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">Reabrir cuenta</button></ModalShell>;
+  const valid = reason.trim() && (targetId === "separate" || freeTables.some((table) => table.id === targetId));
+  return <ModalShell title="Reabrir cuenta" onClose={onClose}>{occupied ? <p className="mb-4 rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-800">Esta mesa ya está ocupada. Puedes reabrir como venta separada o moverla a otra mesa.</p> : null}<FormField label="Destino"><select value={targetId} onChange={(event) => setTargetId(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 bg-white px-4"><option value="separate">Venta separada</option>{freeTables.map((table) => <option key={table.id} value={table.id}>{table.name}</option>)}</select></FormField><div className="mt-4"><FormField label="Motivo obligatorio"><input value={reason} onChange={(event) => setReason(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4" /></FormField></div><button type="button" disabled={!valid} onClick={() => onReopen(sale, reason.trim(), targetId)} className="mt-5 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">Reabrir cuenta</button></ModalShell>;
 }
 
 function OpenTableModal({
@@ -1806,10 +1915,12 @@ function CashierModal({
   sales,
   tables,
   onClose,
+  onAuthorize,
 }: {
   sales: Sale[];
   tables: PosTable[];
   onClose: () => void;
+  onAuthorize: (permission: PosPermission, description: string, onAuthorized: (staff: StaffMember) => void) => void;
 }) {
   const [closing, setClosing] = useState<CashClosing | null>(null);
   const [countedCash, setCountedCash] = useState(0);
@@ -1832,8 +1943,15 @@ function CashierModal({
   const difference = countedCash - snapshot.cash;
   const differenceCopy = difference === 0 ? "Cuadra" : difference > 0 ? "Sobra" : "Falta";
 
-  function persistClosing(status: CashClosing["status"]) {
+  function persistClosing(status: CashClosing["status"], authorizer?: StaffMember) {
     const now = new Date().toISOString();
+    const closeEvent = status === "closed" && authorizer
+      ? makeAuditEvent("cash_closed", `Caja cerrada · autorizó: ${authorizer.name}`, currentPosUser.name, {
+          requestedBy: currentPosUser.name,
+          authorizedBy: authorizer.name,
+          authorizedRole: authorizer.role,
+        })
+      : null;
     const next: CashClosing = {
       id: closing?.id ?? `cash-closing-${globalThis.crypto.randomUUID()}`,
       status,
@@ -1844,6 +1962,8 @@ function CashierModal({
       orders: liveOrders,
       savedAt: now,
       closedAt: status === "closed" ? now : undefined,
+      authorizedBy: status === "closed" ? authorizer : closing?.authorizedBy,
+      history: closeEvent ? [...(closing?.history ?? []), closeEvent] : closing?.history,
     };
     writeCashClosing(next);
     setClosing(next);
@@ -1944,7 +2064,7 @@ function CashierModal({
             <Save size={21} />
             Guardar corte
           </button>
-          <button type="button" disabled={locked} onClick={() => persistClosing("closed")} className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-stone-950 text-base font-semibold text-white disabled:opacity-50">
+          <button type="button" disabled={locked} onClick={() => onAuthorize("close_cash", "Cerrar caja", (staff) => persistClosing("closed", staff))} className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-stone-950 text-base font-semibold text-white disabled:opacity-50">
             <Lock size={21} />
             {locked ? "Caja cerrada" : "Cerrar caja · Gerente"}
           </button>

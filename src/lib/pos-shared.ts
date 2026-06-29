@@ -3,11 +3,30 @@ export type PaymentMethod = "Efectivo" | "Tarjeta" | "Transferencia" | "Mixto";
 export type OrderItemStatus = "pending" | "sent" | "preparing" | "ready" | "served" | "paid" | "cancelled";
 export type ProductStation = "kitchen" | "bar" | "direct";
 export type StaffRole = "waiter" | "cashier" | "manager" | "admin";
+export type PosPermission =
+  | "open_table"
+  | "add_product"
+  | "send_command"
+  | "charge"
+  | "reprint_ticket"
+  | "view_paid_accounts"
+  | "cancel_product"
+  | "apply_discount"
+  | "apply_courtesy"
+  | "reopen_account"
+  | "change_waiter"
+  | "move_table"
+  | "close_cash"
+  | "close_courtesy";
 
 export type StaffMember = {
   id: string;
+  businessId: string;
   name: string;
   role: StaffRole;
+  pin: string;
+  active: boolean;
+  permissions: PosPermission[];
 };
 
 export type OrderAuditEvent = {
@@ -16,6 +35,10 @@ export type OrderAuditEvent = {
   message: string;
   actor: string;
   createdAt: string;
+  requestedBy?: string;
+  authorizedBy?: string;
+  authorizedRole?: StaffRole;
+  reason?: string;
 };
 
 export type PosCategory = {
@@ -147,6 +170,8 @@ export type CashClosing = {
   orders: CashClosingOrder[];
   savedAt: string;
   closedAt?: string;
+  authorizedBy?: StaffMember;
+  history?: OrderAuditEvent[];
 };
 
 export type CashClosingOrder = {
@@ -164,23 +189,52 @@ export const posCashClosingStorageKey = "royalty-pos-cash-closing-v1";
 export const posStateEvent = "royalty-pos-state-updated";
 export const posCatalogEvent = "royalty-pos-catalog-updated";
 
+const businessId = "demo-restaurant";
+const rolePermissions: Record<StaffRole, PosPermission[]> = {
+  waiter: ["open_table", "add_product", "send_command"],
+  cashier: ["charge", "reprint_ticket", "view_paid_accounts"],
+  manager: [
+    "open_table", "add_product", "send_command", "charge", "reprint_ticket", "view_paid_accounts",
+    "cancel_product", "apply_discount", "apply_courtesy", "reopen_account", "change_waiter",
+    "move_table", "close_cash", "close_courtesy",
+  ],
+  admin: [
+    "open_table", "add_product", "send_command", "charge", "reprint_ticket", "view_paid_accounts",
+    "cancel_product", "apply_discount", "apply_courtesy", "reopen_account", "change_waiter",
+    "move_table", "close_cash", "close_courtesy",
+  ],
+};
+
 export const demoStaff: StaffMember[] = [
-  { id: "staff-juan", name: "Juan", role: "waiter" },
-  { id: "staff-ana", name: "Ana", role: "waiter" },
-  { id: "staff-luis", name: "Luis", role: "waiter" },
-  { id: "staff-maria", name: "María", role: "cashier" },
-  { id: "staff-roberto", name: "Roberto", role: "manager" },
+  { id: "staff-juan", businessId, name: "Juan Mesero", role: "waiter", pin: "1111", active: true, permissions: rolePermissions.waiter },
+  { id: "staff-ana", businessId, name: "Ana Cajera", role: "cashier", pin: "2222", active: true, permissions: rolePermissions.cashier },
+  { id: "staff-roberto", businessId, name: "Roberto Gerente", role: "manager", pin: "3333", active: true, permissions: rolePermissions.manager },
+  { id: "staff-admin", businessId, name: "Admin", role: "admin", pin: "9999", active: true, permissions: rolePermissions.admin },
 ];
 
-export const currentPosUser = demoStaff[3];
+export const currentPosUser = demoStaff[1];
 
-export function makeAuditEvent(type: string, message: string, actor = currentPosUser.name): OrderAuditEvent {
+export function hasPosPermission(staff: StaffMember, permission: PosPermission) {
+  return staff.active && (staff.role === "admin" || staff.permissions.includes(permission));
+}
+
+export function authorizePosPin(pin: string, permission: PosPermission) {
+  return demoStaff.find((staff) => staff.pin === pin.trim() && hasPosPermission(staff, permission)) ?? null;
+}
+
+export function makeAuditEvent(
+  type: string,
+  message: string,
+  actor = currentPosUser.name,
+  details: Partial<Pick<OrderAuditEvent, "requestedBy" | "authorizedBy" | "authorizedRole" | "reason">> = {},
+): OrderAuditEvent {
   return {
     id: `event-${globalThis.crypto.randomUUID()}`,
     type,
     message,
     actor,
     createdAt: new Date().toISOString(),
+    ...details,
   };
 }
 
