@@ -7,7 +7,10 @@ import type {
 } from "@/lib/pos-shared";
 
 function tableSubtotal(table: PosTable) {
-  return table.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  return table.items.reduce(
+    (sum, item) => item.status === "cancelled" ? sum : sum + item.price * item.quantity,
+    0,
+  );
 }
 
 function tableDiscount(table: PosTable) {

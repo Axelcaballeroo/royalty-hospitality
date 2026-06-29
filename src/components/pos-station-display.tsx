@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, ChefHat, Clock, Coffee, Flame, RefreshCw } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
-import { posStateEvent, readPosTables, writePosTables } from "@/lib/pos-shared";
+import { makeAuditEvent, posStateEvent, readPosTables, writePosTables } from "@/lib/pos-shared";
 import type { OrderItemStatus, PosTable, ProductStation } from "@/lib/pos-shared";
 
 type KitchenTicket = {
@@ -70,6 +70,12 @@ export function PosStationDisplay({ station }: { station: Exclude<ProductStation
   }
 
   function updateItemStatus(tableId: string, lineId: string, status: OrderItemStatus) {
+    const product = tables.find((table) => table.id === tableId)?.items.find((item) => item.lineId === lineId);
+    const event = makeAuditEvent(
+      status === "ready" ? "product_ready" : "product_preparing",
+      `${product?.name ?? "Producto"}: ${status === "ready" ? "listo" : "preparando"}`,
+      title,
+    );
     const next = tables.map((table) =>
       table.id === tableId
         ? {
@@ -79,6 +85,7 @@ export function PosStationDisplay({ station }: { station: Exclude<ProductStation
                 ? { ...item, status, updatedAt: new Date().toISOString() }
                 : item,
             ),
+            history: [...(table.history ?? []), event],
           }
         : table,
     );

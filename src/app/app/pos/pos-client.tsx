@@ -11,15 +11,20 @@ import {
   Clock,
   Coffee,
   CreditCard,
-  Gift,
   Minus,
-  Percent,
   Package,
+  Pencil,
   Plus,
   Printer,
   ReceiptText,
   Save,
   Lock,
+  Menu,
+  History,
+  UserRound,
+  MoveRight,
+  Ban,
+  RotateCcw,
   Sparkles,
   Trash2,
   Users,
@@ -30,6 +35,9 @@ import { buildCashOrders, buildCashSnapshot } from "@/lib/pos-cash-closing";
 import {
   initialPosCatalog,
   initialTables,
+  currentPosUser,
+  demoStaff,
+  makeAuditEvent,
   makeLineId,
   posCatalogEvent,
   posStateEvent,
@@ -52,12 +60,14 @@ import type {
   Product,
   ProductStation,
   Sale,
+  StaffMember,
   TableStatus,
 } from "@/lib/pos-shared";
 
-type ModalType = "open" | "quick" | "order" | "cashier" | null;
+type ModalType = "open" | "quick" | "order" | "cashier" | "sales" | null;
 type PosStep = "order" | "payment";
 type AccountModal = "discount" | "courtesy" | null;
+type OrderActionModal = "menu" | "waiter" | "rename" | "move" | "cancel" | "history" | null;
 type CompletedPayment = { payments: PaymentPart[]; isCourtesy: boolean };
 
 const money = new Intl.NumberFormat("es-MX", {
@@ -67,7 +77,10 @@ const money = new Intl.NumberFormat("es-MX", {
 });
 
 function subtotal(table: PosTable) {
-  return table.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  return table.items.reduce(
+    (sum, item) => item.status === "cancelled" ? sum : sum + item.price * item.quantity,
+    0,
+  );
 }
 
 function discountAmount(table: PosTable) {
@@ -87,6 +100,14 @@ function courtesyAmount(table: PosTable) {
 
 function total(table: PosTable) {
   return Math.max(0, subtotal(table) - discountAmount(table) - courtesyAmount(table));
+}
+
+function orderLabel(table: PosTable) {
+  return table.orderName || table.name;
+}
+
+function staffRoleLabel(role: StaffMember["role"]) {
+  return role === "waiter" ? "Mesero" : role === "cashier" ? "Cajero" : role === "manager" ? "Gerente" : "Admin";
 }
 
 function tableStatus(table: PosTable): TableStatus {
@@ -127,6 +148,10 @@ export function PosClient() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [accountModal, setAccountModal] = useState<AccountModal>(null);
   const [completedPayment, setCompletedPayment] = useState<CompletedPayment | null>(null);
+  const [orderAction, setOrderAction] = useState<OrderActionModal>(null);
+  const [cancelLineId, setCancelLineId] = useState<string | null>(null);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [reopenSale, setReopenSale] = useState<Sale | null>(null);
 
   const selectedTable = tables.find((table) => table.id === selectedTableId) ?? tables[0];
   const posCategories = catalog.categories
@@ -198,7 +223,8 @@ export function PosClient() {
     setModal("open");
   }
 
-  function openTable(tableId: string, people: number, customer: string) {
+  function openTable(tableId: string, people: number, customer: string, waiter: StaffMember) {
+    const event = makeAuditEvent("table_opened", `Mesa abierta por ${currentPosUser.name}`);
     updateTables((current) =>
       current.map((table) =>
         table.id === tableId
@@ -212,6 +238,12 @@ export function PosClient() {
               courtesy: null,
               readyToPay: false,
               quickType: undefined,
+              orderName: undefined,
+              waiter,
+              openedBy: currentPosUser,
+              paidBy: undefined,
+              closedBy: undefined,
+              history: [event],
             }
           : table,
       ),
@@ -224,6 +256,7 @@ export function PosClient() {
 
   function addProduct(product: Product) {
     const nextStatus: OrderItemStatus = product.station === "direct" ? "served" : "pending";
+    const event = makeAuditEvent("product_added", `${product.name} agregado`);
     updateTables((current) =>
       current.map((table) => {
         if (table.id !== selectedTable.id || !table.openedAt) return table;
@@ -244,7 +277,7 @@ export function PosClient() {
                 updatedAt: new Date().toISOString(),
               },
             ];
-        return { ...table, items, readyToPay: false };
+        return { ...table, items, readyToPay: false, history: [...(table.history ?? []), event] };
       }),
     );
     showToast(`Producto agregado: ${product.name}`);
@@ -271,16 +304,6 @@ export function PosClient() {
     );
   }
 
-  function removeProduct(productId: string) {
-    updateTables((current) =>
-      current.map((table) =>
-        table.id === selectedTable.id
-          ? { ...table, items: table.items.filter((item) => item.lineId !== productId), readyToPay: false }
-          : table,
-      ),
-    );
-  }
-
   function sendCommand() {
     if (!selectedTable.openedAt || selectedTable.items.length === 0) return;
     const pending = selectedTable.items.filter(
@@ -289,6 +312,8 @@ export function PosClient() {
     const hasKitchen = pending.some((item) => item.station === "kitchen");
     const hasBar = pending.some((item) => item.station === "bar");
     if (!hasKitchen && !hasBar) return;
+    const destination = hasKitchen && hasBar ? "cocina y barra" : hasKitchen ? "cocina" : "barra";
+    const event = makeAuditEvent("command_sent", `Comanda enviada a ${destination}`);
     updateTables((current) =>
       current.map((table) =>
         table.id === selectedTable.id
@@ -301,6 +326,7 @@ export function PosClient() {
                 updatedAt: new Date().toISOString(),
               })),
               readyToPay: false,
+              history: [...(table.history ?? []), event],
             }
           : table,
       ),
@@ -315,6 +341,8 @@ export function PosClient() {
   }
 
   function markServed(productId: string) {
+    const product = selectedTable.items.find((item) => item.lineId === productId);
+    const event = makeAuditEvent("product_served", `${product?.name ?? "Producto"} servido`);
     updateTables((current) =>
       current.map((table) =>
         table.id === selectedTable.id
@@ -323,6 +351,7 @@ export function PosClient() {
               items: table.items.map((item) =>
                 item.lineId === productId ? { ...item, status: "served", updatedAt: new Date().toISOString() } : item,
               ),
+              history: [...(table.history ?? []), event],
             }
           : table,
       ),
@@ -342,10 +371,11 @@ export function PosClient() {
   }
 
   function applyDiscount(type: "percent" | "fixed", value: number, reason: string, authorizedBy: string) {
+    const event = makeAuditEvent("discount_applied", `Descuento aplicado: ${reason}`);
     updateTables((current) =>
       current.map((table) =>
         table.id === selectedTable.id
-          ? { ...table, discount: { type, value, reason, authorizedBy: authorizedBy || undefined } }
+          ? { ...table, discount: { type, value, reason, authorizedBy: authorizedBy || undefined }, history: [...(table.history ?? []), event] }
           : table,
       ),
     );
@@ -353,21 +383,146 @@ export function PosClient() {
     showToast("Descuento aplicado");
   }
 
+  function cancelProduct(lineId: string, reason: string, authorizedBy: string) {
+    const product = selectedTable.items.find((item) => item.lineId === lineId);
+    if (!product) return;
+    const event = makeAuditEvent(
+      "product_cancelled",
+      `Producto cancelado: ${product.name} · motivo: ${reason}`,
+    );
+    updateTables((current) => current.map((table) => table.id === selectedTable.id
+      ? {
+          ...table,
+          items: table.items.map((item) => item.lineId === lineId
+            ? {
+                ...item,
+                status: "cancelled",
+                cancellationReason: reason,
+                authorizedBy: authorizedBy || undefined,
+                cancelledBy: currentPosUser.name,
+                cancelledAt: new Date().toISOString(),
+              }
+            : item),
+          history: [...(table.history ?? []), event],
+        }
+      : table));
+    setOrderAction(null);
+    setCancelLineId(null);
+    showToast("Producto cancelado");
+  }
+
+  function changeWaiter(waiter: StaffMember) {
+    const previous = selectedTable.waiter?.name ?? "Sin mesero";
+    const event = makeAuditEvent("waiter_changed", `Mesero cambiado: ${previous} → ${waiter.name}`);
+    updateTables((current) => current.map((table) => table.id === selectedTable.id
+      ? { ...table, waiter, history: [...(table.history ?? []), event] }
+      : table));
+    setOrderAction(null);
+    showToast("Mesero actualizado");
+  }
+
+  function renameOrder(name: string) {
+    const event = makeAuditEvent("table_renamed", `${orderLabel(selectedTable)} renombrada como ${name}`);
+    updateTables((current) => current.map((table) => table.id === selectedTable.id
+      ? { ...table, orderName: name, history: [...(table.history ?? []), event] }
+      : table));
+    setOrderAction(null);
+    showToast("Mesa renombrada");
+  }
+
+  function moveOrder(targetId: string) {
+    const target = tables.find((table) => table.id === targetId);
+    if (!target || target.openedAt) return;
+    const source = selectedTable;
+    const event = makeAuditEvent("table_moved", `${orderLabel(source)} movida a ${target.name}`);
+    updateTables((current) => current.map((table) => {
+      if (table.id === targetId) {
+        return {
+          ...table,
+          customer: source.customer,
+          people: source.people,
+          openedAt: source.openedAt,
+          items: source.items,
+          discount: source.discount,
+          courtesy: source.courtesy,
+          readyToPay: source.readyToPay,
+          orderName: source.orderName,
+          waiter: source.waiter,
+          openedBy: source.openedBy,
+          paidBy: source.paidBy,
+          closedBy: undefined,
+          history: [...(source.history ?? []), event],
+          reopenedFromSaleId: source.reopenedFromSaleId,
+        };
+      }
+      if (table.id === source.id) {
+        return { ...table, customer: "", people: 0, openedAt: null, items: [], discount: null, courtesy: null, readyToPay: false, orderName: undefined, waiter: null, openedBy: undefined, paidBy: undefined, history: [], reopenedFromSaleId: undefined };
+      }
+      return table;
+    }));
+    setSelectedTableId(targetId);
+    setOrderAction(null);
+    showToast(`Orden movida a ${target.name}`);
+  }
+
+  function reopenClosedSale(sale: Sale, reason: string, authorizedBy: string, targetId: string) {
+    const event = makeAuditEvent("order_reopened", `Cuenta reabierta · motivo: ${reason} · autorizó: ${authorizedBy}`);
+    const target = targetId === "separate" ? null : tables.find((table) => table.id === targetId && !table.openedAt);
+    const orderId = target?.id ?? `reopened-${globalThis.crypto.randomUUID()}`;
+    const reopened: PosTable = {
+      ...(target ?? { id: orderId, name: "Cuenta reabierta", customer: "", people: 1, openedAt: null, items: [], discount: null, courtesy: null, readyToPay: false }),
+      customer: "",
+      people: target ? 1 : 0,
+      openedAt: new Date().toISOString(),
+      items: sale.items.map((item) => item.status === "cancelled" ? item : { ...item, status: "served" }),
+      discount: sale.discount ? { type: "fixed", value: sale.discount, reason: "Descuento de cuenta reabierta" } : null,
+      courtesy: sale.courtesy ? { type: "amount", label: "Cortesía de cuenta reabierta", amount: sale.courtesy, reason: "Cortesía original", authorizedBy: sale.closedBy?.name ?? "Gerencia" } : null,
+      readyToPay: true,
+      quickType: target ? undefined : "Cuenta reabierta",
+      orderName: sale.orderName,
+      waiter: sale.waiter ?? null,
+      openedBy: sale.openedBy ?? currentPosUser,
+      paidBy: undefined,
+      closedBy: undefined,
+      history: [...(sale.history ?? []), event],
+      reopenedFromSaleId: sale.id,
+    };
+    updateTables((current) => target
+      ? current.map((table) => table.id === target.id ? reopened : table)
+      : [...current, reopened]);
+    setSales((current) => {
+      const next = current.filter((item) => item.id !== sale.id);
+      writePosSales(next);
+      return next;
+    });
+    setSelectedTableId(orderId);
+    setReopenSale(null);
+    setSelectedSale(null);
+    setPosStep("order");
+    setModal("order");
+    showToast("Cuenta reabierta");
+  }
+
   function applyCourtesy(courtesy: NonNullable<PosTable["courtesy"]>) {
+    const event = makeAuditEvent("courtesy_applied", `Cortesía registrada: ${courtesy.reason}`);
     updateTables((current) =>
-      current.map((table) => (table.id === selectedTable.id ? { ...table, courtesy } : table)),
+      current.map((table) => (table.id === selectedTable.id ? { ...table, courtesy, history: [...(table.history ?? []), event] } : table)),
     );
     setAccountModal(null);
     showToast(courtesy.type === "full" ? "Cuenta marcada como cortesía" : "Cortesía aplicada");
   }
 
   function registerPayment(payments: PaymentPart[]) {
+    const method = payments.length > 1 ? "Mixto" : payments[0]?.method ?? "Cortesía";
+    const event = makeAuditEvent("payment_registered", `Cobrado con ${method}`);
     updateTables((current) =>
       current.map((table) =>
         table.id === selectedTable.id
           ? {
               ...table,
-              items: table.items.map((item) => ({ ...item, status: "paid", updatedAt: new Date().toISOString() })),
+              items: table.items.map((item) => item.status === "cancelled" ? item : { ...item, status: "paid", updatedAt: new Date().toISOString() }),
+              paidBy: currentPosUser,
+              history: [...(table.history ?? []), event],
             }
           : table,
       ),
@@ -377,12 +532,15 @@ export function PosClient() {
   }
 
   function prepareCourtesyClose() {
+    const event = makeAuditEvent("payment_registered", "Cuenta cerrada como cortesía");
     updateTables((current) =>
       current.map((table) =>
         table.id === selectedTable.id
           ? {
               ...table,
-              items: table.items.map((item) => ({ ...item, status: "paid", updatedAt: new Date().toISOString() })),
+              items: table.items.map((item) => item.status === "cancelled" ? item : { ...item, status: "paid", updatedAt: new Date().toISOString() }),
+              paidBy: currentPosUser,
+              history: [...(table.history ?? []), event],
             }
           : table,
       ),
@@ -398,12 +556,17 @@ export function PosClient() {
       : completedPayment.payments.length > 1
         ? "Mixto"
         : completedPayment.payments[0]?.method ?? "Mixto";
+    const closeEvent = makeAuditEvent("order_closed", `Orden cerrada por ${currentPosUser.name}`);
+    const history = [...(table.history ?? []), closeEvent];
     const sale: Sale = {
       id: `sale-${Date.now()}`,
+      folio: `POS-${Date.now().toString().slice(-6)}`,
+      tableId: table.id,
       tableName: table.quickType ? "Venta rápida" : table.name,
+      orderName: table.orderName,
       isQuickSale: Boolean(table.quickType),
       orderType: table.quickType,
-      items: table.items.map((item) => ({ ...item, status: "paid" })),
+      items: table.items.map((item) => item.status === "cancelled" ? item : { ...item, status: "paid" }),
       gross: subtotal(table),
       discount: discountAmount(table),
       courtesy: courtesyAmount(table),
@@ -411,6 +574,11 @@ export function PosClient() {
       paymentMethod,
       payments: completedPayment.payments,
       isCourtesy: completedPayment.isCourtesy,
+      waiter: table.waiter,
+      openedBy: table.openedBy,
+      paidBy: table.paidBy ?? currentPosUser,
+      closedBy: currentPosUser,
+      history,
       closedAt: new Date().toISOString(),
     };
     setSales((current) => {
@@ -433,6 +601,13 @@ export function PosClient() {
                   courtesy: null,
                   readyToPay: false,
                   quickType: undefined,
+                  orderName: undefined,
+                  waiter: null,
+                  openedBy: undefined,
+                  paidBy: undefined,
+                  closedBy: currentPosUser,
+                  history: [],
+                  reopenedFromSaleId: undefined,
                 }
               : item,
           ),
@@ -443,7 +618,7 @@ export function PosClient() {
     showToast("Mesa liberada");
   }
 
-  function openQuickSale(type: string) {
+  function openQuickSale(type: string, responsible?: StaffMember) {
     const quickId = `quick-${Date.now()}`;
     const quickOrder: PosTable = {
       id: quickId,
@@ -456,6 +631,9 @@ export function PosClient() {
       courtesy: null,
       readyToPay: false,
       quickType: type,
+      waiter: responsible ?? null,
+      openedBy: currentPosUser,
+      history: [makeAuditEvent("order_opened", `Venta rápida abierta por ${currentPosUser.name}`)],
     };
     updateTables((current) => [...current.filter((table) => !table.quickType), quickOrder]);
     setSelectedTableId(quickId);
@@ -496,6 +674,9 @@ export function PosClient() {
         <SecondaryLink href="/app/kitchen" icon={<ChefHat size={20} />}>Ver cocina</SecondaryLink>
         <SecondaryLink href="/app/bar" icon={<Coffee size={20} />}>Ver barra</SecondaryLink>
         <SecondaryLink href="/app/pos/products" icon={<Package size={20} />}>Configurar productos</SecondaryLink>
+        <button type="button" onClick={() => setModal("sales")} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
+          <ReceiptText size={20} /> Cuentas cobradas
+        </button>
       </nav>
 
       <section className="grid gap-3 md:grid-cols-3">
@@ -514,7 +695,7 @@ export function PosClient() {
         <OpenTableModal
           table={selectedTable}
           onClose={() => setModal(null)}
-          onOpen={(people, customer) => openTable(selectedTable.id, people, customer)}
+          onOpen={(people, customer, waiter) => openTable(selectedTable.id, people, customer, waiter)}
         />
       ) : null}
 
@@ -537,15 +718,14 @@ export function PosClient() {
           }}
           onAddProduct={addProduct}
           onChangeQuantity={changeQuantity}
-          onRemoveProduct={removeProduct}
+          onCancelProduct={(lineId) => { setCancelLineId(lineId); setOrderAction("cancel"); }}
           onMarkServed={markServed}
           onSendCommand={sendCommand}
           onStartPayment={startPayment}
-          onOpenDiscount={() => setAccountModal("discount")}
-          onOpenCourtesy={() => setAccountModal("courtesy")}
           onBackToOrder={() => setPosStep("order")}
           onPay={registerPayment}
           onCourtesyClose={prepareCourtesyClose}
+          onActions={() => setOrderAction("menu")}
         />
       ) : null}
 
@@ -568,6 +748,35 @@ export function PosClient() {
       {modal === "cashier" ? (
         <CashierModal sales={sales} tables={tables} onClose={() => setModal(null)} />
       ) : null}
+
+      {modal === "sales" ? (
+        <PaidAccountsModal
+          sales={sales}
+          onClose={() => setModal(null)}
+          onDetail={setSelectedSale}
+          onReopen={setReopenSale}
+        />
+      ) : null}
+
+      {orderAction === "menu" ? (
+        <OrderActionsModal
+          table={selectedTable}
+          onClose={() => setOrderAction(null)}
+          onAction={(action) => {
+            setOrderAction(action);
+            if (action === "cancel") setCancelLineId(selectedTable.items.find((item) => item.status !== "cancelled")?.lineId ?? null);
+          }}
+          onDiscount={() => { setOrderAction(null); setAccountModal("discount"); }}
+          onCourtesy={() => { setOrderAction(null); setAccountModal("courtesy"); }}
+        />
+      ) : null}
+      {orderAction === "waiter" ? <ChangeWaiterModal current={selectedTable.waiter} onClose={() => setOrderAction(null)} onSave={changeWaiter} /> : null}
+      {orderAction === "rename" ? <RenameOrderModal table={selectedTable} onClose={() => setOrderAction(null)} onSave={renameOrder} /> : null}
+      {orderAction === "move" ? <MoveOrderModal tables={tables} currentId={selectedTable.id} onClose={() => setOrderAction(null)} onMove={moveOrder} /> : null}
+      {orderAction === "cancel" && cancelLineId ? <CancelProductModal table={selectedTable} lineId={cancelLineId} onSelectLine={setCancelLineId} onClose={() => setOrderAction(null)} onCancel={cancelProduct} /> : null}
+      {orderAction === "history" ? <OrderHistoryModal title={orderLabel(selectedTable)} history={selectedTable.history ?? []} onClose={() => setOrderAction(null)} /> : null}
+      {selectedSale ? <SaleDetailModal sale={selectedSale} onClose={() => setSelectedSale(null)} onReopen={() => setReopenSale(selectedSale)} /> : null}
+      {reopenSale ? <ReopenAccountModal sale={reopenSale} tables={tables} onClose={() => setReopenSale(null)} onReopen={reopenClosedSale} /> : null}
     </div>
   );
 }
@@ -632,8 +841,8 @@ function TableCard({ table, onClick }: { table: PosTable; onClick: () => void })
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-3xl font-semibold text-stone-950">{table.name}</p>
-          <p className="mt-2 text-sm font-semibold text-stone-500">{table.customer || "Sin cliente"}</p>
+          <p className="text-3xl font-semibold text-stone-950">{orderLabel(table)}</p>
+          <p className="mt-2 text-sm font-semibold text-stone-500">{table.openedAt ? `Mesero: ${table.waiter?.name ?? "Sin asignar"}` : "Sin cliente"}</p>
         </div>
         <span className={["rounded-full border px-3 py-1 text-sm font-semibold", statusClasses(status)].join(" ")}>
           {statusLabel(status)}
@@ -676,7 +885,9 @@ function ProductImage({ product }: { product: Product }) {
 
 function OrderStatusBadge({ status, station }: { status: OrderItemStatus; station: ProductStation }) {
   const stationName = station === "kitchen" ? "Cocina" : station === "bar" ? "Barra" : "Cobro directo";
-  const label = station === "direct" && status !== "paid"
+  const label = status === "cancelled"
+    ? "Producto cancelado"
+    : station === "direct" && status !== "paid"
     ? "Cobro directo"
     : status === "pending"
       ? `${stationName} · Pendiente`
@@ -696,6 +907,7 @@ function OrderStatusBadge({ status, station }: { status: OrderItemStatus; statio
     ready: "border-emerald-200 bg-emerald-50 text-emerald-800",
     served: "border-emerald-200 bg-emerald-50 text-emerald-800",
     paid: "border-stone-300 bg-stone-100 text-stone-800",
+    cancelled: "border-rose-200 bg-rose-50 text-rose-800",
   };
 
   return (
@@ -715,15 +927,14 @@ function FullscreenPos({
   onBack,
   onAddProduct,
   onChangeQuantity,
-  onRemoveProduct,
+  onCancelProduct,
   onMarkServed,
   onSendCommand,
   onStartPayment,
-  onOpenDiscount,
-  onOpenCourtesy,
   onBackToOrder,
   onPay,
   onCourtesyClose,
+  onActions,
 }: {
   table: PosTable;
   step: PosStep;
@@ -734,15 +945,14 @@ function FullscreenPos({
   onBack: () => void;
   onAddProduct: (product: Product) => void;
   onChangeQuantity: (productId: string, change: number) => void;
-  onRemoveProduct: (productId: string) => void;
+  onCancelProduct: (lineId: string) => void;
   onMarkServed: (productId: string) => void;
   onSendCommand: () => void;
   onStartPayment: () => void;
-  onOpenDiscount: () => void;
-  onOpenCourtesy: () => void;
   onBackToOrder: () => void;
   onPay: (payments: PaymentPart[]) => void;
   onCourtesyClose: () => void;
+  onActions: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 p-3 transition-opacity">
@@ -758,8 +968,8 @@ function FullscreenPos({
               Volver a mesas
             </button>
             <div>
-              <h2 className="text-4xl font-semibold text-stone-950">{table.name}</h2>
-              <p className="mt-1 text-sm font-semibold text-stone-500">{table.customer || "Cliente opcional"}</p>
+              <h2 className="text-4xl font-semibold text-stone-950">{orderLabel(table)}</h2>
+              <p className="mt-1 text-sm font-semibold text-stone-500">Mesero: {table.waiter?.name ?? "Sin asignar"}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -774,6 +984,9 @@ function FullscreenPos({
               <Clock size={20} />
               {elapsed(table.openedAt)}
             </span>
+            <button type="button" onClick={onActions} className="inline-flex h-12 items-center gap-2 rounded-2xl bg-stone-950 px-4 text-base font-semibold text-white">
+              <Menu size={20} /> Acciones
+            </button>
           </div>
         </header>
 
@@ -786,12 +999,10 @@ function FullscreenPos({
             onCategoryChange={onCategoryChange}
             onAddProduct={onAddProduct}
             onChangeQuantity={onChangeQuantity}
-            onRemoveProduct={onRemoveProduct}
+            onCancelProduct={onCancelProduct}
             onMarkServed={onMarkServed}
             onSendCommand={onSendCommand}
             onStartPayment={onStartPayment}
-            onOpenDiscount={onOpenDiscount}
-            onOpenCourtesy={onOpenCourtesy}
           />
         ) : null}
 
@@ -811,12 +1022,10 @@ function OrderStep({
   onCategoryChange,
   onAddProduct,
   onChangeQuantity,
-  onRemoveProduct,
+  onCancelProduct,
   onMarkServed,
   onSendCommand,
   onStartPayment,
-  onOpenDiscount,
-  onOpenCourtesy,
 }: {
   table: PosTable;
   activeCategory: string;
@@ -825,12 +1034,10 @@ function OrderStep({
   onCategoryChange: (categoryId: string) => void;
   onAddProduct: (product: Product) => void;
   onChangeQuantity: (productId: string, change: number) => void;
-  onRemoveProduct: (productId: string) => void;
+  onCancelProduct: (lineId: string) => void;
   onMarkServed: (productId: string) => void;
   onSendCommand: () => void;
   onStartPayment: () => void;
-  onOpenDiscount: () => void;
-  onOpenCourtesy: () => void;
 }) {
   const hasPendingCommandItems = table.items.some(
     (item) => item.station !== "direct" && item.status === "pending",
@@ -907,12 +1114,12 @@ function OrderStep({
                       </p>
                       <OrderStatusBadge status={item.status} station={item.station} />
                     </div>
-                    <p className="text-xl font-semibold text-stone-950">
-                      {money.format(item.price * item.quantity)}
+                    <p className={["text-xl font-semibold", item.status === "cancelled" ? "text-rose-700 line-through" : "text-stone-950"].join(" ")}>
+                      {item.status === "cancelled" ? money.format(0) : money.format(item.price * item.quantity)}
                     </p>
                   </div>
                   <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
+                    {item.status !== "cancelled" ? <div className="flex items-center gap-2">
                       <RoundIconButton label={`Restar ${item.name}`} onClick={() => onChangeQuantity(item.lineId, -1)}>
                         <Minus size={24} />
                       </RoundIconButton>
@@ -928,10 +1135,12 @@ function OrderStep({
                           Servido
                         </button>
                       ) : null}
-                    </div>
-                    <RoundIconButton label={`Quitar ${item.name}`} onClick={() => onRemoveProduct(item.lineId)}>
-                      <Trash2 size={24} />
-                    </RoundIconButton>
+                    </div> : <span />}
+                    {item.status !== "cancelled" ? (
+                      <button type="button" onClick={() => onCancelProduct(item.lineId)} className="inline-flex h-14 items-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-700">
+                        <Ban size={19} /> Cancelar
+                      </button>
+                    ) : <span className="text-sm font-semibold text-rose-700">Producto cancelado</span>}
                   </div>
                 </div>
               ))
@@ -960,24 +1169,6 @@ function OrderStep({
                 Cortesía: {table.courtesy.label} · {table.courtesy.reason}
               </p>
             ) : null}
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <button
-                type="button"
-                onClick={onOpenDiscount}
-                className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-950"
-              >
-                <Percent size={21} />
-                Descuento
-              </button>
-              <button
-                type="button"
-                onClick={onOpenCourtesy}
-                className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-950"
-              >
-                <Gift size={21} />
-                Cortesía
-              </button>
-            </div>
           </div>
         </div>
 
@@ -1197,7 +1388,7 @@ function ReceiptPanel({ table }: { table: PosTable }) {
           <div key={item.lineId} className="rounded-2xl bg-stone-50 p-4 text-base font-semibold text-stone-950">
             <div className="flex justify-between gap-4">
               <span>{item.quantity}x {item.name}</span>
-              <span>{money.format(item.price * item.quantity)}</span>
+              <span className={item.status === "cancelled" ? "text-rose-700 line-through" : ""}>{item.status === "cancelled" ? money.format(0) : money.format(item.price * item.quantity)}</span>
             </div>
             <OrderStatusBadge status={item.status} station={item.station} />
           </div>
@@ -1313,7 +1504,8 @@ function DiscountModal({
   const [value, setValue] = useState(table.discount?.value ?? 10);
   const [reason, setReason] = useState(table.discount?.reason ?? "");
   const [authorizedBy, setAuthorizedBy] = useState(table.discount?.authorizedBy ?? "");
-  const valid = value > 0 && reason.trim().length > 0;
+  const requiresAuthorization = type === "percent" ? value > 20 : value > subtotal(table) * 0.2;
+  const valid = value > 0 && reason.trim().length > 0 && (!requiresAuthorization || authorizedBy.trim().length > 0);
 
   return (
     <ModalShell title="Aplicar descuento" onClose={onClose}>
@@ -1335,7 +1527,7 @@ function DiscountModal({
         <FormField label="Motivo obligatorio">
           <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ej. 10% gerente" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" />
         </FormField>
-        <FormField label="Autorizado por (opcional)">
+        <FormField label={requiresAuthorization ? "Autorizado por (obligatorio)" : "Autorizado por (opcional)"}>
           <input value={authorizedBy} onChange={(event) => setAuthorizedBy(event.target.value)} placeholder="Nombre" className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" />
         </FormField>
       </div>
@@ -1432,6 +1624,88 @@ function PaymentCompleteModal({
   );
 }
 
+function OrderActionsModal({ table, onClose, onAction, onDiscount, onCourtesy }: { table: PosTable; onClose: () => void; onAction: (action: Exclude<OrderActionModal, "menu" | null>) => void; onDiscount: () => void; onCourtesy: () => void }) {
+  const actions = [
+    { label: "Cambiar mesero", icon: <UserRound size={22} />, run: () => onAction("waiter") },
+    { label: "Renombrar mesa", icon: <Pencil size={22} />, run: () => onAction("rename") },
+    { label: "Mover mesa", icon: <MoveRight size={22} />, run: () => onAction("move") },
+    { label: "Cancelar producto", icon: <Ban size={22} />, run: () => onAction("cancel"), sensitive: true, disabled: !table.items.some((item) => item.status !== "cancelled") },
+    { label: "Aplicar descuento", icon: <ReceiptText size={22} />, run: onDiscount, sensitive: true },
+    { label: "Registrar cortesía", icon: <Sparkles size={22} />, run: onCourtesy, sensitive: true },
+    { label: "Reimprimir ticket", icon: <Printer size={22} />, run: () => window.print() },
+    { label: "Reabrir cuenta", icon: <RotateCcw size={22} />, run: () => undefined, sensitive: true, disabled: true },
+    { label: "Ver historial", icon: <History size={22} />, run: () => onAction("history") },
+  ];
+  return <ModalShell title="Acciones" onClose={onClose}>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {actions.map((action) => <button key={action.label} type="button" disabled={action.disabled} onClick={action.run} className="flex min-h-20 items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 text-left disabled:opacity-40">
+        <span className="text-stone-600">{action.icon}</span><span><span className="block text-base font-semibold text-stone-950">{action.label}</span>{action.sensitive ? <span className="mt-1 block text-xs font-semibold text-amber-700">Requiere autorización</span> : null}</span>
+      </button>)}
+    </div>
+  </ModalShell>;
+}
+
+function ChangeWaiterModal({ current, onClose, onSave }: { current?: StaffMember | null; onClose: () => void; onSave: (waiter: StaffMember) => void }) {
+  const waiters = demoStaff.filter((staff) => staff.role === "waiter");
+  const [waiterId, setWaiterId] = useState(current?.id ?? waiters[0]?.id ?? "");
+  return <ModalShell title="Cambiar mesero" onClose={onClose}>
+    <div className="grid gap-3 sm:grid-cols-3">{waiters.map((waiter) => <button type="button" key={waiter.id} onClick={() => setWaiterId(waiter.id)} className={["h-20 rounded-2xl border text-lg font-semibold", waiterId === waiter.id ? "border-stone-950 bg-stone-950 text-white" : "border-stone-200 bg-stone-50 text-stone-950"].join(" ")}>{waiter.name}</button>)}</div>
+    <button type="button" onClick={() => { const waiter = waiters.find((item) => item.id === waiterId); if (waiter) onSave(waiter); }} className="mt-5 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white">Guardar cambio</button>
+  </ModalShell>;
+}
+
+function RenameOrderModal({ table, onClose, onSave }: { table: PosTable; onClose: () => void; onSave: (name: string) => void }) {
+  const [name, setName] = useState(orderLabel(table));
+  return <ModalShell title="Renombrar mesa" onClose={onClose}><FormField label="Nuevo nombre"><input autoFocus value={name} onChange={(event) => setName(event.target.value)} className="h-16 w-full rounded-2xl border border-stone-200 px-4 text-lg text-stone-950" /></FormField><button type="button" disabled={!name.trim()} onClick={() => onSave(name.trim())} className="mt-5 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">Guardar nombre</button></ModalShell>;
+}
+
+function MoveOrderModal({ tables, currentId, onClose, onMove }: { tables: PosTable[]; currentId: string; onClose: () => void; onMove: (targetId: string) => void }) {
+  const available = tables.filter((table) => table.id !== currentId && !table.openedAt && !table.quickType);
+  return <ModalShell title="Mover mesa" onClose={onClose}>{available.length ? <div className="grid gap-3 sm:grid-cols-2">{available.map((table) => <button type="button" key={table.id} onClick={() => onMove(table.id)} className="h-20 rounded-2xl border border-stone-200 bg-stone-50 text-lg font-semibold text-stone-950">{table.name}</button>)}</div> : <p className="rounded-2xl bg-amber-50 p-5 text-base font-semibold text-amber-800">No hay mesas libres.</p>}</ModalShell>;
+}
+
+function CancelProductModal({ table, lineId, onSelectLine, onClose, onCancel }: { table: PosTable; lineId: string; onSelectLine: (lineId: string) => void; onClose: () => void; onCancel: (lineId: string, reason: string, authorizedBy: string) => void }) {
+  const [reason, setReason] = useState("");
+  const [authorizedBy, setAuthorizedBy] = useState("");
+  const item = table.items.find((product) => product.lineId === lineId);
+  const requiresAuthorization = Boolean(item?.sentAt) || ["sent", "preparing", "ready"].includes(item?.status ?? "");
+  const valid = reason.trim() && (!requiresAuthorization || authorizedBy.trim());
+  return <ModalShell title="Cancelar producto" onClose={onClose}>
+    <FormField label="Producto"><select value={lineId} onChange={(event) => onSelectLine(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 bg-white px-4 text-base text-stone-950">{table.items.filter((product) => product.status !== "cancelled").map((product) => <option key={product.lineId} value={product.lineId}>{product.quantity}x {product.name}</option>)}</select></FormField>
+    <div className="mt-4"><FormField label="Motivo obligatorio"><input value={reason} onChange={(event) => setReason(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950" placeholder="Ej. cliente cambió de opinión" /></FormField></div>
+    {requiresAuthorization ? <div className="mt-4"><FormField label="Autorizado por"><input value={authorizedBy} onChange={(event) => setAuthorizedBy(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4 text-base text-stone-950" placeholder="Gerente" /></FormField></div> : null}
+    <button type="button" disabled={!valid} onClick={() => onCancel(lineId, reason.trim(), authorizedBy.trim())} className="mt-5 h-16 w-full rounded-3xl bg-rose-700 text-lg font-semibold text-white disabled:bg-stone-300">Cancelar producto</button>
+  </ModalShell>;
+}
+
+function OrderHistoryModal({ title, history, onClose }: { title: string; history: NonNullable<PosTable["history"]>; onClose: () => void }) {
+  return <ModalShell title={`Historial · ${title}`} onClose={onClose}><div className="max-h-[60vh] space-y-3 overflow-y-auto">{history.length ? [...history].reverse().map((event) => <div key={event.id} className="flex gap-4 rounded-2xl bg-stone-50 p-4"><span className="shrink-0 text-sm font-semibold text-stone-500">{new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(event.createdAt))}</span><div><p className="text-base font-semibold text-stone-950">{event.message}</p><p className="mt-1 text-xs font-semibold text-stone-500">{event.actor}</p></div></div>) : <p className="p-8 text-center text-stone-500">Sin eventos todavía</p>}</div></ModalShell>;
+}
+
+function PaidAccountsModal({ sales, onClose, onDetail, onReopen }: { sales: Sale[]; onClose: () => void; onDetail: (sale: Sale) => void; onReopen: (sale: Sale) => void }) {
+  return <ModalShell title="Cuentas cobradas" onClose={onClose} wide><div className="max-h-[70vh] space-y-3 overflow-y-auto">{sales.length ? sales.map((sale) => <article key={sale.id} className="rounded-2xl border border-stone-200 bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold text-stone-500">{sale.folio}</p><h3 className="mt-1 text-lg font-semibold text-stone-950">{sale.isQuickSale ? `Venta rápida · ${sale.orderType ?? ""}` : sale.orderName || sale.tableName}</h3><p className="mt-1 text-sm font-semibold text-stone-500">Mesero: {sale.waiter?.name ?? "Sin asignar"} · {new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(sale.closedAt))}</p></div><div className="text-right"><p className="text-2xl font-semibold text-stone-950">{money.format(sale.total)}</p><p className="text-sm font-semibold text-emerald-700">{sale.paymentMethod} · Cerrada</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => onDetail(sale)} className="h-11 rounded-xl border border-stone-200 px-4 text-sm font-semibold">Ver detalle</button><button type="button" onClick={() => window.print()} className="h-11 rounded-xl border border-stone-200 px-4 text-sm font-semibold">Reimprimir ticket</button><button type="button" onClick={() => onReopen(sale)} className="h-11 rounded-xl bg-stone-950 px-4 text-sm font-semibold text-white">Reabrir cuenta</button></div></article>) : <p className="p-10 text-center text-stone-500">No hay cuentas cobradas.</p>}</div></ModalShell>;
+}
+
+function SaleDetailModal({ sale, onClose, onReopen }: { sale: Sale; onClose: () => void; onReopen: () => void }) {
+  return <ModalShell title={`Detalle · ${sale.folio}`} onClose={onClose}>
+    <div className="space-y-3">{sale.items.map((item) => <div key={item.lineId} className="flex justify-between rounded-2xl bg-stone-50 p-4"><span className={item.status === "cancelled" ? "text-rose-700 line-through" : "text-stone-950"}>{item.quantity}x {item.name}</span><span className="font-semibold">{item.status === "cancelled" ? "Cancelado" : money.format(item.price * item.quantity)}</span></div>)}</div>
+    <div className="mt-4 flex justify-between border-t pt-4 text-xl font-semibold"><span>Total</span><span>{money.format(sale.total)}</span></div>
+    <div className="mt-5"><p className="text-sm font-semibold text-stone-500">Historial</p><div className="mt-2 max-h-48 space-y-2 overflow-y-auto">{(sale.history ?? []).map((event) => <div key={event.id} className="rounded-xl bg-stone-50 px-3 py-2 text-sm"><span className="font-semibold text-stone-950">{new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(event.createdAt))} · {event.message}</span></div>)}</div></div>
+    <div className="mt-5 grid grid-cols-2 gap-3"><button type="button" onClick={() => window.print()} className="h-14 rounded-2xl border border-stone-200 font-semibold">Reimprimir</button><button type="button" onClick={onReopen} className="h-14 rounded-2xl bg-stone-950 font-semibold text-white">Reabrir cuenta</button></div>
+  </ModalShell>;
+}
+
+function ReopenAccountModal({ sale, tables, onClose, onReopen }: { sale: Sale; tables: PosTable[]; onClose: () => void; onReopen: (sale: Sale, reason: string, authorizedBy: string, targetId: string) => void }) {
+  const original = tables.find((table) => table.id === sale.tableId);
+  const occupied = Boolean(original?.openedAt);
+  const freeTables = tables.filter((table) => !table.openedAt && !table.quickType);
+  const [reason, setReason] = useState("");
+  const [authorizedBy, setAuthorizedBy] = useState("");
+  const [targetId, setTargetId] = useState(!occupied && original ? original.id : "separate");
+  const valid = reason.trim() && authorizedBy.trim() && (targetId === "separate" || freeTables.some((table) => table.id === targetId));
+  return <ModalShell title="Reabrir cuenta" onClose={onClose}>{occupied ? <p className="mb-4 rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-800">Esta mesa ya está ocupada. Puedes reabrir como venta separada o moverla a otra mesa.</p> : null}<FormField label="Destino"><select value={targetId} onChange={(event) => setTargetId(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 bg-white px-4"><option value="separate">Venta separada</option>{freeTables.map((table) => <option key={table.id} value={table.id}>{table.name}</option>)}</select></FormField><div className="mt-4"><FormField label="Motivo obligatorio"><input value={reason} onChange={(event) => setReason(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4" /></FormField></div><div className="mt-4"><FormField label="Autorizado por"><input value={authorizedBy} onChange={(event) => setAuthorizedBy(event.target.value)} className="h-14 w-full rounded-2xl border border-stone-200 px-4" placeholder="Gerente" /></FormField></div><button type="button" disabled={!valid} onClick={() => onReopen(sale, reason.trim(), authorizedBy.trim(), targetId)} className="mt-5 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">Reabrir cuenta</button></ModalShell>;
+}
+
 function OpenTableModal({
   table,
   onClose,
@@ -1439,10 +1713,12 @@ function OpenTableModal({
 }: {
   table: PosTable;
   onClose: () => void;
-  onOpen: (people: number, customer: string) => void;
+  onOpen: (people: number, customer: string, waiter: StaffMember) => void;
 }) {
   const [people, setPeople] = useState(table.people || 2);
   const [customer, setCustomer] = useState(table.customer);
+  const [waiterId, setWaiterId] = useState(demoStaff.find((staff) => staff.role === "waiter")?.id ?? demoStaff[0].id);
+  const waiter = demoStaff.find((staff) => staff.id === waiterId) ?? demoStaff[0];
 
   return (
     <ModalShell title={table.name} onClose={onClose}>
@@ -1473,6 +1749,12 @@ function OpenTableModal({
           </div>
         </div>
         <label className="block text-base font-semibold text-stone-700">
+          Mesero
+          <select value={waiterId} onChange={(event) => setWaiterId(event.target.value)} className="mt-2 h-14 w-full rounded-2xl border border-stone-200 bg-white px-4 text-base text-stone-950">
+            {demoStaff.filter((staff) => staff.role === "waiter").map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}
+          </select>
+        </label>
+        <label className="block text-base font-semibold text-stone-700">
           Cliente opcional
           <input
             value={customer}
@@ -1483,7 +1765,7 @@ function OpenTableModal({
         </label>
         <button
           type="button"
-          onClick={() => onOpen(people, customer.trim())}
+          onClick={() => onOpen(people, customer.trim(), waiter)}
           className="h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white transition hover:bg-stone-800"
         >
           Abrir mesa
@@ -1493,23 +1775,29 @@ function OpenTableModal({
   );
 }
 
-function QuickSaleModal({ onClose, onSelect }: { onClose: () => void; onSelect: (type: string) => void }) {
+function QuickSaleModal({ onClose, onSelect }: { onClose: () => void; onSelect: (type: string, responsible?: StaffMember) => void }) {
   const options = ["Comer aquí", "Para llevar", "A domicilio", "Para recoger"];
+  const [selectedType, setSelectedType] = useState("");
+  const [responsibleId, setResponsibleId] = useState("");
 
   return (
     <ModalShell title="Venta rápida" onClose={onClose}>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {options.map((option) => (
-          <button
-            type="button"
-            key={option}
-            onClick={() => onSelect(option)}
-            className="h-24 rounded-3xl border border-stone-200 bg-stone-50 text-xl font-semibold text-stone-950 transition hover:border-stone-300 hover:bg-white"
-          >
-            {option}
-          </button>
-        ))}
-      </div>
+      {!selectedType ? <div className="grid gap-3 sm:grid-cols-2">
+          {options.map((option) => (
+            <button type="button" key={option} onClick={() => setSelectedType(option)} className="h-24 rounded-3xl border border-stone-200 bg-stone-50 text-xl font-semibold text-stone-950">
+              {option}
+            </button>
+          ))}
+        </div> : <div className="space-y-5">
+          <div className="rounded-2xl bg-stone-100 p-4 text-xl font-semibold text-stone-950">{selectedType}</div>
+          <label className="block text-base font-semibold text-stone-700">Responsable opcional
+            <select value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} className="mt-2 h-14 w-full rounded-2xl border border-stone-200 bg-white px-4 text-base text-stone-950">
+              <option value="">Sin asignar</option>
+              {demoStaff.map((staff) => <option key={staff.id} value={staff.id}>{staff.name} · {staffRoleLabel(staff.role)}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={() => onSelect(selectedType, demoStaff.find((staff) => staff.id === responsibleId))} className="h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white">Abrir venta rápida</button>
+        </div>}
     </ModalShell>
   );
 }
@@ -1658,7 +1946,7 @@ function CashierModal({
           </button>
           <button type="button" disabled={locked} onClick={() => persistClosing("closed")} className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-stone-950 text-base font-semibold text-white disabled:opacity-50">
             <Lock size={21} />
-            {locked ? "Caja cerrada" : "Cerrar caja"}
+            {locked ? "Caja cerrada" : "Cerrar caja · Gerente"}
           </button>
         </div>
       </div>

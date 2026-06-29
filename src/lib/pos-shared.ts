@@ -1,7 +1,22 @@
 export type TableStatus = "free" | "occupied" | "checkout";
 export type PaymentMethod = "Efectivo" | "Tarjeta" | "Transferencia" | "Mixto";
-export type OrderItemStatus = "pending" | "sent" | "preparing" | "ready" | "served" | "paid";
+export type OrderItemStatus = "pending" | "sent" | "preparing" | "ready" | "served" | "paid" | "cancelled";
 export type ProductStation = "kitchen" | "bar" | "direct";
+export type StaffRole = "waiter" | "cashier" | "manager" | "admin";
+
+export type StaffMember = {
+  id: string;
+  name: string;
+  role: StaffRole;
+};
+
+export type OrderAuditEvent = {
+  id: string;
+  type: string;
+  message: string;
+  actor: string;
+  createdAt: string;
+};
 
 export type PosCategory = {
   id: string;
@@ -36,6 +51,10 @@ export type OrderItem = Product & {
   status: OrderItemStatus;
   sentAt?: string;
   updatedAt?: string;
+  cancelledAt?: string;
+  cancellationReason?: string;
+  authorizedBy?: string;
+  cancelledBy?: string;
 };
 
 export type Discount = {
@@ -71,11 +90,21 @@ export type PosTable = {
   courtesy: Courtesy | null;
   readyToPay: boolean;
   quickType?: string;
+  orderName?: string;
+  waiter?: StaffMember | null;
+  openedBy?: StaffMember;
+  paidBy?: StaffMember;
+  closedBy?: StaffMember;
+  history?: OrderAuditEvent[];
+  reopenedFromSaleId?: string;
 };
 
 export type Sale = {
   id: string;
+  folio?: string;
+  tableId?: string;
   tableName: string;
+  orderName?: string;
   isQuickSale?: boolean;
   orderType?: string;
   items: OrderItem[];
@@ -86,6 +115,11 @@ export type Sale = {
   paymentMethod: PaymentMethod;
   payments: PaymentPart[];
   isCourtesy: boolean;
+  waiter?: StaffMember | null;
+  openedBy?: StaffMember;
+  paidBy?: StaffMember;
+  closedBy?: StaffMember;
+  history?: OrderAuditEvent[];
   closedAt: string;
 };
 
@@ -129,6 +163,26 @@ export const posCatalogStorageKey = "royalty-pos-catalog-v1";
 export const posCashClosingStorageKey = "royalty-pos-cash-closing-v1";
 export const posStateEvent = "royalty-pos-state-updated";
 export const posCatalogEvent = "royalty-pos-catalog-updated";
+
+export const demoStaff: StaffMember[] = [
+  { id: "staff-juan", name: "Juan", role: "waiter" },
+  { id: "staff-ana", name: "Ana", role: "waiter" },
+  { id: "staff-luis", name: "Luis", role: "waiter" },
+  { id: "staff-maria", name: "María", role: "cashier" },
+  { id: "staff-roberto", name: "Roberto", role: "manager" },
+];
+
+export const currentPosUser = demoStaff[3];
+
+export function makeAuditEvent(type: string, message: string, actor = currentPosUser.name): OrderAuditEvent {
+  return {
+    id: `event-${globalThis.crypto.randomUUID()}`,
+    type,
+    message,
+    actor,
+    createdAt: new Date().toISOString(),
+  };
+}
 
 export const initialCategories: PosCategory[] = [
   { id: "sushi", name: "Sushi", active: true, sortOrder: 0 },
@@ -245,7 +299,11 @@ export function readPosSales() {
   try {
     const value = window.localStorage.getItem(posSalesStorageKey);
     if (!value) return [] as Sale[];
-    return JSON.parse(value) as Sale[];
+    return (JSON.parse(value) as Sale[]).map((sale) => ({
+      ...sale,
+      folio: sale.folio ?? `POS-${sale.id.replace(/\D/g, "").slice(-6) || "000000"}`,
+      history: sale.history ?? [],
+    }));
   } catch {
     return [] as Sale[];
   }
@@ -424,5 +482,7 @@ function normalizeTables(tables: PosTable[]) {
         lineId: item.lineId ?? `${table.id}-${item.id}-${index}`,
         status: item.status === ("kitchen" as OrderItemStatus) ? "sent" : item.status,
       })),
+      waiter: table.waiter ?? null,
+      history: table.history ?? [],
     }));
 }
