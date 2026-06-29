@@ -16,6 +16,7 @@ export type PosPermission =
   | "reopen_account"
   | "change_waiter"
   | "move_table"
+  | "register_withdrawal"
   | "close_cash"
   | "close_courtesy";
 
@@ -155,6 +156,7 @@ export type CashClosingSnapshot = {
   card: number;
   transfer: number;
   mixed: number;
+  totalCollected: number;
   pending: number;
   closedOrders: number;
   openOrders: number;
@@ -163,6 +165,7 @@ export type CashClosingSnapshot = {
 export type CashClosing = {
   id: string;
   status: "draft" | "closed";
+  openingCash: number;
   countedCash: number;
   expectedCash: number;
   difference: number;
@@ -172,6 +175,17 @@ export type CashClosing = {
   closedAt?: string;
   authorizedBy?: StaffMember;
   history?: OrderAuditEvent[];
+  withdrawals: CashWithdrawal[];
+  openedAt: string;
+};
+
+export type CashWithdrawal = {
+  id: string;
+  amount: number;
+  reason: string;
+  receivedBy?: string;
+  authorizedBy: StaffMember;
+  createdAt: string;
 };
 
 export type CashClosingOrder = {
@@ -180,6 +194,10 @@ export type CashClosingOrder = {
   total: number;
   method: string;
   status: "Cerrada" | "Pendiente";
+  waiter?: string;
+  time?: string;
+  discount: number;
+  courtesy: number;
 };
 
 export const posStorageKey = "royalty-pos-state-v1";
@@ -196,12 +214,12 @@ const rolePermissions: Record<StaffRole, PosPermission[]> = {
   manager: [
     "open_table", "add_product", "send_command", "charge", "reprint_ticket", "view_paid_accounts",
     "cancel_product", "apply_discount", "apply_courtesy", "reopen_account", "change_waiter",
-    "move_table", "close_cash", "close_courtesy",
+    "move_table", "register_withdrawal", "close_cash", "close_courtesy",
   ],
   admin: [
     "open_table", "add_product", "send_command", "charge", "reprint_ticket", "view_paid_accounts",
     "cancel_product", "apply_discount", "apply_courtesy", "reopen_account", "change_waiter",
-    "move_table", "close_cash", "close_courtesy",
+    "move_table", "register_withdrawal", "close_cash", "close_courtesy",
   ],
 };
 
@@ -372,7 +390,20 @@ export function readCashClosing() {
   if (typeof window === "undefined") return null as CashClosing | null;
   try {
     const value = window.localStorage.getItem(posCashClosingStorageKey);
-    return value ? JSON.parse(value) as CashClosing : null;
+    if (!value) return null;
+    const stored = JSON.parse(value) as Partial<CashClosing>;
+    const savedAt = stored.savedAt ?? new Date().toISOString();
+    return {
+      ...stored,
+      openingCash: stored.openingCash ?? 0,
+      withdrawals: stored.withdrawals ?? [],
+      openedAt: stored.openedAt ?? savedAt,
+      history: stored.history ?? [],
+      snapshot: {
+        ...stored.snapshot!,
+        totalCollected: stored.snapshot?.totalCollected ?? stored.snapshot?.net ?? 0,
+      },
+    } as CashClosing;
   } catch {
     return null;
   }

@@ -1,6 +1,7 @@
 import type {
   CashClosingOrder,
   CashClosingSnapshot,
+  CashWithdrawal,
   PaymentPart,
   PosTable,
   Sale,
@@ -59,6 +60,7 @@ export function buildCashSnapshot(sales: Sale[], tables: PosTable[]): CashClosin
     mixed: sales
       .filter((sale) => sale.paymentMethod === "Mixto" && !sale.isCourtesy)
       .reduce((sum, sale) => sum + sale.total, 0),
+    totalCollected: sales.reduce((sum, sale) => sum + sale.total, 0),
     pending: openOrders.reduce((sum, table) => sum + tableTotal(table), 0),
     closedOrders: sales.length,
     openOrders: openOrders.length,
@@ -71,20 +73,40 @@ export function buildCashOrders(sales: Sale[], tables: PosTable[]): CashClosingO
     const quickSale = sale.isQuickSale || quickTypes.includes(sale.tableName);
     return {
       id: sale.id,
-      label: quickSale ? `Venta rápida${sale.orderType ? ` · ${sale.orderType}` : ""}` : sale.tableName,
+      label: quickSale ? `Venta rápida${sale.orderType ? ` · ${sale.orderType}` : ""}` : sale.orderName || sale.tableName,
       total: sale.total,
       method: sale.isCourtesy ? "Cortesía" : sale.paymentMethod,
       status: "Cerrada",
+      waiter: sale.waiter?.name ?? "Sin asignar",
+      time: sale.closedAt,
+      discount: sale.discount ?? 0,
+      courtesy: sale.courtesy ?? 0,
     };
   });
   const open: CashClosingOrder[] = tables
     .filter((table) => table.openedAt)
     .map((table) => ({
       id: `open-${table.id}`,
-      label: table.quickType ? `Venta rápida · ${table.quickType}` : table.name,
+      label: table.quickType ? `Venta rápida · ${table.quickType}` : table.orderName || table.name,
       total: tableTotal(table),
       method: "Pendiente",
       status: "Pendiente",
+      waiter: table.waiter?.name ?? "Sin asignar",
+      time: table.openedAt ?? undefined,
+      discount: tableDiscount(table),
+      courtesy: tableCourtesy(table),
     }));
   return [...open, ...closed];
+}
+
+export function withdrawalsTotal(withdrawals: CashWithdrawal[]) {
+  return withdrawals.reduce((sum, withdrawal) => sum + withdrawal.amount, 0);
+}
+
+export function expectedDrawerCash(
+  openingCash: number,
+  cashSales: number,
+  withdrawals: CashWithdrawal[],
+) {
+  return openingCash + cashSales - withdrawalsTotal(withdrawals);
 }
