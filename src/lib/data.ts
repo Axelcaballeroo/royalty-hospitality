@@ -9,6 +9,7 @@ import {
 import { getSegmentCustomers, segmentDefinitions } from "@/lib/marketing";
 import { estimateWorkedHours, getTodayDate, getWeekStartIso } from "@/lib/hr";
 import { getPlanCounts } from "@/lib/superadmin";
+import type { CurrencyCode, PaymentMethod } from "@/lib/pos-shared";
 
 export type Customer = {
   id: string;
@@ -25,6 +26,35 @@ export type Customer = {
   last_visit_at: string | null;
   status: string;
   created_at: string;
+};
+
+export type PosCustomerConsumption = {
+  id: string;
+  sale_id: string;
+  folio: string;
+  reservation_id: string | null;
+  table_name: string;
+  order_type: string;
+  is_quick_sale: boolean;
+  gross: number;
+  discount: number;
+  courtesy: number;
+  total: number;
+  payment_method: string;
+  waiter_name: string | null;
+  cash_register: string | null;
+  items: Array<{ id: string; name: string; quantity: number; price: number }>;
+  payments: Array<{
+    method: Exclude<PaymentMethod, "Mixto">;
+    amount: number;
+    currency?: CurrencyCode;
+    foreignAmount?: number;
+    exchangeRate?: number;
+    equivalentMxn?: number;
+  }>;
+  amount_received: number | null;
+  change_amount: number | null;
+  closed_at: string;
 };
 
 export type Reservation = {
@@ -1545,7 +1575,7 @@ export async function getCustomersData(filters: CustomerFilters = {}) {
 export async function getCustomerDetail(customerId: string) {
   const current = await requireCurrentBusiness();
   const supabase = await createClient();
-  const [customer, events, reservations, notes, tasks, comments, businessUsers, loyaltyAccount, loyaltyTransactions, rewards, campaignRecipients, walletAccount, walletTransactions] =
+  const [customer, events, reservations, consumptions, notes, tasks, comments, businessUsers, loyaltyAccount, loyaltyTransactions, rewards, campaignRecipients, walletAccount, walletTransactions] =
     await Promise.all([
       supabase
         .from("customers")
@@ -1561,10 +1591,17 @@ export async function getCustomerDetail(customerId: string) {
         .order("created_at", { ascending: false }),
       supabase
         .from("reservations")
-        .select("id, date, time, party_size, status, source, notes")
+        .select("id, date, time, party_size, status, source, notes, pos_sale_id, pos_total, pos_payment_method, pos_closed_at")
         .eq("business_id", current.businessId)
         .eq("customer_id", customerId)
         .order("date", { ascending: false }),
+      supabase
+        .from("pos_customer_sales")
+        .select("id, sale_id, folio, reservation_id, table_name, order_type, is_quick_sale, gross, discount, courtesy, total, payment_method, waiter_name, cash_register, items, payments, amount_received, change_amount, closed_at")
+        .eq("business_id", current.businessId)
+        .eq("customer_id", customerId)
+        .order("closed_at", { ascending: false })
+        .limit(50),
       supabase
         .from("internal_notes")
         .select("id, title, content, created_at")
@@ -1630,11 +1667,28 @@ export async function getCustomerDetail(customerId: string) {
         .limit(12),
     ]);
 
+  const customerRow = customer.data;
+  const reservationRows = reservations.data ?? [];
+  const consumptionRows = (consumptions.data ?? []) as unknown as PosCustomerConsumption[];
+  const totalVisits = Number(customerRow?.total_visits ?? 0);
+  const totalSpent = Number(customerRow?.total_spent ?? 0);
+
   return {
     current,
-    customer: customer.data,
+    customer: customerRow,
     events: events.data ?? [],
-    reservations: reservations.data ?? [],
+    reservations: reservationRows,
+    consumptions: consumptionRows,
+    crmSummary: {
+      totalSpent,
+      totalVisits,
+      averageTicket: totalVisits > 0 ? totalSpent / totalVisits : 0,
+      lastVisitAt: customerRow?.last_visit_at ?? null,
+      reservations: reservationRows.length,
+      noShows: reservationRows.filter((reservation) => reservation.status === "no_show").length,
+      discounts: consumptionRows.reduce((sum, consumption) => sum + Number(consumption.discount), 0),
+      courtesies: consumptionRows.reduce((sum, consumption) => sum + Number(consumption.courtesy), 0),
+    },
     notes: notes.data ?? [],
     tasks: tasks.data ?? [],
     comments: comments.data ?? [],

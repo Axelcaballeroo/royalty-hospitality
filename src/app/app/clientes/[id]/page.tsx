@@ -22,6 +22,7 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { PublicLinkActions } from "@/components/public-link-actions";
 import { formatCurrency } from "@/lib/wallet";
 import { formatEventType, formatRoleName, formatStatus } from "@/lib/formatters";
+import { CustomerConsumptions } from "@/components/customer-consumptions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,8 @@ export default async function CustomerDetailPage({
     customer,
     events,
     reservations,
+    consumptions,
+    crmSummary,
     notes,
     tasks,
     comments,
@@ -76,14 +79,35 @@ export default async function CustomerDetailPage({
       {messages.error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formatEventType(messages.error)}</p> : null}
       {messages.success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{formatEventType(messages.success)}</p> : null}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <DataPanel title="Nivel" value={loyaltyAccount?.tier ?? "Bronze"} detail="Fidelizacion" />
-        <DataPanel title="Puntos" value={String(loyaltyAccount?.points_balance ?? 0)} detail="Disponibles" />
-        {showWalletMvp ? (
-          <DataPanel title="Monedero" value={walletAccount ? formatCurrency(Number(walletAccount.balance), walletAccount.currency) : "$0"} detail="Saldo interno" />
-        ) : null}
-        <DataPanel title="Visitas" value={String(customer.total_visits)} detail="Historial" />
-        <DataPanel title="Ultima visita" value={customer.last_visit_at ? new Date(customer.last_visit_at).toLocaleDateString("es-MX") : "Sin visita"} detail="Actividad reciente" />
+      <nav className="flex gap-2 overflow-x-auto border-b border-stone-200 pb-3" aria-label="Secciones del cliente">
+        {["Datos", "Reservas", "Consumos", "Notas", "Actividad"].map((label) => (
+          <a key={label} href={`#${label.toLowerCase()}`} className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-stone-950">{label}</a>
+        ))}
+      </nav>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <DataPanel title="Total consumido" value={formatCurrency(crmSummary.totalSpent)} detail="Consumo acumulado" />
+        <DataPanel title="Visitas totales" value={String(crmSummary.totalVisits)} detail="Cuentas cerradas" />
+        <DataPanel title="Ticket promedio" value={formatCurrency(crmSummary.averageTicket)} detail="Por visita" />
+        <DataPanel title="Última visita" value={crmSummary.lastVisitAt ? new Date(crmSummary.lastVisitAt).toLocaleDateString("es-MX") : "Sin visita"} detail="Actividad reciente" />
+        <DataPanel title="Reservas realizadas" value={String(crmSummary.reservations)} detail="Historial" />
+        <DataPanel title="No-shows" value={String(crmSummary.noShows)} detail="Reservas" />
+        <DataPanel title="Descuentos recibidos" value={formatCurrency(crmSummary.discounts)} detail="Consumos POS" />
+        <DataPanel title="Cortesías recibidas" value={formatCurrency(crmSummary.courtesies)} detail="Consumos POS" />
+      </section>
+
+      <section id="consumos" className="scroll-mt-24">
+        <ModuleCard title="Consumos" description="Visitas y tickets cerrados desde el Punto de Venta.">
+          <CustomerConsumptions
+            customerId={customer.id}
+            consumptions={consumptions}
+            business={{
+              name: current.business.name,
+              address: [current.business.address, current.business.city, current.business.country].filter(Boolean).join(", "),
+              phone: current.business.phone ?? undefined,
+            }}
+          />
+        </ModuleCard>
       </section>
 
       <ModuleCard title="Acceso al Club" description="Cliente ya puede acceder al Club con su telefono y codigo.">
@@ -321,7 +345,7 @@ export default async function CustomerDetailPage({
       </ModuleCard>
       ) : null}
 
-      <section className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+      <section id="datos" className="grid scroll-mt-24 gap-4 xl:grid-cols-[0.8fr_1.2fr]">
         <ModuleCard title="Datos principales" description="Editar ficha del cliente.">
           <form action={updateCustomerAction} className="grid gap-3">
             <input type="hidden" name="id" value={customer.id} />
@@ -337,13 +361,14 @@ export default async function CustomerDetailPage({
           </form>
         </ModuleCard>
 
-        <ModuleCard title="Timeline" description="Eventos desde customer_events.">
+        <div id="actividad" className="scroll-mt-24">
+        <ModuleCard title="Actividad" description="Reservas, visitas y acciones del POS.">
           {events.length ? (
             <div className="space-y-3">
               {events.map((event) => (
                 <div key={event.id} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
                   <p className="text-sm font-semibold text-stone-950">{event.title}</p>
-                  <p className="mt-1 text-xs text-stone-500">{formatEventType(event.type)}</p>
+                  <p className="mt-1 text-xs text-stone-500">{new Date(event.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })} · {formatEventType(event.type)}</p>
                   {event.description ? <p className="mt-2 text-sm text-stone-600">{event.description}</p> : null}
                 </div>
               ))}
@@ -352,25 +377,31 @@ export default async function CustomerDetailPage({
             <EmptyState title="Sin timeline" description="Los eventos apareceran al crear reservas, notas y tareas." />
           )}
         </ModuleCard>
+        </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
+        <div id="reservas" className="scroll-mt-24">
         <ModuleCard title="Reservas del cliente" description="Historial operacional.">
           {reservations.length ? (
-            <DataTable
-              columns={["Fecha", "Hora", "Pax", "Estado"]}
-              rows={reservations.map((reservation) => [
-                reservation.date,
-                reservation.time.slice(0, 5),
-                String(reservation.party_size),
-                <StatusBadge key="status" status={reservation.status} />,
-              ])}
-            />
+            <div className="divide-y divide-stone-200">
+              {reservations.map((reservation) => (
+                <div key={reservation.id} className="py-4 first:pt-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div><p className="text-sm font-semibold text-stone-950">{reservation.date} · {reservation.time.slice(0, 5)}</p><p className="mt-1 text-xs text-stone-500">{reservation.party_size} personas · {reservation.source}</p></div>
+                    <StatusBadge status={reservation.status} />
+                  </div>
+                  {reservation.pos_sale_id ? <p className="mt-2 text-xs font-semibold text-emerald-700">Consumo conectado · {formatCurrency(Number(reservation.pos_total ?? 0))} · {reservation.pos_payment_method}</p> : null}
+                </div>
+              ))}
+            </div>
           ) : (
             <EmptyState title="Sin reservas" description="Este cliente aun no tiene reservas." />
           )}
         </ModuleCard>
+        </div>
 
+        <div id="notas" className="scroll-mt-24">
         <ModuleCard title="Notas internas" description="Relacionadas al cliente o reserva.">
           <form action={createInternalNoteAction} className="mb-4 grid gap-3">
             <input type="hidden" name="customer_id" value={customer.id} />
@@ -395,6 +426,7 @@ export default async function CustomerDetailPage({
             ))}
           </div>
         </ModuleCard>
+        </div>
 
         <ModuleCard title="Tareas internas" description="Seguimiento asignable al equipo.">
           <form action={createInternalTaskAction} className="mb-4 grid gap-3">

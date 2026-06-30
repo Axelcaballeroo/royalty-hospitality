@@ -60,67 +60,40 @@ export async function prepareReservationPosCheckIn(input: CheckInInput) {
     updated_at: new Date().toISOString(),
   }).eq("business_id", current.businessId).eq("id", input.reservationId);
 
-  await supabase.from("internal_notes").insert({
-    business_id: current.businessId,
-    customer_id: customerId,
-    reservation_id: input.reservationId,
-    title: "Check-in y cuenta POS",
-    content: `Reserva marcada como llegó. Cuenta POS abierta desde reserva. Mesa asignada: ${input.tableName}. Mesero asignado: ${input.waiterName}.`,
-    created_by: current.userId,
-  });
+  await Promise.all([
+    supabase.from("internal_notes").insert({
+      business_id: current.businessId,
+      customer_id: customerId,
+      reservation_id: input.reservationId,
+      title: "Check-in y cuenta POS",
+      content: `Reserva marcada como llegó. Cuenta POS abierta desde reserva. Mesa asignada: ${input.tableName}. Mesero asignado: ${input.waiterName}.`,
+      created_by: current.userId,
+    }),
+    supabase.from("customer_events").insert([
+      {
+        business_id: current.businessId,
+        customer_id: customerId,
+        reservation_id: input.reservationId,
+        type: "reservation_confirmed",
+        title: "Cliente llegó",
+        description: `Mesa asignada: ${input.tableName}`,
+        metadata: { source: "reservation", table_name: input.tableName },
+        created_by: current.userId,
+      },
+      {
+        business_id: current.businessId,
+        customer_id: customerId,
+        reservation_id: input.reservationId,
+        type: "reservation_confirmed",
+        title: "Cuenta abierta en POS",
+        description: `Mesero: ${input.waiterName}`,
+        metadata: { source: "pos", table_name: input.tableName, waiter_name: input.waiterName },
+        created_by: current.userId,
+      },
+    ]),
+  ]);
 
   revalidatePath("/app/reservas");
   revalidatePath(`/app/clientes/${customerId}`);
   return { customerId };
-}
-
-export async function completeReservationPosSale(input: {
-  reservationId: string;
-  saleId: string;
-  total: number;
-  paymentMethod: string;
-  closedAt: string;
-}) {
-  const current = await requireCurrentBusiness();
-  const supabase = await createClient();
-  const { data: reservation, error } = await supabase.from("reservations")
-    .select("customer_id, status")
-    .eq("business_id", current.businessId)
-    .eq("id", input.reservationId)
-    .maybeSingle<{ customer_id: string; status: string }>();
-  if (error || !reservation) throw new Error(error?.message ?? "Reserva no encontrada");
-  if (reservation.status === "completed") return;
-
-  await supabase.from("reservations").update({ status: "completed", updated_at: input.closedAt }).eq("business_id", current.businessId).eq("id", input.reservationId);
-  const { data: customer } = await supabase.from("customers").select("total_visits, total_spent").eq("business_id", current.businessId).eq("id", reservation.customer_id).maybeSingle<{ total_visits: number; total_spent: number }>();
-  await supabase.from("customers").update({
-    total_visits: (customer?.total_visits ?? 0) + 1,
-    total_spent: Number(customer?.total_spent ?? 0) + input.total,
-    last_visit_at: input.closedAt,
-    updated_at: input.closedAt,
-  }).eq("business_id", current.businessId).eq("id", reservation.customer_id);
-
-  await Promise.all([
-    supabase.from("customer_events").insert({
-      business_id: current.businessId,
-      customer_id: reservation.customer_id,
-      reservation_id: input.reservationId,
-      type: "visit_completed",
-      title: "Visita y consumo POS",
-      description: `Consumo ${input.total} · ${input.paymentMethod}`,
-      metadata: { sale_id: input.saleId, total: input.total, payment_method: input.paymentMethod, closed_at: input.closedAt },
-      created_by: current.userId,
-    }),
-    supabase.from("internal_notes").insert({
-      business_id: current.businessId,
-      customer_id: reservation.customer_id,
-      reservation_id: input.reservationId,
-      title: "Cuenta POS cerrada",
-      content: `Venta ${input.saleId}. Total ${input.total}. Pago ${input.paymentMethod}.`,
-      created_by: current.userId,
-    }),
-  ]);
-
-  revalidatePath("/app/reservas");
-  revalidatePath(`/app/clientes/${reservation.customer_id}`);
 }

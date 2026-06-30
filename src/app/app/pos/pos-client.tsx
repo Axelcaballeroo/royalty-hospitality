@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
 import { RelativeTime, useMinuteNow } from "@/components/relative-time";
-import { completeReservationPosSale } from "@/app/app/reservas/pos-actions";
+import { recordPosCustomerSale } from "@/app/app/pos/crm-actions";
 import { TicketReceipt } from "@/components/pos/ticket-receipt";
 import { CashClosingReceipt, CashWithdrawalReceipt } from "@/components/pos/cash-receipts";
 import type { CashClosingReceiptData } from "@/components/pos/cash-receipts";
@@ -752,17 +752,35 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
         paymentMethod: sale.paymentMethod,
         saleId: sale.id,
       } : link));
+    }
+    if (table.customerId) {
       try {
-        await completeReservationPosSale({
-          reservationId: table.reservationId,
+        await recordPosCustomerSale({
           saleId: sale.id,
+          folio: sale.folio ?? sale.id,
+          customerId: table.customerId,
+          reservationId: table.reservationId,
+          tableName: sale.orderName || sale.tableName,
+          orderType: sale.isQuickSale ? sale.orderType ?? "Venta rápida" : "Mesa",
+          isQuickSale: Boolean(sale.isQuickSale),
+          gross: sale.gross,
+          discount: sale.discount,
+          courtesy: sale.courtesy,
           total: sale.total,
           paymentMethod: sale.paymentMethod,
+          waiterName: sale.waiter?.name,
+          cashRegister: sale.cashRegister,
+          items: sale.items
+            .filter((item) => item.status !== "cancelled")
+            .map((item) => ({ id: item.lineId, name: item.name, quantity: item.quantity, price: item.price })),
+          payments: sale.payments,
+          amountReceived: sale.amountReceived,
+          change: sale.change,
           closedAt: sale.closedAt,
         });
-        showToast("Mesa liberada · reserva completada");
+        showToast(table.reservationId ? "Mesa liberada · reserva y cliente actualizados" : "Mesa liberada · cliente actualizado");
       } catch {
-        showToast("Venta cerrada; no se pudo actualizar la reserva");
+        showToast("Venta cerrada; no se pudo actualizar el cliente");
       }
     }
   }
