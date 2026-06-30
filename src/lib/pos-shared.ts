@@ -10,6 +10,7 @@ export type PosPermission =
   | "charge"
   | "reprint_ticket"
   | "view_paid_accounts"
+  | "open_cash"
   | "cancel_product"
   | "apply_discount"
   | "apply_courtesy"
@@ -177,6 +178,8 @@ export type CashClosing = {
   history?: OrderAuditEvent[];
   withdrawals: CashWithdrawal[];
   openedAt: string;
+  responsible?: StaffMember;
+  openedBy?: StaffMember;
 };
 
 export type CashWithdrawal = {
@@ -204,20 +207,21 @@ export const posStorageKey = "royalty-pos-state-v1";
 export const posSalesStorageKey = "royalty-pos-sales-v1";
 export const posCatalogStorageKey = "royalty-pos-catalog-v1";
 export const posCashClosingStorageKey = "royalty-pos-cash-closing-v1";
+export const posCashClosingEvent = "royalty-pos-cash-closing-updated";
 export const posStateEvent = "royalty-pos-state-updated";
 export const posCatalogEvent = "royalty-pos-catalog-updated";
 
 const businessId = "demo-restaurant";
 const rolePermissions: Record<StaffRole, PosPermission[]> = {
   waiter: ["open_table", "add_product", "send_command"],
-  cashier: ["charge", "reprint_ticket", "view_paid_accounts"],
+  cashier: ["charge", "reprint_ticket", "view_paid_accounts", "open_cash"],
   manager: [
-    "open_table", "add_product", "send_command", "charge", "reprint_ticket", "view_paid_accounts",
+    "open_table", "add_product", "send_command", "charge", "reprint_ticket", "view_paid_accounts", "open_cash",
     "cancel_product", "apply_discount", "apply_courtesy", "reopen_account", "change_waiter",
     "move_table", "register_withdrawal", "close_cash", "close_courtesy",
   ],
   admin: [
-    "open_table", "add_product", "send_command", "charge", "reprint_ticket", "view_paid_accounts",
+    "open_table", "add_product", "send_command", "charge", "reprint_ticket", "view_paid_accounts", "open_cash",
     "cancel_product", "apply_discount", "apply_courtesy", "reopen_account", "change_waiter",
     "move_table", "register_withdrawal", "close_cash", "close_courtesy",
   ],
@@ -412,6 +416,7 @@ export function readCashClosing() {
 export function writeCashClosing(closing: CashClosing) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(posCashClosingStorageKey, JSON.stringify(closing));
+  window.dispatchEvent(new CustomEvent(posCashClosingEvent));
 }
 
 export function readPosCatalog(): PosCatalog {

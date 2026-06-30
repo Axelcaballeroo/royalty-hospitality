@@ -41,6 +41,7 @@ import {
   makeAuditEvent,
   makeLineId,
   posCatalogEvent,
+  posCashClosingEvent,
   posStateEvent,
   readCashClosing,
   readPosCatalog,
@@ -68,7 +69,7 @@ import type {
   TableStatus,
 } from "@/lib/pos-shared";
 
-type ModalType = "open" | "quick" | "order" | "cashier" | "sales" | null;
+type ModalType = "open" | "quick" | "order" | "cashier" | "openCash" | "sales" | null;
 type PosStep = "order" | "payment";
 type AccountModal = "discount" | "courtesy" | null;
 type OrderActionModal = "menu" | "waiter" | "rename" | "move" | "cancel" | "history" | null;
@@ -173,6 +174,8 @@ export function PosClient() {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [reopenSale, setReopenSale] = useState<Sale | null>(null);
   const [authorizationRequest, setAuthorizationRequest] = useState<AuthorizationRequest | null>(null);
+  const [cashClosing, setCashClosing] = useState<CashClosing | null>(null);
+  const [resumePaymentAfterCashOpen, setResumePaymentAfterCashOpen] = useState(false);
 
   const selectedTable = tables.find((table) => table.id === selectedTableId) ?? tables[0];
   const posCategories = catalog.categories
@@ -190,6 +193,7 @@ export function PosClient() {
       setTables(readPosTables());
       setSales(readPosSales());
       setCatalog(readPosCatalog());
+      setCashClosing(readCashClosing());
     };
 
     syncTables();
@@ -197,14 +201,18 @@ export function PosClient() {
     window.addEventListener("storage", syncTables);
     window.addEventListener(posStateEvent, syncTables);
     window.addEventListener(posCatalogEvent, syncTables);
+    window.addEventListener(posCashClosingEvent, syncTables);
 
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("storage", syncTables);
       window.removeEventListener(posStateEvent, syncTables);
       window.removeEventListener(posCatalogEvent, syncTables);
+      window.removeEventListener(posCashClosingEvent, syncTables);
     };
   }, []);
+
+  const cashIsOpen = cashClosing?.status === "draft";
 
   const metrics = useMemo(() => {
     const openTables = tables.filter((table) => table.openedAt);
@@ -391,6 +399,12 @@ export function PosClient() {
     if (!selectedTable.openedAt || selectedTable.items.length === 0) return;
     if (selectedTable.items.some((item) => item.station !== "direct" && item.status === "pending")) {
       showToast("Envía la comanda pendiente antes de cobrar");
+      return;
+    }
+    if (!cashIsOpen) {
+      showToast("Primero abre caja para iniciar el turno.");
+      setResumePaymentAfterCashOpen(true);
+      setModal("openCash");
       return;
     }
     updateTables((current) =>
@@ -687,7 +701,7 @@ export function PosClient() {
   }
 
   function reprintActiveTicket(authorizer: StaffMember) {
-    const event = makeAuditEvent("ticket_reprinted", `Ticket reimpreso · autorizó: ${authorizer.name}`, currentPosUser.name, {
+    const event = makeAuditEvent("ticket_reprinted", `Ticket reimpreso por ${currentPosUser.name} · autorizado por ${authorizer.name}`, currentPosUser.name, {
       requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role,
     });
     updateTables((current) => current.map((table) => table.id === selectedTable.id
@@ -697,7 +711,7 @@ export function PosClient() {
   }
 
   function reprintSaleTicket(sale: Sale, authorizer: StaffMember) {
-    const event = makeAuditEvent("ticket_reprinted", `Ticket reimpreso · autorizó: ${authorizer.name}`, currentPosUser.name, {
+    const event = makeAuditEvent("ticket_reprinted", `Ticket reimpreso por ${currentPosUser.name} · autorizado por ${authorizer.name}`, currentPosUser.name, {
       requestedBy: currentPosUser.name, authorizedBy: authorizer.name, authorizedRole: authorizer.role,
     });
     setSales((current) => {
@@ -707,6 +721,51 @@ export function PosClient() {
     });
     setSelectedSale((current) => current?.id === sale.id ? { ...current, history: [...(current.history ?? []), event] } : current);
     window.print();
+  }
+
+  function openCashShift(openingCash: number, responsible: StaffMember, authorizer: StaffMember) {
+    const now = new Date().toISOString();
+    const snapshot = buildCashSnapshot([], tables);
+    const event = makeAuditEvent("cash_opened", `Caja abierta con ${money.format(openingCash)} · responsable: ${responsible.name} · autorizó: ${authorizer.name}`, responsible.name, {
+      requestedBy: responsible.name,
+      authorizedBy: authorizer.name,
+      authorizedRole: authorizer.role,
+    });
+    const next: CashClosing = {
+      id: `cash-closing-${globalThis.crypto.randomUUID()}`,
+      status: "draft",
+      openingCash,
+      countedCash: openingCash,
+      expectedCash: openingCash,
+      difference: 0,
+      snapshot,
+      orders: buildCashOrders([], tables),
+      savedAt: now,
+      withdrawals: [],
+      openedAt: now,
+      responsible,
+      openedBy: authorizer,
+      history: [event],
+    };
+    writeCashClosing(next);
+    setCashClosing(next);
+    if (resumePaymentAfterCashOpen) {
+      updateTables((current) => current.map((table) => table.id === selectedTable.id ? { ...table, readyToPay: true } : table));
+      setPosStep("payment");
+      setModal("order");
+    } else {
+      setModal(null);
+    }
+    setResumePaymentAfterCashOpen(false);
+    showToast("Caja abierta");
+  }
+
+  function showCashClosing() {
+    if (!cashIsOpen) {
+      showToast("Primero abre caja para iniciar el turno.");
+      return;
+    }
+    setModal("cashier");
   }
 
   return (
@@ -730,12 +789,28 @@ export function PosClient() {
             <ActionButton onClick={() => setModal("quick")} icon={<Sparkles size={22} />} light>
               Venta rápida
             </ActionButton>
-            <ActionButton onClick={() => setModal("cashier")} icon={<ReceiptText size={22} />} light>
+            {!cashIsOpen ? <ActionButton onClick={() => { setResumePaymentAfterCashOpen(false); setModal("openCash"); }} icon={<Banknote size={22} />}>
+              Abrir caja
+            </ActionButton> : null}
+            <ActionButton onClick={showCashClosing} icon={<ReceiptText size={22} />} light>
               Cierre de caja
             </ActionButton>
           </>
         }
       />
+
+      <section className={[
+        "flex flex-wrap items-center justify-between gap-4 rounded-2xl border px-5 py-4",
+        cashIsOpen ? "border-emerald-200 bg-emerald-50" : "border-amber-300 bg-amber-50",
+      ].join(" ")}>
+        <div>
+          <p className={["text-lg font-semibold", cashIsOpen ? "text-emerald-950" : "text-amber-950"].join(" ")}>{cashIsOpen ? "Caja abierta" : "Caja cerrada"}</p>
+          <p className={["mt-1 text-sm font-semibold", cashIsOpen ? "text-emerald-700" : "text-amber-800"].join(" ")}>
+            {cashIsOpen ? `${cashClosing?.responsible?.name ?? "Responsable sin asignar"} · Inicial ${money.format(cashClosing?.openingCash ?? 0)}` : "Abre caja para iniciar ventas y cobros del turno."}
+          </p>
+        </div>
+        {!cashIsOpen ? <button type="button" onClick={() => { setResumePaymentAfterCashOpen(false); setModal("openCash"); }} className="inline-flex h-14 items-center gap-2 rounded-2xl bg-stone-950 px-5 text-base font-semibold text-white"><Banknote size={21} /> Abrir turno</button> : null}
+      </section>
 
       <nav className="flex flex-wrap gap-3 rounded-2xl border border-stone-200 bg-white p-3" aria-label="Accesos del punto de venta">
         <SecondaryLink href="/app/kitchen" icon={<ChefHat size={20} />}>Ver cocina</SecondaryLink>
@@ -813,13 +888,15 @@ export function PosClient() {
           isCourtesy={completedPayment.isCourtesy}
           isQuickSale={Boolean(selectedTable.quickType)}
           onCloseOrder={closeOrder}
-          onPrint={() => requireAuthorization("reprint_ticket", "Reimprimir ticket", reprintActiveTicket)}
+          onPrint={() => window.print()}
         />
       ) : null}
 
       {modal === "cashier" ? (
         <CashierModal sales={sales} tables={tables} onClose={() => setModal(null)} onAuthorize={requireAuthorization} />
       ) : null}
+
+      {modal === "openCash" ? <OpenCashModal onClose={() => { setResumePaymentAfterCashOpen(false); setModal(null); }} onOpen={openCashShift} /> : null}
 
       {modal === "sales" ? (
         <PaidAccountsModal
@@ -1924,6 +2001,50 @@ function QuickSaleModal({ onClose, onSelect }: { onClose: () => void; onSelect: 
   );
 }
 
+function OpenCashModal({
+  onClose,
+  onOpen,
+}: {
+  onClose: () => void;
+  onOpen: (openingCash: number, responsible: StaffMember, authorizer: StaffMember) => void;
+}) {
+  const responsibleStaff = demoStaff.filter((staff) => staff.active && ["cashier", "manager", "admin"].includes(staff.role));
+  const [openingCash, setOpeningCash] = useState(0);
+  const [responsibleId, setResponsibleId] = useState(responsibleStaff[0]?.id ?? "");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  function open() {
+    const responsible = responsibleStaff.find((staff) => staff.id === responsibleId);
+    const authorizer = authorizePosPin(pin, "open_cash");
+    if (!responsible || !authorizer) {
+      setError("PIN sin permiso para abrir caja.");
+      return;
+    }
+    onOpen(openingCash, responsible, authorizer);
+  }
+
+  return (
+    <ModalShell title="Abrir caja" onClose={onClose}>
+      <div className="space-y-4">
+        <FormField label="Caja inicial">
+          <input autoFocus type="number" min={0} value={openingCash || ""} onChange={(event) => setOpeningCash(Number(event.target.value))} className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-2xl font-semibold text-stone-950" placeholder="$0" />
+        </FormField>
+        <FormField label="Responsable">
+          <select value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} className="h-16 w-full rounded-2xl border border-stone-200 bg-white px-5 text-lg text-stone-950">
+            {responsibleStaff.map((staff) => <option key={staff.id} value={staff.id}>{staff.name} · {staffRoleLabel(staff.role)}</option>)}
+          </select>
+        </FormField>
+        <FormField label="PIN cajero o gerente">
+          <input type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={(event) => { setPin(event.target.value.replace(/\D/g, "").slice(0, 8)); setError(""); }} onKeyDown={(event) => { if (event.key === "Enter" && pin) open(); }} className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-center text-3xl tracking-[0.3em] text-stone-950" />
+        </FormField>
+      </div>
+      {error ? <p className="mt-3 rounded-2xl bg-rose-50 p-4 text-sm font-semibold text-rose-800">{error}</p> : null}
+      <button type="button" disabled={!responsibleId || !pin || openingCash < 0} onClick={open} className="mt-6 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">Abrir turno</button>
+    </ModalShell>
+  );
+}
+
 function CashierModal({
   sales,
   tables,
@@ -1951,8 +2072,11 @@ function CashierModal({
     loadClosing();
   }, []);
 
-  const liveSnapshot = buildCashSnapshot(sales, tables);
-  const liveOrders = buildCashOrders(sales, tables);
+  const shiftSales = closing
+    ? sales.filter((sale) => new Date(sale.closedAt).getTime() >= new Date(closing.openedAt).getTime())
+    : [];
+  const liveSnapshot = buildCashSnapshot(shiftSales, tables);
+  const liveOrders = buildCashOrders(shiftSales, tables);
   const locked = closing?.status === "closed";
   const snapshot = locked ? closing.snapshot : liveSnapshot;
   const orders = locked ? closing.orders ?? [] : liveOrders;
@@ -2033,7 +2157,7 @@ function CashierModal({
 
   const cashHistory = [
     ...(closing?.history ?? []),
-    ...sales.map((sale) => makeCashSaleEvent(sale)),
+    ...shiftSales.map((sale) => makeCashSaleEvent(sale)),
   ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   return (
@@ -2087,17 +2211,7 @@ function CashierModal({
             </span>
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <label className="rounded-2xl border border-stone-200 bg-white p-4">
-              <span className="text-sm font-semibold text-stone-500">Caja inicial</span>
-              <input
-                type="number"
-                min={0}
-                disabled={locked || withdrawals.length > 0}
-                value={openingCash}
-                onChange={(event) => { setOpeningCash(Number(event.target.value)); setMessage(""); }}
-                className="mt-2 h-12 w-full rounded-xl border border-stone-200 px-3 text-2xl font-semibold text-stone-950 disabled:bg-stone-100"
-              />
-            </label>
+            <CashMetric label="Caja inicial" value={money.format(openingCash)} />
             <CashMetric label="Efectivo esperado" value={money.format(expectedCash)} />
             <label className="rounded-2xl border border-stone-200 bg-white p-4">
               <span className="text-sm font-semibold text-stone-500">Efectivo contado</span>
