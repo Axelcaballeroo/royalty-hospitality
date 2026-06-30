@@ -139,12 +139,16 @@ export type Sale = {
   total: number;
   paymentMethod: PaymentMethod;
   payments: PaymentPart[];
+  amountReceived?: number;
+  change?: number;
+  cashRegister?: string;
   isCourtesy: boolean;
   waiter?: StaffMember | null;
   openedBy?: StaffMember;
   paidBy?: StaffMember;
   closedBy?: StaffMember;
   history?: OrderAuditEvent[];
+  paidAt?: string;
   closedAt: string;
 };
 

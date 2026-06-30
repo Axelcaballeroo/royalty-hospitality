@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -31,7 +32,10 @@ import {
   X,
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
+import { TicketReceipt } from "@/components/pos/ticket-receipt";
 import { buildCashOrders, buildCashSnapshot, expectedDrawerCash, withdrawalsTotal } from "@/lib/pos-cash-closing";
+import { receiptFromSale, receiptFromTable } from "@/lib/pos-receipt";
+import type { CurrentReceiptPayment, ReceiptBusinessProfile, ReceiptData, ReceiptPaperWidth } from "@/lib/pos-receipt";
 import {
   initialPosCatalog,
   initialTables,
@@ -73,7 +77,9 @@ type ModalType = "open" | "quick" | "order" | "cashier" | "openCash" | "sales" |
 type PosStep = "order" | "payment";
 type AccountModal = "discount" | "courtesy" | null;
 type OrderActionModal = "menu" | "waiter" | "rename" | "move" | "cancel" | "history" | null;
-type CompletedPayment = { payments: PaymentPart[]; isCourtesy: boolean };
+type CompletedPayment = CurrentReceiptPayment;
+type PaymentResult = Pick<CurrentReceiptPayment, "payments" | "amountReceived" | "change">;
+type ReceiptPreview = { data: ReceiptData; mode: "initial" | "reprint" };
 type AuthorizationRequest = {
   permission: PosPermission;
   description: string;
@@ -158,7 +164,7 @@ function statusClasses(status: TableStatus) {
   return "border-stone-900 bg-stone-950 text-white";
 }
 
-export function PosClient() {
+export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
   const [tables, setTables] = useState<PosTable[]>(initialTables);
   const [selectedTableId, setSelectedTableId] = useState(initialTables[1].id);
   const [catalog, setCatalog] = useState<PosCatalog>(initialPosCatalog);
@@ -176,6 +182,7 @@ export function PosClient() {
   const [authorizationRequest, setAuthorizationRequest] = useState<AuthorizationRequest | null>(null);
   const [cashClosing, setCashClosing] = useState<CashClosing | null>(null);
   const [resumePaymentAfterCashOpen, setResumePaymentAfterCashOpen] = useState(false);
+  const [receiptPreview, setReceiptPreview] = useState<ReceiptPreview | null>(null);
 
   const selectedTable = tables.find((table) => table.id === selectedTableId) ?? tables[0];
   const posCategories = catalog.categories
@@ -568,7 +575,8 @@ export function PosClient() {
     showToast(courtesy.type === "full" ? "Cuenta marcada como cortesía" : "Cortesía aplicada");
   }
 
-  function registerPayment(payments: PaymentPart[]) {
+  function registerPayment(result: PaymentResult) {
+    const { payments } = result;
     const method = payments.length > 1 ? "Mixto" : payments[0]?.method ?? "Cortesía";
     const event = makeAuditEvent("payment_registered", `Cobrado con ${method}`);
     updateTables((current) =>
@@ -583,7 +591,12 @@ export function PosClient() {
           : table,
       ),
     );
-    setCompletedPayment({ payments, isCourtesy: false });
+    setCompletedPayment({
+      ...result,
+      folio: `POS-${Date.now().toString().slice(-6)}`,
+      paidAt: new Date().toISOString(),
+      isCourtesy: false,
+    });
     showToast("Pago registrado");
   }
 
@@ -603,7 +616,12 @@ export function PosClient() {
           : table,
       ),
     );
-    setCompletedPayment({ payments: [], isCourtesy: true });
+    setCompletedPayment({
+      payments: [],
+      folio: `POS-${Date.now().toString().slice(-6)}`,
+      paidAt: new Date().toISOString(),
+      isCourtesy: true,
+    });
   }
 
   function closeOrder() {
@@ -618,7 +636,7 @@ export function PosClient() {
     const history = [...(table.history ?? []), closeEvent];
     const sale: Sale = {
       id: `sale-${Date.now()}`,
-      folio: `POS-${Date.now().toString().slice(-6)}`,
+      folio: completedPayment.folio,
       tableId: table.id,
       tableName: table.quickType ? "Venta rápida" : table.name,
       orderName: table.orderName,
@@ -631,12 +649,16 @@ export function PosClient() {
       total: total(table),
       paymentMethod,
       payments: completedPayment.payments,
+      amountReceived: completedPayment.amountReceived,
+      change: completedPayment.change,
+      cashRegister: cashClosing?.responsible?.name ?? currentPosUser.name,
       isCourtesy: completedPayment.isCourtesy,
       waiter: table.waiter,
       openedBy: table.openedBy,
       paidBy: table.paidBy ?? currentPosUser,
       closedBy: currentPosUser,
       history,
+      paidAt: completedPayment.paidAt,
       closedAt: new Date().toISOString(),
     };
     setSales((current) => {
@@ -707,7 +729,13 @@ export function PosClient() {
     updateTables((current) => current.map((table) => table.id === selectedTable.id
       ? { ...table, history: [...(table.history ?? []), event] }
       : table));
-    window.print();
+    const payment = completedPayment ?? {
+      folio: `ORD-${selectedTable.id}`,
+      paidAt: new Date().toISOString(),
+      payments: [],
+      isCourtesy: false,
+    };
+    setReceiptPreview({ data: receiptFromTable(selectedTable, payment, business, cashClosing), mode: "reprint" });
   }
 
   function reprintSaleTicket(sale: Sale, authorizer: StaffMember) {
@@ -720,7 +748,15 @@ export function PosClient() {
       return next;
     });
     setSelectedSale((current) => current?.id === sale.id ? { ...current, history: [...(current.history ?? []), event] } : current);
-    window.print();
+    setReceiptPreview({ data: receiptFromSale(sale, business), mode: "reprint" });
+  }
+
+  function previewInitialReceipt() {
+    if (!completedPayment) return;
+    setReceiptPreview({
+      data: receiptFromTable(selectedTable, completedPayment, business, cashClosing),
+      mode: "initial",
+    });
   }
 
   function openCashShift(openingCash: number, responsible: StaffMember, authorizer: StaffMember) {
@@ -888,7 +924,7 @@ export function PosClient() {
           isCourtesy={completedPayment.isCourtesy}
           isQuickSale={Boolean(selectedTable.quickType)}
           onCloseOrder={closeOrder}
-          onPrint={() => window.print()}
+          onPrint={previewInitialReceipt}
         />
       ) : null}
 
@@ -933,6 +969,7 @@ export function PosClient() {
         setAuthorizationRequest(null);
         action(staff);
       }} /> : null}
+      {receiptPreview ? <ReceiptPreviewModal preview={receiptPreview} onClose={() => setReceiptPreview(null)} /> : null}
     </div>
   );
 }
@@ -1106,7 +1143,7 @@ function FullscreenPos({
   onSendCommand: () => void;
   onStartPayment: () => void;
   onBackToOrder: () => void;
-  onPay: (payments: PaymentPart[]) => void;
+  onPay: (result: PaymentResult) => void;
   onCourtesyClose: () => void;
   onActions: () => void;
 }) {
@@ -1359,7 +1396,7 @@ function PaymentStep({
 }: {
   table: PosTable;
   onBack: () => void;
-  onPay: (payments: PaymentPart[]) => void;
+  onPay: (result: PaymentResult) => void;
   onCourtesyClose: () => void;
 }) {
   const [method, setMethod] = useState<PaymentMethod>("Efectivo");
@@ -1394,11 +1431,15 @@ function PaymentStep({
 
   function register() {
     if (method === "Mixto") {
-      if (remaining === 0 && payments.length > 0) onPay(payments);
+      if (remaining === 0 && payments.length > 0) onPay({ payments });
       return;
     }
     if (method === "Efectivo" && amountReceived < total(table)) return;
-    onPay([{ method, amount: total(table) }]);
+    onPay({
+      payments: [{ method, amount: total(table) }],
+      amountReceived: method === "Efectivo" ? amountReceived : undefined,
+      change: method === "Efectivo" ? change : undefined,
+    });
   }
 
   return (
@@ -1801,6 +1842,49 @@ function ChoiceButton({ children, active, onClick }: { children: ReactNode; acti
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return <label className="block text-base font-semibold text-stone-700">{label}<span className="mt-2 block">{children}</span></label>;
+}
+
+function ReceiptPreviewModal({
+  preview,
+  onClose,
+}: {
+  preview: ReceiptPreview;
+  onClose: () => void;
+}) {
+  const [paperWidth, setPaperWidth] = useState<ReceiptPaperWidth>("80mm");
+
+  function printReceipt() {
+    const cleanup = () => document.body.classList.remove("receipt-printing");
+    document.body.classList.add("receipt-printing");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+    window.setTimeout(cleanup, 60000);
+  }
+
+  return createPortal(
+    <div className="receipt-preview-portal">
+    <ModalShell title={preview.mode === "initial" ? "Vista previa del ticket" : "Vista previa de reimpresión"} onClose={onClose} wide>
+      <div className="receipt-preview-controls mb-5 flex flex-wrap items-center justify-between gap-4">
+        <div className="inline-flex rounded-2xl bg-stone-100 p-1" aria-label="Ancho del ticket">
+          {(["58mm", "80mm"] as ReceiptPaperWidth[]).map((width) => (
+            <button key={width} type="button" onClick={() => setPaperWidth(width)} className={["h-11 rounded-xl px-5 text-sm font-semibold", paperWidth === width ? "bg-stone-950 text-white" : "text-stone-600"].join(" ")}>{width}</button>
+          ))}
+        </div>
+        <p className="text-sm font-semibold text-stone-500">{preview.mode === "reprint" ? "Reimpresión autorizada" : "Primera impresión"}</p>
+      </div>
+      <div className="max-h-[62vh] overflow-y-auto rounded-2xl bg-stone-100 py-6">
+        <div className="thermal-print-root">
+          <TicketReceipt data={preview.data} paperWidth={paperWidth} />
+        </div>
+      </div>
+      <div className="receipt-preview-controls mt-5 grid grid-cols-2 gap-3">
+        <button type="button" onClick={onClose} className="h-16 rounded-2xl border border-stone-200 bg-white text-lg font-semibold text-stone-950">Cerrar</button>
+        <button type="button" onClick={printReceipt} className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-stone-950 text-lg font-semibold text-white"><Printer size={22} /> Imprimir</button>
+      </div>
+    </ModalShell>
+    </div>,
+    document.body,
+  );
 }
 
 function PaymentCompleteModal({

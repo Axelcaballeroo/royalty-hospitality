@@ -46,3 +46,42 @@ textarea:focus-visible {
   background: #1c1917;
   color: #ffffff;
 }
+
+@media print {
+  @page {
+    size: auto;
+    margin: 0;
+  }
+
+  body.receipt-printing {
+    background: #ffffff;
+  }
+
+  body.receipt-printing > *:not(.receipt-preview-portal) {
+    display: none !important;
+  }
+
+  body.receipt-printing * {
+    visibility: hidden !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  body.receipt-printing .thermal-print-root,
+  body.receipt-printing .thermal-print-root * {
+    visibility: visible !important;
+  }
+
+  body.receipt-printing .thermal-print-root {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: auto;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  body.receipt-printing .receipt-preview-controls {
+    display: none !important;
+  }
+}
