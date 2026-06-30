@@ -29,6 +29,7 @@ export function TicketReceipt({
   const footer = data.business.footerMessage?.length
     ? data.business.footerMessage
     : ["Gracias por visitarnos.", "¡Te esperamos pronto!"];
+  const hasForeignPayment = data.payments.some((payment) => payment.currency === "USD" || payment.currency === "EUR");
 
   return (
     <article className={`${styles.receipt} thermal-receipt`} data-paper-width={paperWidth} aria-label={`Ticket ${data.folio}`}>
@@ -76,10 +77,13 @@ export function TicketReceipt({
 
       <section>
         <h3 className={styles.paymentTitle}>{data.paymentMethod}</h3>
-        {data.payments.length > 1 ? data.payments.map((payment, index) => (
-          <p key={`${payment.method}-${index}`} className={styles.paymentLine}><span>{payment.method}</span><span>{currency.format(payment.amount)}</span></p>
+        {data.payments.length > 1 || hasForeignPayment ? data.payments.map((payment, index) => (
+          <div key={`${payment.method}-${index}`}>
+            <p className={styles.paymentLine}><span>{payment.method}{payment.currency && payment.currency !== "MXN" ? ` · ${payment.currency}` : ""}</span><span>{payment.foreignAmount !== undefined && payment.currency !== "MXN" ? `${payment.foreignAmount} ${payment.currency}` : currency.format(payment.amount)}</span></p>
+            {payment.currency && payment.currency !== "MXN" ? <p className={styles.paymentLine}><span>TC {payment.exchangeRate}</span><span>Equiv. {currency.format(payment.equivalentMxn ?? payment.amount)}</span></p> : null}
+          </div>
         )) : <p className={styles.paymentAmount}>{currency.format(data.payments[0]?.amount ?? data.total)}</p>}
-        {data.amountReceived !== undefined ? <p className={styles.paymentLine}><span>Recibido</span><span>{currency.format(data.amountReceived)}</span></p> : null}
+        {data.amountReceived !== undefined && !hasForeignPayment ? <p className={styles.paymentLine}><span>Recibido</span><span>{currency.format(data.amountReceived)}</span></p> : null}
         {(data.change ?? 0) > 0 ? <p className={styles.paymentLine}><span>Cambio</span><span>{currency.format(data.change ?? 0)}</span></p> : null}
       </section>
 

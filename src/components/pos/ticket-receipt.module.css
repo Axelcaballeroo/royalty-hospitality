@@ -128,6 +128,12 @@
   font-weight: 700;
 }
 
+.signature {
+  margin-top: 6mm;
+  text-align: center;
+  white-space: pre;
+}
+
 @media print {
   .receipt {
     margin: 0;

@@ -1,5 +1,6 @@
 export type TableStatus = "free" | "occupied" | "checkout";
 export type PaymentMethod = "Efectivo" | "Tarjeta" | "Transferencia" | "Mixto";
+export type CurrencyCode = "MXN" | "USD" | "EUR";
 export type OrderItemStatus = "pending" | "sent" | "preparing" | "ready" | "served" | "paid" | "cancelled";
 export type ProductStation = "kitchen" | "bar" | "direct";
 export type StaffRole = "waiter" | "cashier" | "manager" | "admin";
@@ -9,6 +10,7 @@ export type PosPermission =
   | "send_command"
   | "charge"
   | "reprint_ticket"
+  | "reprint_cash_receipt"
   | "view_paid_accounts"
   | "open_cash"
   | "cancel_product"
@@ -102,6 +104,15 @@ export type Courtesy = {
 export type PaymentPart = {
   method: Exclude<PaymentMethod, "Mixto">;
   amount: number;
+  currency?: CurrencyCode;
+  foreignAmount?: number;
+  exchangeRate?: number;
+  equivalentMxn?: number;
+};
+
+export type ExchangeRateSettings = {
+  USD: number;
+  EUR: number;
 };
 
 export type PosTable = {
@@ -162,6 +173,9 @@ export type CashClosingSnapshot = {
   transfer: number;
   mixed: number;
   totalCollected: number;
+  usdReceived: number;
+  eurReceived: number;
+  foreignEquivalentMxn: number;
   pending: number;
   closedOrders: number;
   openOrders: number;
@@ -190,6 +204,7 @@ export type CashWithdrawal = {
   id: string;
   amount: number;
   reason: string;
+  description?: string;
   receivedBy?: string;
   authorizedBy: StaffMember;
   createdAt: string;
@@ -211,21 +226,24 @@ export const posStorageKey = "royalty-pos-state-v1";
 export const posSalesStorageKey = "royalty-pos-sales-v1";
 export const posCatalogStorageKey = "royalty-pos-catalog-v1";
 export const posCashClosingStorageKey = "royalty-pos-cash-closing-v1";
+export const posExchangeRatesStorageKey = "royalty-pos-exchange-rates-v1";
 export const posCashClosingEvent = "royalty-pos-cash-closing-updated";
+export const posExchangeRatesEvent = "royalty-pos-exchange-rates-updated";
 export const posStateEvent = "royalty-pos-state-updated";
 export const posCatalogEvent = "royalty-pos-catalog-updated";
 
 const businessId = "demo-restaurant";
+export const initialExchangeRates: ExchangeRateSettings = { USD: 15, EUR: 17 };
 const rolePermissions: Record<StaffRole, PosPermission[]> = {
   waiter: ["open_table", "add_product", "send_command"],
   cashier: ["charge", "reprint_ticket", "view_paid_accounts", "open_cash"],
   manager: [
-    "open_table", "add_product", "send_command", "charge", "reprint_ticket", "view_paid_accounts", "open_cash",
+    "open_table", "add_product", "send_command", "charge", "reprint_ticket", "reprint_cash_receipt", "view_paid_accounts", "open_cash",
     "cancel_product", "apply_discount", "apply_courtesy", "reopen_account", "change_waiter",
     "move_table", "register_withdrawal", "close_cash", "close_courtesy",
   ],
   admin: [
-    "open_table", "add_product", "send_command", "charge", "reprint_ticket", "view_paid_accounts", "open_cash",
+    "open_table", "add_product", "send_command", "charge", "reprint_ticket", "reprint_cash_receipt", "view_paid_accounts", "open_cash",
     "cancel_product", "apply_discount", "apply_courtesy", "reopen_account", "change_waiter",
     "move_table", "register_withdrawal", "close_cash", "close_courtesy",
   ],
@@ -410,6 +428,9 @@ export function readCashClosing() {
       snapshot: {
         ...stored.snapshot!,
         totalCollected: stored.snapshot?.totalCollected ?? stored.snapshot?.net ?? 0,
+        usdReceived: stored.snapshot?.usdReceived ?? 0,
+        eurReceived: stored.snapshot?.eurReceived ?? 0,
+        foreignEquivalentMxn: stored.snapshot?.foreignEquivalentMxn ?? 0,
       },
     } as CashClosing;
   } catch {
@@ -421,6 +442,27 @@ export function writeCashClosing(closing: CashClosing) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(posCashClosingStorageKey, JSON.stringify(closing));
   window.dispatchEvent(new CustomEvent(posCashClosingEvent));
+}
+
+export function readExchangeRates(): ExchangeRateSettings {
+  if (typeof window === "undefined") return initialExchangeRates;
+  try {
+    const value = window.localStorage.getItem(posExchangeRatesStorageKey);
+    if (!value) return initialExchangeRates;
+    const stored = JSON.parse(value) as Partial<ExchangeRateSettings>;
+    return {
+      USD: Number(stored.USD) > 0 ? Number(stored.USD) : initialExchangeRates.USD,
+      EUR: Number(stored.EUR) > 0 ? Number(stored.EUR) : initialExchangeRates.EUR,
+    };
+  } catch {
+    return initialExchangeRates;
+  }
+}
+
+export function writeExchangeRates(rates: ExchangeRateSettings) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(posExchangeRatesStorageKey, JSON.stringify(rates));
+  window.dispatchEvent(new CustomEvent(posExchangeRatesEvent));
 }
 
 export function readPosCatalog(): PosCatalog {

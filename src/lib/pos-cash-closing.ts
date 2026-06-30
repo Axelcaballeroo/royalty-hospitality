@@ -37,30 +37,39 @@ function tableTotal(table: PosTable) {
 
 export function buildCashSnapshot(sales: Sale[], tables: PosTable[]): CashClosingSnapshot {
   const openOrders = tables.filter((table) => table.openedAt);
-  const byMethod = (method: PaymentPart["method"]) =>
+  const salePayments = (sale: Sale) => sale.payments?.length
+    ? sale.payments
+    : sale.paymentMethod !== "Mixto"
+      ? [{ method: sale.paymentMethod, amount: sale.total, currency: "MXN" } as PaymentPart]
+      : [];
+  const byMethod = (method: PaymentPart["method"], onlyMxn = false) =>
     sales.reduce((sum, sale) => {
-      const payments = sale.payments?.length
-        ? sale.payments
-        : sale.paymentMethod !== "Mixto"
-          ? [{ method: sale.paymentMethod, amount: sale.total } as PaymentPart]
-          : [];
-      return sum + payments
-        .filter((payment) => payment.method === method)
+      return sum + salePayments(sale)
+        .filter((payment) => payment.method === method && (!onlyMxn || (payment.currency ?? "MXN") === "MXN"))
         .reduce((paymentSum, payment) => paymentSum + payment.amount, 0);
     }, 0);
+  const foreignReceived = (currency: "USD" | "EUR") => sales.reduce((sum, sale) => sum + salePayments(sale)
+    .filter((payment) => payment.currency === currency)
+    .reduce((paymentSum, payment) => paymentSum + (payment.foreignAmount ?? 0), 0), 0);
+  const foreignEquivalentMxn = sales.reduce((sum, sale) => sum + salePayments(sale)
+    .filter((payment) => payment.currency === "USD" || payment.currency === "EUR")
+    .reduce((paymentSum, payment) => paymentSum + (payment.equivalentMxn ?? payment.amount), 0), 0);
 
   return {
     gross: sales.reduce((sum, sale) => sum + (sale.gross ?? sale.total), 0),
     discounts: sales.reduce((sum, sale) => sum + (sale.discount ?? 0), 0),
     courtesies: sales.reduce((sum, sale) => sum + (sale.courtesy ?? 0), 0),
     net: sales.reduce((sum, sale) => sum + sale.total, 0),
-    cash: byMethod("Efectivo"),
+    cash: byMethod("Efectivo", true),
     card: byMethod("Tarjeta"),
     transfer: byMethod("Transferencia"),
     mixed: sales
       .filter((sale) => sale.paymentMethod === "Mixto" && !sale.isCourtesy)
       .reduce((sum, sale) => sum + sale.total, 0),
     totalCollected: sales.reduce((sum, sale) => sum + sale.total, 0),
+    usdReceived: foreignReceived("USD"),
+    eurReceived: foreignReceived("EUR"),
+    foreignEquivalentMxn,
     pending: openOrders.reduce((sum, table) => sum + tableTotal(table), 0),
     closedOrders: sales.length,
     openOrders: openOrders.length,

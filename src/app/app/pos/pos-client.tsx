@@ -33,12 +33,16 @@ import {
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
 import { TicketReceipt } from "@/components/pos/ticket-receipt";
+import { CashClosingReceipt, CashWithdrawalReceipt } from "@/components/pos/cash-receipts";
+import type { CashClosingReceiptData } from "@/components/pos/cash-receipts";
 import { buildCashOrders, buildCashSnapshot, expectedDrawerCash, withdrawalsTotal } from "@/lib/pos-cash-closing";
+import { convertToMxn, exchangeRateFor } from "@/lib/pos-currency";
 import { receiptFromSale, receiptFromTable } from "@/lib/pos-receipt";
 import type { CurrentReceiptPayment, ReceiptBusinessProfile, ReceiptData, ReceiptPaperWidth } from "@/lib/pos-receipt";
 import {
   initialPosCatalog,
   initialTables,
+  initialExchangeRates,
   authorizePosPin,
   currentPosUser,
   demoStaff,
@@ -46,18 +50,23 @@ import {
   makeLineId,
   posCatalogEvent,
   posCashClosingEvent,
+  posExchangeRatesEvent,
   posStateEvent,
   readCashClosing,
+  readExchangeRates,
   readPosCatalog,
   readPosSales,
   readPosTables,
   writePosSales,
   writeCashClosing,
+  writeExchangeRates,
   writePosTables,
 } from "@/lib/pos-shared";
 import type {
   CashClosing,
   CashWithdrawal,
+  CurrencyCode,
+  ExchangeRateSettings,
   OrderAuditEvent,
   OrderItemStatus,
   PaymentPart,
@@ -73,7 +82,7 @@ import type {
   TableStatus,
 } from "@/lib/pos-shared";
 
-type ModalType = "open" | "quick" | "order" | "cashier" | "openCash" | "sales" | null;
+type ModalType = "open" | "quick" | "order" | "cashier" | "openCash" | "currency" | "sales" | null;
 type PosStep = "order" | "payment";
 type AccountModal = "discount" | "courtesy" | null;
 type OrderActionModal = "menu" | "waiter" | "rename" | "move" | "cancel" | "history" | null;
@@ -183,6 +192,7 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
   const [cashClosing, setCashClosing] = useState<CashClosing | null>(null);
   const [resumePaymentAfterCashOpen, setResumePaymentAfterCashOpen] = useState(false);
   const [receiptPreview, setReceiptPreview] = useState<ReceiptPreview | null>(null);
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRateSettings>(initialExchangeRates);
 
   const selectedTable = tables.find((table) => table.id === selectedTableId) ?? tables[0];
   const posCategories = catalog.categories
@@ -201,6 +211,7 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
       setSales(readPosSales());
       setCatalog(readPosCatalog());
       setCashClosing(readCashClosing());
+      setExchangeRates(readExchangeRates());
     };
 
     syncTables();
@@ -209,6 +220,7 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
     window.addEventListener(posStateEvent, syncTables);
     window.addEventListener(posCatalogEvent, syncTables);
     window.addEventListener(posCashClosingEvent, syncTables);
+    window.addEventListener(posExchangeRatesEvent, syncTables);
 
     return () => {
       window.clearInterval(interval);
@@ -216,6 +228,7 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
       window.removeEventListener(posStateEvent, syncTables);
       window.removeEventListener(posCatalogEvent, syncTables);
       window.removeEventListener(posCashClosingEvent, syncTables);
+      window.removeEventListener(posExchangeRatesEvent, syncTables);
     };
   }, []);
 
@@ -845,13 +858,16 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
             {cashIsOpen ? `${cashClosing?.responsible?.name ?? "Responsable sin asignar"} · Inicial ${money.format(cashClosing?.openingCash ?? 0)}` : "Abre caja para iniciar ventas y cobros del turno."}
           </p>
         </div>
-        {!cashIsOpen ? <button type="button" onClick={() => { setResumePaymentAfterCashOpen(false); setModal("openCash"); }} className="inline-flex h-14 items-center gap-2 rounded-2xl bg-stone-950 px-5 text-base font-semibold text-white"><Banknote size={21} /> Abrir turno</button> : null}
+        {!cashIsOpen ? <div className="flex flex-wrap gap-2">{cashClosing ? <button type="button" onClick={() => setModal("cashier")} className="inline-flex h-14 items-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 text-base font-semibold text-stone-900"><History size={20} /> Último corte</button> : null}<button type="button" onClick={() => { setResumePaymentAfterCashOpen(false); setModal("openCash"); }} className="inline-flex h-14 items-center gap-2 rounded-2xl bg-stone-950 px-5 text-base font-semibold text-white"><Banknote size={21} /> Abrir turno</button></div> : null}
       </section>
 
       <nav className="flex flex-wrap gap-3 rounded-2xl border border-stone-200 bg-white p-3" aria-label="Accesos del punto de venta">
         <SecondaryLink href="/app/kitchen" icon={<ChefHat size={20} />}>Ver cocina</SecondaryLink>
         <SecondaryLink href="/app/bar" icon={<Coffee size={20} />}>Ver barra</SecondaryLink>
         <SecondaryLink href="/app/pos/products" icon={<Package size={20} />}>Configurar productos</SecondaryLink>
+        <button type="button" onClick={() => setModal("currency")} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
+          <Banknote size={20} /> Tipo de cambio
+        </button>
         <button type="button" onClick={() => setModal("sales")} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
           <ReceiptText size={20} /> Cuentas cobradas
         </button>
@@ -886,6 +902,7 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
           activeCategory={selectedCategory}
           posCategories={posCategories}
           categoryProducts={categoryProducts}
+          exchangeRates={exchangeRates}
           onCategoryChange={setActiveCategory}
           onBack={() => {
             if (selectedTable.quickType) {
@@ -929,10 +946,12 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
       ) : null}
 
       {modal === "cashier" ? (
-        <CashierModal sales={sales} tables={tables} onClose={() => setModal(null)} onAuthorize={requireAuthorization} />
+        <CashierModal business={business} sales={sales} tables={tables} onClose={() => setModal(null)} onAuthorize={requireAuthorization} />
       ) : null}
 
       {modal === "openCash" ? <OpenCashModal onClose={() => { setResumePaymentAfterCashOpen(false); setModal(null); }} onOpen={openCashShift} /> : null}
+
+      {modal === "currency" ? <ExchangeRatesModal rates={exchangeRates} onClose={() => setModal(null)} onSave={(rates) => { writeExchangeRates(rates); setExchangeRates(rates); setModal(null); showToast("Tipo de cambio actualizado"); }} /> : null}
 
       {modal === "sales" ? (
         <PaidAccountsModal
@@ -1116,6 +1135,7 @@ function FullscreenPos({
   activeCategory,
   posCategories,
   categoryProducts,
+  exchangeRates,
   onCategoryChange,
   onBack,
   onAddProduct,
@@ -1134,6 +1154,7 @@ function FullscreenPos({
   activeCategory: string;
   posCategories: PosCategory[];
   categoryProducts: Product[];
+  exchangeRates: ExchangeRateSettings;
   onCategoryChange: (categoryId: string) => void;
   onBack: () => void;
   onAddProduct: (product: Product) => void;
@@ -1200,7 +1221,7 @@ function FullscreenPos({
         ) : null}
 
         {step === "payment" ? (
-          <PaymentStep table={table} onBack={onBackToOrder} onPay={onPay} onCourtesyClose={onCourtesyClose} />
+          <PaymentStep table={table} exchangeRates={exchangeRates} onBack={onBackToOrder} onPay={onPay} onCourtesyClose={onCourtesyClose} />
         ) : null}
       </div>
     </div>
@@ -1390,28 +1411,35 @@ function OrderStep({
 
 function PaymentStep({
   table,
+  exchangeRates,
   onBack,
   onPay,
   onCourtesyClose,
 }: {
   table: PosTable;
+  exchangeRates: ExchangeRateSettings;
   onBack: () => void;
   onPay: (result: PaymentResult) => void;
   onCourtesyClose: () => void;
 }) {
   const [method, setMethod] = useState<PaymentMethod>("Efectivo");
   const [amountReceived, setAmountReceived] = useState(total(table));
+  const [currency, setCurrency] = useState<CurrencyCode>("MXN");
   const [partialMethod, setPartialMethod] = useState<PaymentPart["method"]>("Efectivo");
+  const [partialCurrency, setPartialCurrency] = useState<CurrencyCode>("MXN");
   const [partialAmount, setPartialAmount] = useState(total(table));
   const [payments, setPayments] = useState<PaymentPart[]>([]);
   const methods: PaymentMethod[] = ["Efectivo", "Tarjeta", "Transferencia", "Mixto"];
   const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const remaining = Math.max(0, total(table) - paid);
-  const change = Math.max(0, amountReceived - total(table));
+  const rate = exchangeRateFor(currency, exchangeRates);
+  const receivedEquivalent = convertToMxn(amountReceived, currency, exchangeRates);
+  const partialRate = exchangeRateFor(partialCurrency, exchangeRates);
+  const change = Math.max(0, receivedEquivalent - total(table));
   const visiblePaid = method === "Mixto"
     ? paid
     : method === "Efectivo"
-      ? Math.min(Math.max(0, amountReceived), total(table))
+      ? Math.min(Math.max(0, receivedEquivalent), total(table))
       : total(table);
   const visibleRemaining = Math.max(0, total(table) - visiblePaid);
   const canFinish = total(table) === 0 || (visibleRemaining === 0 && (method !== "Mixto" || payments.length > 0));
@@ -1419,14 +1447,25 @@ function PaymentStep({
   function chooseMethod(nextMethod: PaymentMethod) {
     setMethod(nextMethod);
     setPayments([]);
+    setCurrency("MXN");
+    setPartialCurrency("MXN");
+    setAmountReceived(total(table));
     setPartialAmount(total(table));
   }
 
   function addPartialPayment() {
-    const amount = Math.min(Math.max(0, partialAmount), remaining);
+    const equivalent = partialMethod === "Efectivo" ? partialAmount * partialRate : partialAmount;
+    const amount = Math.min(Math.max(0, equivalent), remaining);
     if (!amount) return;
-    setPayments((current) => [...current, { method: partialMethod, amount }]);
-    setPartialAmount(Math.max(0, remaining - amount));
+    setPayments((current) => [...current, {
+      method: partialMethod,
+      amount,
+      currency: partialMethod === "Efectivo" ? partialCurrency : "MXN",
+      foreignAmount: partialMethod === "Efectivo" && partialCurrency !== "MXN" ? amount / partialRate : undefined,
+      exchangeRate: partialMethod === "Efectivo" && partialCurrency !== "MXN" ? partialRate : undefined,
+      equivalentMxn: partialMethod === "Efectivo" && partialCurrency !== "MXN" ? amount : undefined,
+    }]);
+    setPartialAmount(Math.max(0, remaining - amount) / (partialMethod === "Efectivo" ? partialRate : 1));
   }
 
   function register() {
@@ -1434,10 +1473,17 @@ function PaymentStep({
       if (remaining === 0 && payments.length > 0) onPay({ payments });
       return;
     }
-    if (method === "Efectivo" && amountReceived < total(table)) return;
+    if (method === "Efectivo" && receivedEquivalent < total(table)) return;
     onPay({
-      payments: [{ method, amount: total(table) }],
-      amountReceived: method === "Efectivo" ? amountReceived : undefined,
+      payments: [{
+        method,
+        amount: total(table),
+        currency: method === "Efectivo" ? currency : "MXN",
+        foreignAmount: method === "Efectivo" && currency !== "MXN" ? amountReceived : undefined,
+        exchangeRate: method === "Efectivo" && currency !== "MXN" ? rate : undefined,
+        equivalentMxn: method === "Efectivo" && currency !== "MXN" ? receivedEquivalent : undefined,
+      }],
+      amountReceived: method === "Efectivo" ? receivedEquivalent : undefined,
       change: method === "Efectivo" ? change : undefined,
     });
   }
@@ -1480,9 +1526,13 @@ function PaymentStep({
               ))}
             </div>
           {method === "Efectivo" ? (
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="mt-5">
+              <div className="grid grid-cols-3 gap-2">
+                {(["MXN", "USD", "EUR"] as CurrencyCode[]).map((code) => <button key={code} type="button" onClick={() => { const nextRate = code === "MXN" ? 1 : exchangeRates[code]; setCurrency(code); setAmountReceived(total(table) / nextRate); }} className={["h-14 rounded-2xl border text-base font-semibold", currency === code ? "border-stone-950 bg-stone-950 text-white" : "border-stone-200 bg-white text-stone-700"].join(" ")}>{code}</button>)}
+              </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <label className="block text-base font-semibold text-stone-700">
-                Monto recibido
+                Monto recibido en {currency}
                 <input
                   type="number"
                   min={0}
@@ -1491,10 +1541,16 @@ function PaymentStep({
                   className="mt-2 h-16 w-full rounded-2xl border border-stone-200 px-5 text-xl text-stone-950"
                 />
               </label>
+              <div className="rounded-2xl bg-stone-100 p-4">
+                <p className="text-sm font-semibold text-stone-600">Equivalente MXN</p>
+                <p className="mt-2 text-3xl font-semibold text-stone-950">{money.format(receivedEquivalent)}</p>
+                {currency !== "MXN" ? <p className="mt-1 text-xs font-semibold text-stone-500">TC {rate} MXN</p> : null}
+              </div>
               <div className="rounded-2xl bg-emerald-50 p-4">
                 <p className="text-sm font-semibold text-emerald-700">Cambio</p>
                 <p className="mt-2 text-3xl font-semibold text-emerald-900">{money.format(change)}</p>
               </div>
+            </div>
             </div>
           ) : null}
           {method === "Mixto" ? (
@@ -1504,7 +1560,7 @@ function PaymentStep({
                   <button
                     type="button"
                     key={item}
-                    onClick={() => setPartialMethod(item)}
+                    onClick={() => { setPartialMethod(item); setPartialCurrency("MXN"); setPartialAmount(remaining); }}
                     className={[
                       "h-14 rounded-2xl border text-base font-semibold",
                       partialMethod === item
@@ -1516,15 +1572,16 @@ function PaymentStep({
                   </button>
                 ))}
               </div>
+              {partialMethod === "Efectivo" ? <div className="mt-3 grid grid-cols-3 gap-2">{(["MXN", "USD", "EUR"] as CurrencyCode[]).map((code) => <button key={code} type="button" onClick={() => { const nextRate = code === "MXN" ? 1 : exchangeRates[code]; setPartialCurrency(code); setPartialAmount(remaining / nextRate); }} className={["h-12 rounded-xl border text-sm font-semibold", partialCurrency === code ? "border-stone-950 bg-stone-950 text-white" : "border-stone-200 bg-white text-stone-700"].join(" ")}>{code}</button>)}</div> : null}
               <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
                 <input
                   type="number"
                   min={0}
-                  max={remaining}
+                  max={remaining / (partialMethod === "Efectivo" ? partialRate : 1)}
                   value={partialAmount}
                   onChange={(event) => setPartialAmount(Number(event.target.value))}
                   className="h-16 rounded-2xl border border-stone-200 px-5 text-xl text-stone-950"
-                  aria-label="Monto del pago parcial"
+                  aria-label={`Monto del pago parcial en ${partialMethod === "Efectivo" ? partialCurrency : "MXN"}`}
                 />
                 <button
                   type="button"
@@ -1539,7 +1596,7 @@ function PaymentStep({
                 <div className="mt-4 max-h-36 space-y-2 overflow-y-auto pr-1">
                   {payments.map((payment, index) => (
                     <div key={`${payment.method}-${index}`} className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-base font-semibold text-stone-800">
-                      <span>{payment.method}</span>
+                      <span>{payment.method}{payment.currency && payment.currency !== "MXN" ? ` · ${payment.foreignAmount?.toFixed(2)} ${payment.currency}` : ""}</span>
                       <span className="flex items-center gap-3">
                         {money.format(payment.amount)}
                         <button type="button" onClick={() => setPayments((current) => current.filter((_, paymentIndex) => paymentIndex !== index))} className="grid size-10 place-items-center rounded-xl bg-white text-stone-600" aria-label={`Quitar pago de ${payment.method}`}><Trash2 size={18} /></button>
@@ -1851,6 +1908,10 @@ function ReceiptPreviewModal({
   preview: ReceiptPreview;
   onClose: () => void;
 }) {
+  return <ThermalPreviewModal title={preview.mode === "initial" ? "Vista previa del ticket" : "Vista previa de reimpresión"} status={preview.mode === "reprint" ? "Reimpresión autorizada" : "Primera impresión"} onClose={onClose} render={(paperWidth) => <TicketReceipt data={preview.data} paperWidth={paperWidth} />} />;
+}
+
+function ThermalPreviewModal({ title, status, onClose, render }: { title: string; status: string; onClose: () => void; render: (paperWidth: ReceiptPaperWidth) => ReactNode }) {
   const [paperWidth, setPaperWidth] = useState<ReceiptPaperWidth>("80mm");
 
   function printReceipt() {
@@ -1863,18 +1924,18 @@ function ReceiptPreviewModal({
 
   return createPortal(
     <div className="receipt-preview-portal">
-    <ModalShell title={preview.mode === "initial" ? "Vista previa del ticket" : "Vista previa de reimpresión"} onClose={onClose} wide>
+    <ModalShell title={title} onClose={onClose} wide>
       <div className="receipt-preview-controls mb-5 flex flex-wrap items-center justify-between gap-4">
         <div className="inline-flex rounded-2xl bg-stone-100 p-1" aria-label="Ancho del ticket">
           {(["58mm", "80mm"] as ReceiptPaperWidth[]).map((width) => (
             <button key={width} type="button" onClick={() => setPaperWidth(width)} className={["h-11 rounded-xl px-5 text-sm font-semibold", paperWidth === width ? "bg-stone-950 text-white" : "text-stone-600"].join(" ")}>{width}</button>
           ))}
         </div>
-        <p className="text-sm font-semibold text-stone-500">{preview.mode === "reprint" ? "Reimpresión autorizada" : "Primera impresión"}</p>
+        <p className="text-sm font-semibold text-stone-500">{status}</p>
       </div>
       <div className="max-h-[62vh] overflow-y-auto rounded-2xl bg-stone-100 py-6">
         <div className="thermal-print-root">
-          <TicketReceipt data={preview.data} paperWidth={paperWidth} />
+          {render(paperWidth)}
         </div>
       </div>
       <div className="receipt-preview-controls mt-5 grid grid-cols-2 gap-3">
@@ -2129,12 +2190,27 @@ function OpenCashModal({
   );
 }
 
+function ExchangeRatesModal({ rates, onClose, onSave }: { rates: ExchangeRateSettings; onClose: () => void; onSave: (rates: ExchangeRateSettings) => void }) {
+  const [usd, setUsd] = useState(rates.USD);
+  const [eur, setEur] = useState(rates.EUR);
+  const valid = usd > 0 && eur > 0;
+  return <ModalShell title="Tipo de cambio" onClose={onClose}>
+    <div className="space-y-4">
+      <FormField label="USD a MXN"><input type="number" min={0.01} step={0.01} value={usd} onChange={(event) => setUsd(Number(event.target.value))} className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-2xl font-semibold text-stone-950" /></FormField>
+      <FormField label="EUR a MXN"><input type="number" min={0.01} step={0.01} value={eur} onChange={(event) => setEur(Number(event.target.value))} className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-2xl font-semibold text-stone-950" /></FormField>
+    </div>
+    <button type="button" disabled={!valid} onClick={() => onSave({ USD: usd, EUR: eur })} className="mt-6 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">Guardar tipo de cambio</button>
+  </ModalShell>;
+}
+
 function CashierModal({
+  business,
   sales,
   tables,
   onClose,
   onAuthorize,
 }: {
+  business: ReceiptBusinessProfile;
   sales: Sale[];
   tables: PosTable[];
   onClose: () => void;
@@ -2145,6 +2221,9 @@ function CashierModal({
   const [countedCash, setCountedCash] = useState(0);
   const [message, setMessage] = useState("");
   const [withdrawalModal, setWithdrawalModal] = useState(false);
+  const [registeredWithdrawal, setRegisteredWithdrawal] = useState<CashWithdrawal | null>(null);
+  const [cashReceiptPreview, setCashReceiptPreview] = useState<{ kind: "closing" | "withdrawal"; withdrawal?: CashWithdrawal; reprint: boolean } | null>(null);
+  const [justClosed, setJustClosed] = useState(false);
 
   useEffect(() => {
     const loadClosing = () => {
@@ -2227,7 +2306,11 @@ function CashierModal({
     writeCashClosing(next);
     setClosing(next);
     setMessage(withdrawal ? "Retiro registrado" : status === "closed" ? "Caja cerrada correctamente" : "Corte guardado");
-    if (withdrawal) setWithdrawalModal(false);
+    if (status === "closed") setJustClosed(true);
+    if (withdrawal) {
+      setWithdrawalModal(false);
+      setRegisteredWithdrawal(withdrawal);
+    }
   }
 
   function registerWithdrawal(input: Omit<CashWithdrawal, "id" | "authorizedBy" | "createdAt">) {
@@ -2243,6 +2326,38 @@ function CashierModal({
     ...(closing?.history ?? []),
     ...shiftSales.map((sale) => makeCashSaleEvent(sale)),
   ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const closingReceiptData: CashClosingReceiptData = {
+    business,
+    issuedAt: closing?.closedAt ?? new Date().toISOString(),
+    shiftId: closing?.id ?? "Turno actual",
+    responsible: closing?.responsible?.name ?? currentPosUser.name,
+    snapshot,
+    withdrawals,
+    openingCash,
+    expectedCash,
+    countedCash,
+    difference,
+  };
+
+  function authorizeCashReprint(label: string, action: () => void) {
+    onAuthorize("reprint_cash_receipt", label, (staff) => {
+      if (closing) {
+        const event = makeAuditEvent("cash_receipt_reprinted", `${label} · autorizó: ${staff.name}`, currentPosUser.name, { requestedBy: currentPosUser.name, authorizedBy: staff.name, authorizedRole: staff.role });
+        const next = { ...closing, history: [...(closing.history ?? []), event] };
+        writeCashClosing(next);
+        setClosing(next);
+      }
+      action();
+    });
+  }
+
+  function previewClosingReceipt() {
+    if (locked && !justClosed) {
+      authorizeCashReprint("Reimpresión de corte", () => setCashReceiptPreview({ kind: "closing", reprint: true }));
+      return;
+    }
+    setCashReceiptPreview({ kind: "closing", reprint: false });
+  }
 
   return (
     <>
@@ -2278,6 +2393,9 @@ function CashierModal({
             <PaymentMethodCard icon={<CreditCard size={25} />} label="Total tarjeta" value={snapshot.card} />
             <PaymentMethodCard icon={<ReceiptText size={25} />} label="Total transferencia" value={snapshot.transfer} />
             <PaymentMethodCard icon={<Sparkles size={25} />} label="Total pagos mixtos" value={snapshot.mixed} detail="Total de órdenes con pago mixto" />
+            <CashMetric label="USD recibido" value={`${snapshot.usdReceived.toFixed(2)} USD`} />
+            <CashMetric label="EUR recibido" value={`${snapshot.eurReceived.toFixed(2)} EUR`} />
+            <CashMetric label="Equivalente MXN" value={money.format(snapshot.foreignEquivalentMxn)} />
           </div>
         </section>
 
@@ -2326,7 +2444,7 @@ function CashierModal({
             {withdrawals.length ? [...withdrawals].reverse().map((withdrawal) => (
               <div key={withdrawal.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-4">
                 <div><p className="text-base font-semibold text-stone-950">{withdrawal.reason}</p><p className="mt-1 text-sm font-semibold text-stone-500">Autorizó: {withdrawal.authorizedBy.name}{withdrawal.receivedBy ? ` · Recibió: ${withdrawal.receivedBy}` : ""}</p></div>
-                <p className="text-2xl font-semibold text-rose-700">-{money.format(withdrawal.amount)}</p>
+                <div className="flex items-center gap-3"><p className="text-2xl font-semibold text-rose-700">-{money.format(withdrawal.amount)}</p><button type="button" onClick={() => authorizeCashReprint("Reimpresión de retiro", () => setCashReceiptPreview({ kind: "withdrawal", withdrawal, reprint: true }))} className="h-11 rounded-xl border border-stone-200 px-3 text-sm font-semibold text-stone-700"><Printer size={17} /></button></div>
               </div>
             )) : <div className="rounded-2xl border border-dashed border-stone-300 p-6 text-center text-sm font-semibold text-stone-500">Sin retiros registrados</div>}
           </div>
@@ -2361,14 +2479,15 @@ function CashierModal({
             {cashHistory.length ? cashHistory.map((event) => (
               <div key={event.id} className="flex gap-4 rounded-2xl bg-stone-50 px-4 py-3">
                 <span className="shrink-0 text-sm font-semibold text-stone-500">{new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(event.createdAt))}</span>
-                <div><p className="text-sm font-semibold text-stone-950">{event.message}</p><p className="mt-1 text-xs font-semibold text-stone-500">{event.actor}</p></div>
+                <div className="flex-1"><p className="text-sm font-semibold text-stone-950">{event.message}</p><p className="mt-1 text-xs font-semibold text-stone-500">{event.actor}</p></div>
+                {event.type === "cash_closed" ? <button type="button" onClick={() => authorizeCashReprint("Reimpresión de corte", () => setCashReceiptPreview({ kind: "closing", reprint: true }))} className="grid size-10 place-items-center rounded-xl border border-stone-200 bg-white" aria-label="Reimprimir corte"><Printer size={17} /></button> : null}
               </div>
             )) : <div className="rounded-2xl border border-dashed border-stone-300 p-6 text-center text-sm font-semibold text-stone-500">El historial comenzará al guardar el corte.</div>}
           </div>
         </section>
 
         <div className="sticky bottom-0 grid gap-3 border-t border-stone-200 bg-white pt-4 sm:grid-cols-3">
-          <button type="button" onClick={() => window.print()} className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-900">
+          <button type="button" onClick={previewClosingReceipt} className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-base font-semibold text-stone-900">
             <Printer size={21} />
             Imprimir corte
           </button>
@@ -2384,6 +2503,8 @@ function CashierModal({
       </div>
     </ModalShell>
     {withdrawalModal ? <WithdrawalModal onClose={() => setWithdrawalModal(false)} onRegister={registerWithdrawal} /> : null}
+    {registeredWithdrawal ? <WithdrawalCompleteModal onClose={() => setRegisteredWithdrawal(null)} onPrint={() => setCashReceiptPreview({ kind: "withdrawal", withdrawal: registeredWithdrawal, reprint: false })} /> : null}
+    {cashReceiptPreview ? <ThermalPreviewModal title={cashReceiptPreview.kind === "closing" ? "Vista previa del corte" : "Vista previa del retiro"} status={cashReceiptPreview.reprint ? "Reimpresión autorizada" : "Primera impresión"} onClose={() => setCashReceiptPreview(null)} render={(paperWidth) => cashReceiptPreview.kind === "closing" ? <CashClosingReceipt data={closingReceiptData} paperWidth={paperWidth} /> : <CashWithdrawalReceipt business={business} shiftId={closing?.id ?? "Turno actual"} responsible={closing?.responsible?.name ?? currentPosUser.name} withdrawal={cashReceiptPreview.withdrawal!} paperWidth={paperWidth} />} /> : null}
     </>
   );
 }
@@ -2399,6 +2520,7 @@ function WithdrawalModal({
   const [amount, setAmount] = useState(0);
   const [reason, setReason] = useState(reasons[0]);
   const [customReason, setCustomReason] = useState("");
+  const [description, setDescription] = useState("");
   const [receivedBy, setReceivedBy] = useState("");
   const finalReason = reason === "Otro" ? customReason.trim() : reason;
   const valid = amount > 0 && finalReason.length > 0;
@@ -2415,13 +2537,21 @@ function WithdrawalModal({
           </select>
         </FormField>
         {reason === "Otro" ? <FormField label="Describe el motivo"><input value={customReason} onChange={(event) => setCustomReason(event.target.value)} className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" /></FormField> : null}
+        <FormField label="Descripción (opcional)"><input value={description} onChange={(event) => setDescription(event.target.value)} className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" placeholder="Detalle del retiro" /></FormField>
         <FormField label="Recibió (opcional)"><input value={receivedBy} onChange={(event) => setReceivedBy(event.target.value)} className="h-16 w-full rounded-2xl border border-stone-200 px-5 text-lg text-stone-950" placeholder="Nombre" /></FormField>
       </div>
-      <button type="button" disabled={!valid} onClick={() => onRegister({ amount, reason: finalReason, receivedBy: receivedBy.trim() || undefined })} className="mt-6 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">
+      <button type="button" disabled={!valid} onClick={() => onRegister({ amount, reason: finalReason, description: description.trim() || undefined, receivedBy: receivedBy.trim() || undefined })} className="mt-6 h-16 w-full rounded-3xl bg-stone-950 text-lg font-semibold text-white disabled:bg-stone-300">
         Autorizar retiro
       </button>
     </ModalShell>
   );
+}
+
+function WithdrawalCompleteModal({ onClose, onPrint }: { onClose: () => void; onPrint: () => void }) {
+  return <ModalShell title="Retiro registrado" onClose={onClose}>
+    <div className="rounded-3xl bg-emerald-50 p-7 text-center"><CheckCircle2 className="mx-auto text-emerald-700" size={54} /><p className="mt-4 text-xl font-semibold text-emerald-950">El retiro quedó guardado en el turno.</p></div>
+    <div className="mt-5 grid grid-cols-2 gap-3"><button type="button" onClick={onClose} className="h-16 rounded-2xl border border-stone-200 text-lg font-semibold">Cerrar</button><button type="button" onClick={onPrint} className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-stone-950 text-lg font-semibold text-white"><Printer size={21} /> Imprimir comprobante</button></div>
+  </ModalShell>;
 }
 
 function CashMetric({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
