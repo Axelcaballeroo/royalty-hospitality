@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
+import { completeReservationPosSale } from "@/app/app/reservas/pos-actions";
 import { TicketReceipt } from "@/components/pos/ticket-receipt";
 import { CashClosingReceipt, CashWithdrawalReceipt } from "@/components/pos/cash-receipts";
 import type { CashClosingReceiptData } from "@/components/pos/cash-receipts";
@@ -57,10 +58,12 @@ import {
   readPosCatalog,
   readPosSales,
   readPosTables,
+  readReservationPosLinks,
   writePosSales,
   writeCashClosing,
   writeExchangeRates,
   writePosTables,
+  writeReservationPosLinks,
 } from "@/lib/pos-shared";
 import type {
   CashClosing,
@@ -232,6 +235,23 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
     };
   }, []);
 
+  useEffect(() => {
+    const reservationId = new URLSearchParams(window.location.search).get("reservationId");
+    if (!reservationId) return;
+    const timeout = window.setTimeout(() => {
+      const table = readPosTables().find((item) => item.reservationId === reservationId && item.openedAt);
+      if (table) {
+        setSelectedTableId(table.id);
+        setPosStep("order");
+        setModal("order");
+        return;
+      }
+      const sale = readPosSales().find((item) => item.reservationId === reservationId);
+      if (sale) setSelectedSale(sale);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
   const cashIsOpen = cashClosing?.status === "draft";
 
   const metrics = useMemo(() => {
@@ -301,6 +321,10 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
               paidBy: undefined,
               closedBy: undefined,
               history: [event],
+              reservationId: undefined,
+              customerId: undefined,
+              orderSource: undefined,
+              reservationNotes: undefined,
             }
           : table,
       ),
@@ -529,10 +553,14 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
           closedBy: undefined,
           history: [...(source.history ?? []), event],
           reopenedFromSaleId: source.reopenedFromSaleId,
+          reservationId: source.reservationId,
+          customerId: source.customerId,
+          orderSource: source.orderSource,
+          reservationNotes: source.reservationNotes,
         };
       }
       if (table.id === source.id) {
-        return { ...table, customer: "", people: 0, openedAt: null, items: [], discount: null, courtesy: null, readyToPay: false, orderName: undefined, waiter: null, openedBy: undefined, paidBy: undefined, history: [], reopenedFromSaleId: undefined };
+        return { ...table, customer: "", people: 0, openedAt: null, items: [], discount: null, courtesy: null, readyToPay: false, orderName: undefined, waiter: null, openedBy: undefined, paidBy: undefined, history: [], reopenedFromSaleId: undefined, reservationId: undefined, customerId: undefined, orderSource: undefined, reservationNotes: undefined };
       }
       return table;
     }));
@@ -642,7 +670,7 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
     });
   }
 
-  function closeOrder() {
+  async function closeOrder() {
     if (!completedPayment) return;
     const table = selectedTable;
     const paymentMethod: PaymentMethod = completedPayment.isCourtesy
@@ -678,6 +706,9 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
       history,
       paidAt: completedPayment.paidAt,
       closedAt: new Date().toISOString(),
+      reservationId: table.reservationId,
+      customerId: table.customerId,
+      orderSource: table.orderSource,
     };
     setSales((current) => {
       const next = [sale, ...current];
@@ -706,6 +737,10 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
                   closedBy: currentPosUser,
                   history: [],
                   reopenedFromSaleId: undefined,
+                  reservationId: undefined,
+                  customerId: undefined,
+                  orderSource: undefined,
+                  reservationNotes: undefined,
                 }
               : item,
           ),
@@ -714,6 +749,29 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
     setPosStep("order");
     setModal(null);
     showToast("Mesa liberada");
+    if (table.reservationId) {
+      const links = readReservationPosLinks();
+      writeReservationPosLinks(links.map((link) => link.reservationId === table.reservationId ? {
+        ...link,
+        status: "completed",
+        completedAt: sale.closedAt,
+        total: sale.total,
+        paymentMethod: sale.paymentMethod,
+        saleId: sale.id,
+      } : link));
+      try {
+        await completeReservationPosSale({
+          reservationId: table.reservationId,
+          saleId: sale.id,
+          total: sale.total,
+          paymentMethod: sale.paymentMethod,
+          closedAt: sale.closedAt,
+        });
+        showToast("Mesa liberada · reserva completada");
+      } catch {
+        showToast("Venta cerrada; no se pudo actualizar la reserva");
+      }
+    }
   }
 
   function openQuickSale(type: string, responsible?: StaffMember) {
@@ -1189,6 +1247,7 @@ function FullscreenPos({
             <div>
               <h2 className="text-4xl font-semibold text-stone-950">{orderLabel(table)}</h2>
               <p className="mt-1 text-sm font-semibold text-stone-500">Mesero: {table.waiter?.name ?? "Sin asignar"}</p>
+              {table.reservationId ? <p className="mt-1 text-sm font-semibold text-emerald-700">Reserva: {table.customer} · Origen: Reserva</p> : null}
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -1208,6 +1267,8 @@ function FullscreenPos({
             </button>
           </div>
         </header>
+
+        {table.reservationId ? <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-base font-semibold text-amber-900">Cliente llegó desde reserva.{table.reservationNotes ? ` · ${table.reservationNotes}` : ""}</div> : null}
 
         {step === "order" ? (
           <OrderStep

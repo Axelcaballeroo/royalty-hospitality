@@ -136,6 +136,10 @@ export type PosTable = {
   closedBy?: StaffMember;
   history?: OrderAuditEvent[];
   reopenedFromSaleId?: string;
+  reservationId?: string;
+  customerId?: string;
+  orderSource?: "reservation";
+  reservationNotes?: string;
 };
 
 export type Sale = {
@@ -164,6 +168,24 @@ export type Sale = {
   history?: OrderAuditEvent[];
   paidAt?: string;
   closedAt: string;
+  reservationId?: string;
+  customerId?: string;
+  orderSource?: "reservation";
+};
+
+export type ReservationPosLink = {
+  reservationId: string;
+  customerId: string;
+  tableId: string;
+  waiterId: string;
+  posOrderId: string;
+  status: "arrived" | "completed";
+  notes?: string;
+  openedAt: string;
+  completedAt?: string;
+  total?: number;
+  paymentMethod?: PaymentMethod;
+  saleId?: string;
 };
 
 export type CashClosingSnapshot = {
@@ -230,8 +252,10 @@ export const posSalesStorageKey = "royalty-pos-sales-v1";
 export const posCatalogStorageKey = "royalty-pos-catalog-v1";
 export const posCashClosingStorageKey = "royalty-pos-cash-closing-v1";
 export const posExchangeRatesStorageKey = "royalty-pos-exchange-rates-v1";
+export const posReservationLinksStorageKey = "royalty-pos-reservation-links-v1";
 export const posCashClosingEvent = "royalty-pos-cash-closing-updated";
 export const posExchangeRatesEvent = "royalty-pos-exchange-rates-updated";
+export const posReservationLinksEvent = "royalty-pos-reservation-links-updated";
 export const posStateEvent = "royalty-pos-state-updated";
 export const posCatalogEvent = "royalty-pos-catalog-updated";
 
@@ -466,6 +490,22 @@ export function writeExchangeRates(rates: ExchangeRateSettings) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(posExchangeRatesStorageKey, JSON.stringify(rates));
   window.dispatchEvent(new CustomEvent(posExchangeRatesEvent));
+}
+
+export function readReservationPosLinks(): ReservationPosLink[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const value = window.localStorage.getItem(posReservationLinksStorageKey);
+    return value ? JSON.parse(value) as ReservationPosLink[] : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeReservationPosLinks(links: ReservationPosLink[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(posReservationLinksStorageKey, JSON.stringify(links));
+  window.dispatchEvent(new CustomEvent(posReservationLinksEvent));
 }
 
 export function readPosCatalog(): PosCatalog {

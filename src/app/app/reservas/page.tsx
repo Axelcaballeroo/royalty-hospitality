@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { CheckCircle2, Clock, Plus, UserRound, X } from "lucide-react";
-import { createReservationAction, updateReservationStatusAction } from "@/app/app/actions";
+import { Clock, Plus, UserRound, X } from "lucide-react";
+import { createReservationAction } from "@/app/app/actions";
 import { EmptyState, ModuleCard, SectionHeader, StatCard } from "@/components/ui";
-import { getReservationsData, type ReservationWithTable } from "@/lib/data";
+import { ReservationPosActions } from "@/components/reservation-pos-actions";
+import { getReservationsData } from "@/lib/data";
 import { formatEventType } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ const fieldClass =
 const statusLabels: Record<string, string> = {
   confirmed: "Confirmada",
   pending: "Pendiente",
-  completed: "Llegó",
+  completed: "Completada",
   cancelled: "Cancelada",
   no_show: "No Show",
 };
@@ -40,35 +41,6 @@ function StatusPill({ status }: { status: string }) {
     >
       {statusLabels[status] ?? status}
     </span>
-  );
-}
-
-function StatusButton({
-  reservation,
-  status,
-  returnTo,
-}: {
-  reservation: ReservationWithTable;
-  status: string;
-  returnTo: string;
-}) {
-  return (
-    <form action={updateReservationStatusAction}>
-      <input type="hidden" name="reservation_id" value={reservation.id} />
-      <input type="hidden" name="customer_id" value={reservation.customer_id} />
-      <input type="hidden" name="status" value={status} />
-      <input type="hidden" name="return_to" value={returnTo} />
-      <button
-        className={[
-          "inline-flex h-9 items-center rounded-lg border px-3 text-xs font-semibold transition hover:shadow-sm",
-          reservation.status === status
-            ? "border-stone-900 bg-stone-950 text-white"
-            : "border-stone-200 bg-white text-stone-700 hover:border-stone-300",
-        ].join(" ")}
-      >
-        {statusLabels[status]}
-      </button>
-    </form>
   );
 }
 
@@ -217,7 +189,7 @@ export default async function ReservationsPage({
   const returnTo = selectedReservation
     ? reservationHref(selectedDate, selectedReservation.id)
     : `/app/reservas?date=${selectedDate}`;
-  const arrivedReservations = data.reservations.filter(
+  const completedReservations = data.reservations.filter(
     (reservation) => reservation.status === "completed",
   );
 
@@ -262,7 +234,7 @@ export default async function ReservationsPage({
       <section className="grid gap-4 md:grid-cols-4">
         <StatCard title="Reservas" value={String(data.reservations.length)} detail={selectedDate} tone="dark" />
         <StatCard title="Confirmadas" value={String(data.reservations.filter((item) => item.status === "confirmed").length)} detail="Listas para servicio" />
-        <StatCard title="Llegaron" value={String(arrivedReservations.length)} detail="Preparadas para POS futuro" />
+        <StatCard title="Completadas" value={String(completedReservations.length)} detail="Visitas cerradas en POS" />
         <StatCard title="Mesas activas" value={String(data.tables.filter((table) => table.is_active).length || 12)} detail="Disponibilidad automatica" />
       </section>
 
@@ -375,29 +347,7 @@ export default async function ReservationsPage({
                   </div>
                 </div>
 
-                <div>
-                  <p className="text-sm font-semibold text-stone-950">Estado</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {["confirmed", "pending", "completed", "cancelled", "no_show"].map((status) => (
-                      <StatusButton
-                        key={status}
-                        reservation={selectedReservation}
-                        status={status}
-                        returnTo={returnTo}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-stone-200 p-4">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-stone-950">
-                    <CheckCircle2 size={16} />
-                    Check-in hacia POS futuro
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-stone-500">
-                    Marcar “Llegó” conserva el flujo actual de visita completada y deja esta reserva lista para abrir una cuenta en el POS cuando exista.
-                  </p>
-                </div>
+                <div><p className="text-sm font-semibold text-stone-950">Acciones</p><div className="mt-3"><ReservationPosActions reservation={{ id: selectedReservation.id, status: selectedReservation.status, customerId: selectedReservation.customer_id, customerName: selectedReservation.customers?.full_name ?? "Cliente", phone: selectedReservation.customers?.phone ?? undefined, partySize: selectedReservation.party_size, tableName: selectedReservation.tableName, notes: selectedReservation.notes ?? undefined, specialRequest: selectedReservation.special_request ?? undefined }} returnTo={returnTo} /></div></div>
 
                 <div className="grid gap-3 text-sm">
                   <div>
