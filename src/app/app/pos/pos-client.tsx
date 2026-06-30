@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
+import { RelativeTime, useMinuteNow } from "@/components/relative-time";
 import { completeReservationPosSale } from "@/app/app/reservas/pos-actions";
 import { TicketReceipt } from "@/components/pos/ticket-receipt";
 import { CashClosingReceipt, CashWithdrawalReceipt } from "@/components/pos/cash-receipts";
@@ -155,15 +156,6 @@ function tableStatus(table: PosTable): TableStatus {
   return "occupied";
 }
 
-function elapsed(openedAt: string | null) {
-  if (!openedAt) return "--";
-  const minutes = Math.max(1, Math.floor((Date.now() - new Date(openedAt).getTime()) / 60000));
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return `${hours} h ${rest} min`;
-}
-
 function statusLabel(status: TableStatus) {
   if (status === "free") return "Mesa libre";
   if (status === "checkout") return "Por cobrar";
@@ -177,6 +169,7 @@ function statusClasses(status: TableStatus) {
 }
 
 export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
+  const minuteNow = useMinuteNow();
   const [tables, setTables] = useState<PosTable[]>(initialTables);
   const [selectedTableId, setSelectedTableId] = useState(initialTables[1].id);
   const [catalog, setCatalog] = useState<PosCatalog>(initialPosCatalog);
@@ -944,7 +937,7 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {tables.filter((table) => !table.quickType).map((table) => (
-          <TableCard key={table.id} table={table} onClick={() => openTableMap(table)} />
+          <TableCard key={table.id} table={table} now={minuteNow} onClick={() => openTableMap(table)} />
         ))}
       </section>
 
@@ -961,6 +954,7 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
       {modal === "order" ? (
         <FullscreenPos
           table={selectedTable}
+          now={minuteNow}
           step={posStep}
           activeCategory={selectedCategory}
           posCategories={posCategories}
@@ -1105,7 +1099,7 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TableCard({ table, onClick }: { table: PosTable; onClick: () => void }) {
+function TableCard({ table, now, onClick }: { table: PosTable; now: number | null; onClick: () => void }) {
   const status = tableStatus(table);
 
   return (
@@ -1126,13 +1120,13 @@ function TableCard({ table, onClick }: { table: PosTable; onClick: () => void })
       <div className="mt-8 grid grid-cols-3 gap-3">
         <CardFact icon={<Users size={18} />} label="Personas" value={String(table.people || 0)} />
         <CardFact icon={<Banknote size={18} />} label="Total" value={table.openedAt ? money.format(total(table)) : "$0"} />
-        <CardFact icon={<Clock size={18} />} label="Tiempo" value={elapsed(table.openedAt)} />
+        <CardFact icon={<Clock size={18} />} label="Tiempo" value={<RelativeTime from={table.openedAt} now={now} minOne />} />
       </div>
     </button>
   );
 }
 
-function CardFact({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+function CardFact({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
   return (
     <div className="rounded-2xl bg-stone-50 p-3">
       <div className="text-stone-500">{icon}</div>
@@ -1194,6 +1188,7 @@ function OrderStatusBadge({ status, station }: { status: OrderItemStatus; statio
 
 function FullscreenPos({
   table,
+  now,
   step,
   activeCategory,
   posCategories,
@@ -1213,6 +1208,7 @@ function FullscreenPos({
   onActions,
 }: {
   table: PosTable;
+  now: number | null;
   step: PosStep;
   activeCategory: string;
   posCategories: PosCategory[];
@@ -1260,7 +1256,7 @@ function FullscreenPos({
             </span>
             <span className="inline-flex h-12 items-center gap-2 rounded-2xl bg-stone-100 px-4 text-base font-semibold text-stone-800">
               <Clock size={20} />
-              {elapsed(table.openedAt)}
+              <RelativeTime from={table.openedAt} now={now} minOne />
             </span>
             <button type="button" onClick={onActions} className="inline-flex h-12 items-center gap-2 rounded-2xl bg-stone-950 px-4 text-base font-semibold text-white">
               <Menu size={20} /> Acciones

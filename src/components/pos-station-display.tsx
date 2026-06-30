@@ -7,12 +7,9 @@ import { makeAuditEvent, posStateEvent, readPosTables, writePosTables } from "@/
 import type { OrderItemStatus, PosTable, ProductStation } from "@/lib/pos-shared";
 import { buildKdsTickets } from "@/lib/pos-kds";
 import type { KdsStatus, KdsTicket } from "@/lib/pos-kds";
+import { RelativeTime, relativeMinutes, useMinuteNow } from "@/components/relative-time";
 
 type KdsFilter = "all" | KdsStatus;
-
-function minutesSince(value: string) {
-  return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
-}
 
 function ageClasses(minutes: number) {
   if (minutes >= 30) return "border-rose-400 bg-rose-50 text-rose-800";
@@ -52,6 +49,7 @@ function playNewTicketSound() {
 }
 
 export function PosStationDisplay({ station }: { station: Exclude<ProductStation, "direct"> }) {
+  const minuteNow = useMinuteNow();
   const [tables, setTables] = useState<PosTable[]>([]);
   const [filter, setFilter] = useState<KdsFilter>("all");
   const [toast, setToast] = useState("");
@@ -92,7 +90,12 @@ export function PosStationDisplay({ station }: { station: Exclude<ProductStation
   const visibleTickets = filter === "all" ? tickets : tickets.filter((ticket) => ticket.status === filter);
   const pending = tickets.filter((ticket) => ticket.status !== "ready").length;
   const ready = tickets.filter((ticket) => ticket.status === "ready").length;
-  const average = tickets.length ? Math.round(tickets.reduce((sum, ticket) => sum + minutesSince(ticket.sentAt), 0) / tickets.length) : 0;
+  const ticketAges = tickets
+    .map((ticket) => relativeMinutes(ticket.sentAt, minuteNow))
+    .filter((age): age is number => age !== null);
+  const average = ticketAges.length
+    ? Math.round(ticketAges.reduce((sum, age) => sum + age, 0) / ticketAges.length)
+    : null;
 
   function advance(ticket: KdsTicket) {
     const nextStatus: OrderItemStatus = ticket.status === "new" ? "preparing" : ticket.status === "preparing" ? "ready" : "served";
@@ -127,7 +130,7 @@ export function PosStationDisplay({ station }: { station: Exclude<ProductStation
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KdsMetric label="Comandas activas" value={tickets.length} />
-          <KdsMetric label="Tiempo promedio" value={`${average} min`} />
+          <KdsMetric label="Tiempo promedio" value={average === null ? "--" : `${average} min`} />
           <KdsMetric label="Pendientes" value={pending} />
           <KdsMetric label="Listas" value={ready} />
         </div>
@@ -139,11 +142,11 @@ export function PosStationDisplay({ station }: { station: Exclude<ProductStation
 
       {visibleTickets.length ? <section className="grid items-start gap-5 lg:grid-cols-2 2xl:grid-cols-3">
         {visibleTickets.map((ticket) => {
-          const age = minutesSince(ticket.sentAt);
+          const age = relativeMinutes(ticket.sentAt, minuteNow);
           const notes = ticket.items.filter((item) => item.notes).map((item) => `${item.name}: ${item.notes}`);
           return <article key={ticket.id} className={["overflow-hidden rounded-lg border-4 bg-white shadow-sm", cardClasses(ticket.status)].join(" ")}>
             <div className="border-b-2 border-stone-200 p-5">
-              <div className="flex items-start justify-between gap-4"><div><p className="text-lg font-semibold text-stone-500">COMANDA #{ticket.commandNumber}</p><h2 className="mt-1 text-4xl font-semibold text-stone-950">{ticket.tableName}</h2>{ticket.customer ? <p className="mt-2 text-2xl font-semibold text-stone-700">{ticket.customer}</p> : null}</div><span className={["inline-flex min-h-14 items-center gap-2 rounded-lg border-2 px-4 text-xl font-semibold", ageClasses(age)].join(" ")}><Clock size={24} />{age} min</span></div>
+              <div className="flex items-start justify-between gap-4"><div><p className="text-lg font-semibold text-stone-500">COMANDA #{ticket.commandNumber}</p><h2 className="mt-1 text-4xl font-semibold text-stone-950">{ticket.tableName}</h2>{ticket.customer ? <p className="mt-2 text-2xl font-semibold text-stone-700">{ticket.customer}</p> : null}</div><span className={["inline-flex min-h-14 items-center gap-2 rounded-lg border-2 px-4 text-xl font-semibold", ageClasses(age ?? 0)].join(" ")}><Clock size={24} /><RelativeTime from={ticket.sentAt} now={minuteNow} /></span></div>
               <div className="mt-4 flex items-center justify-between text-xl font-semibold"><span>{new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(ticket.sentAt))}</span><span>{statusLabel(ticket.status)}</span></div>
             </div>
             <div className="space-y-4 p-5">{ticket.items.map((item) => <p key={item.lineId} className="text-3xl font-semibold text-stone-950">{item.quantity}x {item.name}</p>)}</div>
