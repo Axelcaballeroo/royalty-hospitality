@@ -369,6 +369,9 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
     const hasKitchen = pending.some((item) => item.station === "kitchen");
     const hasBar = pending.some((item) => item.station === "bar");
     if (!hasKitchen && !hasBar) return;
+    const commandId = `command-${globalThis.crypto.randomUUID()}`;
+    const commandNumber = Math.max(0, ...selectedTable.items.map((item) => item.commandNumber ?? 0)) + 1;
+    const sentAt = new Date().toISOString();
     const destination = hasKitchen && hasBar ? "cocina y barra" : hasKitchen ? "cocina" : "barra";
     const event = makeAuditEvent("command_sent", `Comanda enviada a ${destination}`);
     updateTables((current) =>
@@ -379,7 +382,9 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
               items: table.items.map((item) => ({
                 ...item,
                 status: item.status === "pending" && item.station !== "direct" ? "sent" : item.status,
-                sentAt: item.status === "pending" && item.station !== "direct" ? new Date().toISOString() : item.sentAt,
+                sentAt: item.status === "pending" && item.station !== "direct" ? sentAt : item.sentAt,
+                commandId: item.status === "pending" && item.station !== "direct" ? commandId : item.commandId,
+                commandNumber: item.status === "pending" && item.station !== "direct" ? commandNumber : item.commandNumber,
                 updatedAt: new Date().toISOString(),
               })),
               readyToPay: false,
@@ -862,8 +867,8 @@ export function PosClient({ business }: { business: ReceiptBusinessProfile }) {
       </section>
 
       <nav className="flex flex-wrap gap-3 rounded-2xl border border-stone-200 bg-white p-3" aria-label="Accesos del punto de venta">
-        <SecondaryLink href="/app/kitchen" icon={<ChefHat size={20} />}>Ver cocina</SecondaryLink>
-        <SecondaryLink href="/app/bar" icon={<Coffee size={20} />}>Ver barra</SecondaryLink>
+        <SecondaryLink href="/app/kds/cocina" icon={<ChefHat size={20} />}>Ver cocina</SecondaryLink>
+        <SecondaryLink href="/app/kds/barra" icon={<Coffee size={20} />}>Ver barra</SecondaryLink>
         <SecondaryLink href="/app/pos/products" icon={<Package size={20} />}>Configurar productos</SecondaryLink>
         <button type="button" onClick={() => setModal("currency")} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
           <Banknote size={20} /> Tipo de cambio
@@ -1110,7 +1115,7 @@ function OrderStatusBadge({ status, station }: { status: OrderItemStatus; statio
           : status === "ready"
             ? `${stationName} · Listo`
             : status === "served"
-              ? "Servido"
+              ? "Entregado"
               : "Cobrado";
   const classes: Record<OrderItemStatus, string> = {
     pending: "border-amber-200 bg-amber-50 text-amber-800",
@@ -1346,7 +1351,7 @@ function OrderStep({
                           onClick={() => onMarkServed(item.lineId)}
                           className="h-16 rounded-2xl bg-emerald-600 px-4 text-base font-semibold text-white transition hover:bg-emerald-700"
                         >
-                          Servido
+                          Entregado
                         </button>
                       ) : null}
                     </div> : <span />}

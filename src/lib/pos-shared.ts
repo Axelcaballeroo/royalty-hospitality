@@ -77,6 +77,9 @@ export type OrderItem = Product & {
   quantity: number;
   status: OrderItemStatus;
   sentAt?: string;
+  commandId?: string;
+  commandNumber?: number;
+  notes?: string;
   updatedAt?: string;
   cancelledAt?: string;
   cancellationReason?: string;
